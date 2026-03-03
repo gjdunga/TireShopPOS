@@ -9,7 +9,7 @@
 | P1a | Project skeleton: front controller, autoloader, .env, config, error handling | None | COMPLETE | 9016527 |
 | P1b | Database layer: PDO factory, connection health, `GET /api/health` with DB status | P1a | COMPLETE | 871b75f |
 | P1c | Auth system: login, logout, password change. Database-backed sessions. Wires to existing helpers.php auth functions | P1a, P1b | COMPLETE | 17b1b09 |
-| P1d | API router: method+path dispatcher, JSON envelope, global error handler, CORS | P1a | COMPLETE | (pending) |
+| P1d | API router: method+path dispatcher, JSON envelope, global error handler, CORS | P1a | COMPLETE | f0e14b9 |
 | P1e | RBAC middleware: session-to-role, permission check per endpoint, 403 response. All business logic exposed as REST behind RBAC | P1c, P1d | NOT STARTED | |
 | P1f | Backup and ops: daily MySQL dump script, photo rsync, cron template, expanded health endpoint | P1b | NOT STARTED | |
 
