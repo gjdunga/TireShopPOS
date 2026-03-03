@@ -32,6 +32,7 @@ $app->boot();
 // Procedural helpers bridged to use Database::pdo() via getDB() shim.
 // These functions are called by route handlers behind RBAC middleware.
 require_once BASE_PATH . '/php/tire_pos_helpers.php';
+require_once BASE_PATH . '/php/tire_pos_crud.php';
 
 // ---- Create router and load routes ----
 $router = new \App\Http\Router();

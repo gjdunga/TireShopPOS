@@ -732,3 +732,426 @@ $router->with(permit('WORK_ORDER_CREATE'))->get('/api/sequences/next-work-order'
 $router->with(permit('PO_CREATE'))->get('/api/sequences/next-po', function () {
     return ['number' => nextPONumber()];
 });
+
+
+// ============================================================================
+// P2b: Entity CRUD Routes
+// Full create/read/update/delete for all POS entities.
+// DunganSoft Technologies, March 2026
+// ============================================================================
+
+
+// ---- Tires: single, create, update, write-off, photos ----
+
+$router->with(permit('INVENTORY_VIEW'))->get('/api/tires/{id}', function (array $params) {
+    $tire = getTire((int) $params['id']);
+    if ($tire === null) {
+        Router::sendError('NOT_FOUND', 'Tire not found.', 404);
+    }
+    return $tire;
+});
+
+$router->with(permit('INVENTORY_ADD'))->post('/api/tires', function (array $params, array $body) {
+    $tireId = createTire($body, Middleware::userId());
+    return ['message' => 'Tire created.', 'tire_id' => $tireId];
+});
+
+$router->with(permit('INVENTORY_EDIT'))->patch('/api/tires/{id}', function (array $params, array $body) {
+    $result = updateTire((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Tire updated.', 'tire_id' => (int) $params['id'], 'changed' => $result['changed']];
+});
+
+$router->with(permit('INVENTORY_WRITE_OFF'))->post('/api/tires/{id}/write-off', function (array $params, array $body) {
+    $reason = trim($body['reason'] ?? '');
+    if ($reason === '') {
+        Router::sendError('MISSING_FIELD', 'Field "reason" is required.', 400);
+    }
+    writeOffTire((int) $params['id'], $reason, Middleware::userId());
+    return ['message' => 'Tire written off.', 'tire_id' => (int) $params['id']];
+});
+
+$router->with(permit('INVENTORY_VIEW'))->get('/api/tires/{id}/photos', function (array $params) {
+    return ['photos' => getTirePhotos((int) $params['id'])];
+});
+
+$router->with(permit('PHOTO_UPLOAD'))->post('/api/tires/{id}/photos', function (array $params) {
+    $tireId = (int) $params['id'];
+
+    // Verify tire exists
+    $tire = getTire($tireId);
+    if ($tire === null) {
+        Router::sendError('NOT_FOUND', 'Tire not found.', 404);
+    }
+
+    // Handle file upload
+    if (empty($_FILES['photo']) || $_FILES['photo']['error'] !== UPLOAD_ERR_OK) {
+        Router::sendError('UPLOAD_ERROR', 'No file uploaded or upload error.', 400);
+    }
+
+    $file = $_FILES['photo'];
+    $allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+
+    if (!in_array($mime, $allowed, true)) {
+        Router::sendError('INVALID_FILE', 'Allowed types: JPEG, PNG, WebP.', 400);
+    }
+
+    // Max 10 MB
+    if ($file['size'] > 10 * 1024 * 1024) {
+        Router::sendError('FILE_TOO_LARGE', 'Maximum file size is 10 MB.', 400);
+    }
+
+    $ext = match ($mime) {
+        'image/jpeg' => 'jpg',
+        'image/png'  => 'png',
+        'image/webp' => 'webp',
+        default      => 'jpg',
+    };
+
+    $filename = 'tire_' . $tireId . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $destDir = BASE_PATH . '/storage/photos';
+    $destPath = $destDir . '/' . $filename;
+
+    if (!move_uploaded_file($file['tmp_name'], $destPath)) {
+        Router::sendError('SAVE_ERROR', 'Failed to save uploaded file.', 500);
+    }
+
+    $caption = $_POST['caption'] ?? null;
+    $isPrimary = (bool) ($_POST['is_primary'] ?? false);
+
+    $photoId = saveTirePhoto($tireId, $filename, $caption, $isPrimary, Middleware::userId());
+    return ['message' => 'Photo uploaded.', 'photo_id' => $photoId, 'file_path' => $filename];
+});
+
+$router->with(permit('PHOTO_UPLOAD'))->delete('/api/tires/photos/{id}', function (array $params) {
+    $filePath = deleteTirePhoto((int) $params['id'], Middleware::userId());
+    // Attempt to remove physical file (non-fatal if missing)
+    $fullPath = BASE_PATH . '/storage/photos/' . $filePath;
+    if (file_exists($fullPath)) {
+        @unlink($fullPath);
+    }
+    return ['message' => 'Photo deleted.', 'photo_id' => (int) $params['id']];
+});
+
+
+// ---- Customers: single, create, update ----
+
+$router->with(permit('CUSTOMER_MANAGE'))->get('/api/customers/{id}', function (array $params) {
+    $customer = getCustomer((int) $params['id']);
+    if ($customer === null) {
+        Router::sendError('NOT_FOUND', 'Customer not found.', 404);
+    }
+    return $customer;
+});
+
+$router->with(permit('CUSTOMER_MANAGE'))->post('/api/customers', function (array $params, array $body) {
+    $customerId = createCustomer($body, Middleware::userId());
+    return ['message' => 'Customer created.', 'customer_id' => $customerId];
+});
+
+$router->with(permit('CUSTOMER_MANAGE'))->patch('/api/customers/{id}', function (array $params, array $body) {
+    $result = updateCustomer((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Customer updated.', 'customer_id' => (int) $params['id'], 'changed' => $result['changed']];
+});
+
+
+// ---- Vehicles: single, create, update, link/unlink ----
+
+$router->with(permit('VEHICLE_MANAGE'))->get('/api/vehicles/{id}', function (array $params) {
+    $vehicle = getVehicle((int) $params['id']);
+    if ($vehicle === null) {
+        Router::sendError('NOT_FOUND', 'Vehicle not found.', 404);
+    }
+    return $vehicle;
+});
+
+$router->with(permit('VEHICLE_MANAGE'))->post('/api/vehicles', function (array $params, array $body) {
+    $vehicleId = createVehicle($body, Middleware::userId());
+    return ['message' => 'Vehicle created.', 'vehicle_id' => $vehicleId];
+});
+
+$router->with(permit('VEHICLE_MANAGE'))->patch('/api/vehicles/{id}', function (array $params, array $body) {
+    $result = updateVehicle((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Vehicle updated.', 'vehicle_id' => (int) $params['id'], 'changed' => $result['changed']];
+});
+
+$router->with(permit('CUSTOMER_MANAGE'))->post('/api/customers/{customerId}/vehicles/{vehicleId}', function (array $params) {
+    linkCustomerVehicle((int) $params['customerId'], (int) $params['vehicleId'], Middleware::userId());
+    return ['message' => 'Vehicle linked to customer.'];
+});
+
+$router->with(permit('CUSTOMER_MANAGE'))->delete('/api/customers/{customerId}/vehicles/{vehicleId}', function (array $params) {
+    unlinkCustomerVehicle((int) $params['customerId'], (int) $params['vehicleId'], Middleware::userId());
+    return ['message' => 'Vehicle unlinked from customer.'];
+});
+
+
+// ---- Work Orders: single, create, update, assign, positions, complete ----
+
+$router->with(permit('WORK_ORDER_CREATE', 'WORK_ORDER_ASSIGN'))->get('/api/work-orders/{id}', function (array $params) {
+    $wo = getWorkOrder((int) $params['id']);
+    if ($wo === null) {
+        Router::sendError('NOT_FOUND', 'Work order not found.', 404);
+    }
+    return $wo;
+});
+
+$router->with(permit('WORK_ORDER_CREATE'))->post('/api/work-orders', function (array $params, array $body) {
+    $woId = createWorkOrder($body, Middleware::userId());
+    return ['message' => 'Work order created.', 'work_order_id' => $woId];
+});
+
+$router->with(permit('WORK_ORDER_CREATE'))->patch('/api/work-orders/{id}', function (array $params, array $body) {
+    $result = updateWorkOrder((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Work order updated.', 'work_order_id' => (int) $params['id'], 'changed' => $result['changed']];
+});
+
+$router->with(permit('WORK_ORDER_ASSIGN'))->post('/api/work-orders/{id}/assign', function (array $params, array $body) {
+    $techId = (int) ($body['tech_id'] ?? 0);
+    if ($techId === 0) {
+        Router::sendError('MISSING_FIELD', 'Field "tech_id" is required.', 400);
+    }
+    assignWorkOrder((int) $params['id'], $techId, Middleware::userId());
+    return ['message' => 'Technician assigned.', 'work_order_id' => (int) $params['id'], 'tech_id' => $techId];
+});
+
+$router->with(permit('WORK_ORDER_CREATE'))->post('/api/work-orders/{id}/positions', function (array $params, array $body) {
+    $posId = addWorkOrderPosition((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Position added.', 'position_id' => $posId];
+});
+
+$router->with(permit('WORK_ORDER_CREATE'))->patch('/api/work-orders/positions/{id}', function (array $params, array $body) {
+    $result = updateWorkOrderPosition((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Position updated.', 'position_id' => (int) $params['id'], 'changed' => $result['changed']];
+});
+
+$router->with(permit('WORK_ORDER_CREATE'))->post('/api/work-orders/{id}/complete', function (array $params) {
+    $result = completeWorkOrder((int) $params['id'], Middleware::userId());
+    return ['message' => 'Work order completed.', 'work_order_id' => (int) $params['id'], 'details' => $result];
+});
+
+
+// ---- Invoices: single, create, line items, void ----
+
+$router->with(permit('INVOICE_CREATE'))->get('/api/invoices/{id}', function (array $params) {
+    $inv = getInvoice((int) $params['id']);
+    if ($inv === null) {
+        Router::sendError('NOT_FOUND', 'Invoice not found.', 404);
+    }
+    return $inv;
+});
+
+$router->with(permit('INVOICE_CREATE'))->post('/api/invoices', function (array $params, array $body) {
+    $invoiceId = createInvoice($body, Middleware::userId());
+    return ['message' => 'Invoice created.', 'invoice_id' => $invoiceId];
+});
+
+$router->with(permit('INVOICE_CREATE'))->post('/api/invoices/{id}/line-items', function (array $params, array $body) {
+    $itemId = addInvoiceLineItem((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Line item added.', 'line_item_id' => $itemId];
+});
+
+$router->with(permit('INVOICE_CREATE'))->delete('/api/invoices/line-items/{id}', function (array $params) {
+    removeInvoiceLineItem((int) $params['id'], Middleware::userId());
+    return ['message' => 'Line item removed.', 'line_item_id' => (int) $params['id']];
+});
+
+$router->with(permit('INVOICE_VOID'))->post('/api/invoices/{id}/void', function (array $params, array $body) {
+    $reason = trim($body['reason'] ?? '');
+    if ($reason === '') {
+        Router::sendError('MISSING_FIELD', 'Field "reason" is required.', 400);
+    }
+    voidInvoice((int) $params['id'], $reason, Middleware::userId());
+    return ['message' => 'Invoice voided.', 'invoice_id' => (int) $params['id']];
+});
+
+
+// ---- Payments ----
+
+$router->with(permit('PAYMENT_ACCEPT'))->post('/api/invoices/{id}/payments', function (array $params, array $body) {
+    $paymentId = recordPayment((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Payment recorded.', 'payment_id' => $paymentId];
+});
+
+$router->with(permit('INVOICE_CREATE'))->get('/api/invoices/{id}/payments', function (array $params) {
+    return ['payments' => getInvoicePayments((int) $params['id'])];
+});
+
+
+// ---- Fee Waiver (owner only) ----
+
+$router->with(permit('FEE_WAIVE'))->post('/api/invoices/line-items/{id}/waive', function (array $params, array $body) {
+    $reason = trim($body['reason'] ?? '');
+    if ($reason === '') {
+        Router::sendError('MISSING_FIELD', 'Field "reason" is required.', 400);
+    }
+    waiveFee((int) $params['id'], $reason, Middleware::userId());
+    return ['message' => 'Fee waived.', 'line_item_id' => (int) $params['id']];
+});
+
+
+// ---- Deposits: create, apply, forfeit ----
+
+$router->with(permit('DEPOSIT_ACCEPT'))->post('/api/deposits', function (array $params, array $body) {
+    $depositId = createDeposit($body, Middleware::userId());
+    return ['message' => 'Deposit created.', 'deposit_id' => $depositId];
+});
+
+$router->with(permit('DEPOSIT_ACCEPT'))->post('/api/deposits/{id}/apply', function (array $params, array $body) {
+    $invoiceId = (int) ($body['invoice_id'] ?? 0);
+    if ($invoiceId === 0) {
+        Router::sendError('MISSING_FIELD', 'Field "invoice_id" is required.', 400);
+    }
+    applyDeposit((int) $params['id'], $invoiceId, Middleware::userId());
+    return ['message' => 'Deposit applied.', 'deposit_id' => (int) $params['id'], 'invoice_id' => $invoiceId];
+});
+
+$router->with(permit('DEPOSIT_FORFEIT'))->post('/api/deposits/{id}/forfeit', function (array $params, array $body) {
+    $reason = trim($body['reason'] ?? '');
+    if ($reason === '') {
+        Router::sendError('MISSING_FIELD', 'Field "reason" is required.', 400);
+    }
+    forfeitDeposit((int) $params['id'], $reason, Middleware::userId());
+    return ['message' => 'Deposit forfeited.', 'deposit_id' => (int) $params['id']];
+});
+
+
+// ---- Refunds: create request, approve ----
+
+$router->with(permit('REFUND_REQUEST'))->post('/api/refunds', function (array $params, array $body) {
+    $refundId = createRefundRequest($body, Middleware::userId());
+    return ['message' => 'Refund requested.', 'refund_id' => $refundId];
+});
+
+$router->with(permit('REFUND_APPROVE', 'REFUND_APPROVE_HIGH'))->post('/api/refunds/{id}/approve', function (array $params) {
+    approveRefund((int) $params['id'], Middleware::userId());
+    return ['message' => 'Refund approved.', 'refund_id' => (int) $params['id']];
+});
+
+
+// ---- Purchase Orders: single, create, line items, receive ----
+
+$router->with(permit('PO_CREATE', 'PO_RECEIVE'))->get('/api/purchase-orders/{id}', function (array $params) {
+    $po = getPurchaseOrder((int) $params['id']);
+    if ($po === null) {
+        Router::sendError('NOT_FOUND', 'Purchase order not found.', 404);
+    }
+    return $po;
+});
+
+$router->with(permit('PO_CREATE'))->post('/api/purchase-orders', function (array $params, array $body) {
+    $poId = createPurchaseOrder($body, Middleware::userId());
+    return ['message' => 'Purchase order created.', 'po_id' => $poId];
+});
+
+$router->with(permit('PO_CREATE'))->post('/api/purchase-orders/{id}/lines', function (array $params, array $body) {
+    $lineId = addPoLineItem((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Line item added.', 'po_line_id' => $lineId];
+});
+
+$router->with(permit('PO_RECEIVE'))->post('/api/purchase-orders/{id}/receive', function (array $params, array $body) {
+    $items = $body['items'] ?? [];
+    if (empty($items)) {
+        Router::sendError('MISSING_FIELD', 'Field "items" is required (array of {po_line_id, quantity_received}).', 400);
+    }
+    $result = receivePurchaseOrder((int) $params['id'], $items, Middleware::userId());
+    return ['message' => 'Items received.', 'po_id' => (int) $params['id'], 'status' => $result['status'], 'received' => $result['received']];
+});
+
+
+// ---- Appointments: single, list, create, update, cancel ----
+
+$router->with(permit('APPOINTMENT_MANAGE'))->get('/api/appointments/{id}', function (array $params) {
+    $appt = getAppointment((int) $params['id']);
+    if ($appt === null) {
+        Router::sendError('NOT_FOUND', 'Appointment not found.', 404);
+    }
+    return $appt;
+});
+
+$router->with(permit('APPOINTMENT_MANAGE'))->get('/api/appointments', function () {
+    $start = Router::query('start');
+    $end = Router::query('end');
+    return ['appointments' => listAppointments($start, $end)];
+});
+
+$router->with(permit('APPOINTMENT_MANAGE'))->post('/api/appointments', function (array $params, array $body) {
+    $apptId = createAppointment($body, Middleware::userId());
+    return ['message' => 'Appointment created.', 'appointment_id' => $apptId];
+});
+
+$router->with(permit('APPOINTMENT_MANAGE'))->patch('/api/appointments/{id}', function (array $params, array $body) {
+    $result = updateAppointment((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Appointment updated.', 'appointment_id' => (int) $params['id'], 'changed' => $result['changed']];
+});
+
+$router->with(permit('APPOINTMENT_MANAGE'))->post('/api/appointments/{id}/cancel', function (array $params) {
+    cancelAppointment((int) $params['id'], Middleware::userId());
+    return ['message' => 'Appointment cancelled.', 'appointment_id' => (int) $params['id']];
+});
+
+
+// ---- Waivers ----
+
+$router->with(permit('WAIVER_CREATE'))->post('/api/waivers', function (array $params, array $body) {
+    $waiverId = createWaiver($body, Middleware::userId());
+    return ['message' => 'Waiver created.', 'waiver_id' => $waiverId];
+});
+
+
+// ---- Vendors ----
+
+$router->with(permit('PO_CREATE'))->get('/api/vendors', function () {
+    return ['vendors' => listVendors()];
+});
+
+$router->with(permit('PO_CREATE'))->get('/api/vendors/{id}', function (array $params) {
+    $vendor = getVendor((int) $params['id']);
+    if ($vendor === null) {
+        Router::sendError('NOT_FOUND', 'Vendor not found.', 404);
+    }
+    return $vendor;
+});
+
+$router->with(permit('PO_CREATE'))->post('/api/vendors', function (array $params, array $body) {
+    $vendorId = createVendor($body, Middleware::userId());
+    return ['message' => 'Vendor created.', 'vendor_id' => $vendorId];
+});
+
+
+// ---- Service Catalog (read-only for techs, config for owner) ----
+
+$router->with($auth)->get('/api/services', function () {
+    return ['services' => listServices()];
+});
+
+$router->with($auth)->get('/api/services/{id}', function (array $params) {
+    $service = getService((int) $params['id']);
+    if ($service === null) {
+        Router::sendError('NOT_FOUND', 'Service not found.', 404);
+    }
+    return $service;
+});
+
+
+// ---- Configuration (owner only) ----
+
+$router->with(permit('CONFIG_MANAGE'))->get('/api/config', function () {
+    return ['config' => getAllConfig()];
+});
+
+$router->with(permit('CONFIG_MANAGE'))->get('/api/config/{key}', function (array $params) {
+    $config = getConfigValue($params['key']);
+    if ($config === null) {
+        Router::sendError('NOT_FOUND', 'Configuration key not found.', 404);
+    }
+    return $config;
+});
+
+$router->with(permit('CONFIG_MANAGE'))->patch('/api/config/{key}', function (array $params, array $body) {
+    $value = $body['value'] ?? '';
+    updateConfig($params['key'], (string) $value, Middleware::userId());
+    return ['message' => 'Configuration updated.', 'key' => $params['key']];
+});
