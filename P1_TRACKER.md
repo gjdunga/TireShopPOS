@@ -8,7 +8,7 @@
 |-------|-------------|------------|--------|--------|
 | P1a | Project skeleton: front controller, autoloader, .env, config, error handling | None | COMPLETE | 9016527 |
 | P1b | Database layer: PDO factory, connection health, `GET /api/health` with DB status | P1a | COMPLETE | 871b75f |
-| P1c | Auth system: login, logout, password change. Database-backed sessions. Wires to existing helpers.php auth functions | P1a, P1b | NOT STARTED | |
+| P1c | Auth system: login, logout, password change. Database-backed sessions. Wires to existing helpers.php auth functions | P1a, P1b | COMPLETE | (pending) |
 | P1d | API router: method+path dispatcher, JSON envelope, global error handler, CORS | P1a | NOT STARTED | |
 | P1e | RBAC middleware: session-to-role, permission check per endpoint, 403 response. All business logic exposed as REST behind RBAC | P1c, P1d | NOT STARTED | |
 | P1f | Backup and ops: daily MySQL dump script, photo rsync, cron template, expanded health endpoint | P1b | NOT STARTED | |
@@ -83,6 +83,60 @@ public/index.php       Health endpoint now includes database status
 - Graceful failure: DB unavailable returns structured JSON (no crash)
 
 **Verified against live MySQL 8.0.45 with full v2.4 schema (44 tables, 14 views, 410 torque specs).**
+
+## P1c: Authentication System
+
+**Files created:**
+
+```
+app/
+  Core/
+    Session.php        Database-backed session manager (token, validate, destroy, cleanup)
+  Http/
+    Auth.php           Auth service (login, logout, password change, requireAuth)
+sql/
+  migrations/
+    001_sessions_table.sql   Sessions table + audit_log enum extension
+```
+
+**Files modified:**
+
+```
+public/index.php       Added auth routes + jsonBody/jsonResponse helpers
+```
+
+**API Endpoints:**
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| POST | /api/auth/login | No | Authenticate, returns token + user profile + permissions |
+| POST | /api/auth/logout | Bearer token | Destroy session |
+| POST | /api/auth/password | Bearer token | Change password (validates strength, history, current pw) |
+| GET | /api/auth/session | Bearer token | Return current session/user info |
+
+**Login response includes:** token, expires_at, user_id, username, display_name, email, role, force_password_change flag, password_expired flag, full permissions array.
+
+**Security features verified (39/39 tests):**
+
+- Bcrypt password verification (cost 12)
+- Account lockout after 5 failed attempts (15-minute cooldown, HTTP 423)
+- No username enumeration (same error for bad user vs bad password)
+- Password strength: min 8 chars, upper + lower + digit
+- Password history: rejects last 5 passwords
+- Session tokens: 64-char hex (32 bytes cryptographic random)
+- Sliding session expiry (extends on each valid access)
+- Password change invalidates all other sessions
+- Inactive users rejected even with valid credentials
+- Expired session cleanup on health endpoint
+- Audit trail: LOGIN, LOGOUT, FAILED_LOGIN, PASSWORD_CHANGE
+
+**Schema changes (migration 001):**
+
+- New table: sessions (token, user_id, ip, user_agent, expiry, last_active)
+- Extended audit_log action enum: +PASSWORD_CHANGE, +SESSION_CREATE, +SESSION_DESTROY
+
+**Auth class wraps these helpers.php functions using Database:: instead of getDB():**
+recordFailedLogin, recordSuccessfulLogin, isPasswordReused, isPasswordExpired, getUserPermissions, auditLog
 
 ## Notes
 
