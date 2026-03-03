@@ -15,7 +15,7 @@ boot, authenticate, authorize, dispatch, respond, backup.
 | P2a | Frontend scaffold: Vite, React Router, AuthContext, API client, layout shell | DONE | d0643bf | 2026-03-03 |
 | P2b | CRUD API completion: remaining 12 permissions, all entity endpoints | DONE | de3c3b8 | 2026-03-03 |
 | P2c | Dashboard (live KPIs) + tire inventory screens + photo upload UI | DONE | b87ad4e | 2026-03-03 |
-| P2d | Customer/vehicle CRUD + VehicleLookupService integration | TODO | | |
+| P2d | Customer/vehicle CRUD + VehicleLookupService integration | DONE | 2b01121 | 2026-03-03 |
 | P2e | Work order + invoice + waiver + checkout (core transaction flow) | TODO | | |
 | P2f | Cash drawer, appointments, PO, refunds, quotes | TODO | | |
 | P2g | Print/PDF templates + 25 report charts | TODO | | |
@@ -91,15 +91,20 @@ boot, authenticate, authorize, dispatch, respond, backup.
 
 ---
 
-## P2d: Customers + Vehicles + VehicleLookup (TODO)
+## P2d: Customers + Vehicles + VehicleLookup (DONE)
 
-**Scope:** Customer and vehicle management, VehicleLookupService integration.
-- Customer search + create/edit
-- Vehicle search + create/edit
-- Customer-vehicle M:M linking UI
-- VIN entry with validation
-- Plate lookup (PlateToVIN, NHTSA VPIC decode, torque match)
-- Torque spec display and manual override
+**Deliverables:**
+- CustomerSearch: debounced search (name/phone/email), results table, link to detail.
+- CustomerDetail: create/edit form (name, phone primary/secondary, email, full address, tax exempt toggle with ID). Linked vehicles panel (search-and-link, unlink, create-new shortcut).
+- VehicleSearch: debounced search (VIN, plate, year/make/model), owner column from M:M join.
+- VehicleDetail: create/edit form (year, make, model, trim, VIN with inline check-digit validator, plate+state, color, drivetrain, lug count, lug pattern, torque override, OEM size, notes). Service history table.
+- VehicleLookup panel: two-tab interface (Plate Lookup, VIN Decode). Plate runs full 4-stage pipeline (cache, PlateToVIN $0.05, NHTSA VPIC, torque match). VIN runs NHTSA decode (free). Results auto-fill form. Source/cost badge. Torque spec inline.
+- TorqueSpecPanel: three-tier matching display (exact/partial/fallback), range, match level + confidence badges, lug info, verified status, manual override awareness.
+- 3 new API routes: /vehicles/lookup/plate, /vehicles/lookup/vin, /vehicles/torque-spec.
+- VehicleLookupService.php loaded in boot. CRUD column alignment fixed for customers + vehicles tables.
+
+**File count:** 5 new files (4 JSX, 1 CSS), 4 modified. 1,205 insertions.
+**Build:** 298 KB (89 KB gzipped), 66 modules, zero warnings. 116 API routes total.
 
 ---
 
