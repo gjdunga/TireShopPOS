@@ -6,7 +6,7 @@
 
 | Chunk | Deliverable | Depends On | Status | Commit |
 |-------|-------------|------------|--------|--------|
-| P1a | Project skeleton: front controller, autoloader, .env, config, error handling | None | COMPLETE | (pending) |
+| P1a | Project skeleton: front controller, autoloader, .env, config, error handling | None | COMPLETE | 9016527 |
 | P1b | Database layer: PDO factory, connection health, `GET /api/health` with DB status | P1a | NOT STARTED | |
 | P1c | Auth system: login, logout, password change. Database-backed sessions. Wires to existing helpers.php auth functions | P1a, P1b | NOT STARTED | |
 | P1d | API router: method+path dispatcher, JSON envelope, global error handler, CORS | P1a | NOT STARTED | |
