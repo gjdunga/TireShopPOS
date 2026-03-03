@@ -1,30 +1,22 @@
 // ================================================================
-// Dashboard (Placeholder)
-// P2a: proves the scaffold works end to end.
-// Fetches /api/health and displays system status.
-// Will be replaced with live KPIs in P2c.
+// Dashboard (P2c)
+// Live KPIs: open work orders, today's appointments, re-torque due,
+// cash drawer status, deposit alerts, system health.
+//
+// Each widget fetches independently and handles 403 gracefully
+// (user may lack permission for some panels).
 //
 // DunganSoft Technologies, March 2026
 // ================================================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
 import api from '../api/client.js';
+import './Dashboard.css';
 
 export default function Dashboard() {
-  const { user } = useAuth();
-  const [health, setHealth] = useState(null);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    api.get('/health')
-      .then((data) => { if (!cancelled) setHealth(data); })
-      .catch((err) => { if (!cancelled) setError(err.message); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
+  const { user, can, canAny } = useAuth();
 
   return (
     <div>
@@ -32,68 +24,306 @@ export default function Dashboard() {
         Welcome, {user?.display_name || user?.username}
       </h1>
 
-      {loading && (
-        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span className="spinner" />
-          <span>Loading system status...</span>
-        </div>
-      )}
-
-      {error && <div className="alert alert-error">{error}</div>}
-
-      {health && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
-          <StatusCard label="System" value={health.status} ok={health.status === 'ok'} />
-          <StatusCard label="Database" value={health.database?.connected ? 'Connected' : 'Down'} ok={health.database?.connected} />
-          <StatusCard label="Tables" value={health.database?.table_count} />
-          <StatusCard label="PHP" value={health.php} />
-          <StatusCard label="App Version" value={health.version || 'dev'} />
-          <StatusCard label="Debug Mode" value={health.debug ? 'ON' : 'OFF'} ok={!health.debug} />
-
-          {health.ops?.disk && (
-            <>
-              <StatusCard label="Disk Used" value={`${health.ops.disk.used_pct}%`} ok={!health.ops.disk.warning} />
-              <StatusCard label="Disk Free" value={`${health.ops.disk.free_gb} GB`} />
-            </>
-          )}
-
-          {health.ops?.sessions && (
-            <StatusCard label="Active Sessions" value={health.ops.sessions.active_sessions} />
-          )}
-
-          {health.ops?.backups?.db_backup && (
-            <StatusCard
-              label="Last Backup"
-              value={health.ops.backups.db_backup.stale ? 'STALE' : 'OK'}
-              ok={!health.ops.backups.db_backup.stale}
-            />
-          )}
-        </div>
-      )}
-
-      <div className="card" style={{ marginTop: '1.5rem', color: 'var(--gray)', fontSize: '0.875rem' }}>
-        <p style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--navy)' }}>
-          P2a Scaffold Verification
-        </p>
-        <p>
-          This page confirms the frontend scaffold is operational: Vite build, React Router, AuthContext (login, session, permissions), API client (Bearer token, JSON envelope unwrap), layout shell (sidebar, topbar), and the force-password-change gate all work end to end.
-        </p>
-        <p style={{ marginTop: '0.5rem' }}>
-          The dashboard will be wired to live KPI queries in P2c.
-        </p>
+      <div className="dash-grid">
+        <HealthCard />
+        {canAny('WORK_ORDER_CREATE', 'WORK_ORDER_ASSIGN') && <WorkOrdersCard />}
+        {can('APPOINTMENT_MANAGE') && <AppointmentsCard />}
+        {can('WORK_ORDER_CREATE') && <RetorqueCard />}
+        {canAny('CASH_DRAWER_OPEN', 'CASH_DRAWER_CLOSE') && <CashDrawerCard />}
+        {can('DEPOSIT_ACCEPT') && <DepositsCard />}
+        {can('DEPOSIT_FORFEIT') && <ExpiredDepositsCard />}
+        {can('INVENTORY_VIEW') && <InventoryCard />}
       </div>
     </div>
   );
 }
 
-function StatusCard({ label, value, ok }) {
+
+// ---- Shared hook: fetch + loading + error ----
+
+function useApiData(path) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const reload = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    api.get(path)
+      .then(setData)
+      .catch((err) => {
+        if (err.status === 403) {
+          setData(null);
+        } else {
+          setError(err.message);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, [path]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  return { data, loading, error, reload };
+}
+
+
+// ---- KPI Widgets ----
+
+function HealthCard() {
+  const { data, loading, error } = useApiData('/health');
+
+  return (
+    <DashCard title="System" span={1}>
+      {loading && <Spinner />}
+      {error && <ErrMsg msg={error} />}
+      {data && (
+        <div className="dash-stats">
+          <Stat label="Status" value={data.status} ok={data.status === 'ok'} />
+          <Stat label="Database" value={data.database?.connected ? 'Connected' : 'Down'} ok={data.database?.connected} />
+          <Stat label="Tables" value={data.database?.table_count} />
+          {data.ops?.disk && (
+            <Stat label="Disk" value={`${data.ops.disk.used_pct}%`} ok={!data.ops.disk.warning} />
+          )}
+        </div>
+      )}
+    </DashCard>
+  );
+}
+
+function WorkOrdersCard() {
+  const { data, loading, error } = useApiData('/work-orders/open');
+  const count = data?.work_orders?.length ?? 0;
+
+  return (
+    <DashCard title="Open Work Orders" count={count} link="/work-orders" span={2}>
+      {loading && <Spinner />}
+      {error && <ErrMsg msg={error} />}
+      {data?.work_orders?.length > 0 && (
+        <table className="dash-table">
+          <thead>
+            <tr><th>WO #</th><th>Vehicle</th><th>Status</th><th>Tech</th></tr>
+          </thead>
+          <tbody>
+            {data.work_orders.slice(0, 8).map((wo) => (
+              <tr key={wo.work_order_id}>
+                <td className="mono">{wo.work_order_number}</td>
+                <td>{wo.vehicle_year ? `${wo.vehicle_year} ${wo.vehicle_make} ${wo.vehicle_model}` : 'N/A'}</td>
+                <td><StatusBadge status={wo.status} /></td>
+                <td>{wo.assigned_tech_name || 'Unassigned'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {data?.work_orders?.length === 0 && <p className="text-muted" style={{ fontSize: '0.875rem' }}>No open work orders.</p>}
+    </DashCard>
+  );
+}
+
+function AppointmentsCard() {
+  const { data, loading, error } = useApiData('/appointments/today');
+  const count = data?.appointments?.length ?? 0;
+
+  return (
+    <DashCard title="Today's Appointments" count={count} link="/appointments" span={2}>
+      {loading && <Spinner />}
+      {error && <ErrMsg msg={error} />}
+      {data?.appointments?.length > 0 && (
+        <table className="dash-table">
+          <thead>
+            <tr><th>Time</th><th>Customer</th><th>Service</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {data.appointments.slice(0, 6).map((a) => (
+              <tr key={a.appointment_id}>
+                <td className="mono">{a.appointment_time?.slice(0, 5) || 'TBD'}</td>
+                <td>{a.customer_first ? `${a.customer_first} ${a.customer_last}` : 'Walk-in'}</td>
+                <td>{a.service_type || 'General'}</td>
+                <td><StatusBadge status={a.status} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {data?.appointments?.length === 0 && <p className="text-muted" style={{ fontSize: '0.875rem' }}>No appointments today.</p>}
+    </DashCard>
+  );
+}
+
+function RetorqueCard() {
+  const { data, loading, error } = useApiData('/retorque/due');
+  const count = data?.due_list?.length ?? 0;
+
+  return (
+    <DashCard title="Re-torque Due" count={count} accent={count > 0 ? 'var(--orange)' : null}>
+      {loading && <Spinner />}
+      {error && <ErrMsg msg={error} />}
+      {data?.due_list?.length > 0 && (
+        <ul className="dash-list">
+          {data.due_list.slice(0, 5).map((item, i) => (
+            <li key={i}>
+              <span className="mono">{item.work_order_number || `WO #${item.work_order_id}`}</span>
+              {item.due_date && <span className="text-muted"> by {item.due_date}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {count === 0 && !loading && <p className="text-muted" style={{ fontSize: '0.875rem' }}>None due.</p>}
+    </DashCard>
+  );
+}
+
+function CashDrawerCard() {
+  const { data, loading, error } = useApiData('/cash-drawer/today');
+
+  return (
+    <DashCard title="Cash Drawer" link="/cash-drawer">
+      {loading && <Spinner />}
+      {error && <ErrMsg msg={error} />}
+      {data && (
+        <div className="dash-stats">
+          <Stat label="Status" value={data.open ? 'OPEN' : 'CLOSED'} ok={data.open} />
+          {data.drawer && (
+            <Stat label="Opening" value={'$' + Number(data.drawer.opening_balance || 0).toFixed(2)} />
+          )}
+        </div>
+      )}
+    </DashCard>
+  );
+}
+
+function DepositsCard() {
+  const { data, loading, error } = useApiData('/deposits/expiring?within_days=7');
+  const count = data?.deposits?.length ?? 0;
+
+  return (
+    <DashCard title="Expiring Deposits (7d)" count={count} accent={count > 0 ? 'var(--orange)' : null}>
+      {loading && <Spinner />}
+      {error && <ErrMsg msg={error} />}
+      {data?.deposits?.length > 0 && (
+        <ul className="dash-list">
+          {data.deposits.slice(0, 5).map((d, i) => (
+            <li key={i}>
+              <span>${Number(d.amount || 0).toFixed(2)}</span>
+              <span className="text-muted"> expires {d.expires_at?.slice(0, 10)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {count === 0 && !loading && <p className="text-muted" style={{ fontSize: '0.875rem' }}>None expiring.</p>}
+    </DashCard>
+  );
+}
+
+function ExpiredDepositsCard() {
+  const { data, loading, error } = useApiData('/deposits/expired');
+  const count = data?.deposits?.length ?? 0;
+
+  return (
+    <DashCard title="Expired Deposits" count={count} accent={count > 0 ? 'var(--red)' : null}>
+      {loading && <Spinner />}
+      {error && <ErrMsg msg={error} />}
+      {count > 0 && (
+        <ul className="dash-list">
+          {data.deposits.slice(0, 5).map((d, i) => (
+            <li key={i}>
+              <span>${Number(d.amount || 0).toFixed(2)}</span>
+              <span className="text-muted"> expired {d.expires_at?.slice(0, 10)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {count === 0 && !loading && <p className="text-muted" style={{ fontSize: '0.875rem' }}>None expired.</p>}
+    </DashCard>
+  );
+}
+
+function InventoryCard() {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get('/tires/search/advanced?status=available&limit=1')
+      .then((data) => { setStats({ available: data.results?.total ?? 0 }); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <DashCard title="Inventory" link="/tires">
+      {loading && <Spinner />}
+      {stats && (
+        <div className="dash-stats">
+          <Stat label="Available Tires" value={stats.available} />
+        </div>
+      )}
+    </DashCard>
+  );
+}
+
+
+// ---- Shared UI Components ----
+
+function DashCard({ title, count, link, accent, span, children }) {
+  const style = {
+    gridColumn: span ? `span ${span}` : undefined,
+    borderLeft: accent ? `4px solid ${accent}` : undefined,
+  };
+
+  return (
+    <div className="card dash-card" style={style}>
+      <div className="dash-card-header">
+        <div>
+          <span className="dash-card-title">{title}</span>
+          {count !== undefined && (
+            <span className="dash-card-count" style={{ color: accent || 'var(--navy)' }}>{count}</span>
+          )}
+        </div>
+        {link && <Link to={link} className="btn btn-ghost btn-sm">View All</Link>}
+      </div>
+      <div className="dash-card-body">{children}</div>
+    </div>
+  );
+}
+
+function Stat({ label, value, ok }) {
   const color = ok === true ? 'var(--green)' : ok === false ? 'var(--red)' : 'var(--navy)';
   return (
-    <div className="card">
+    <div className="dash-stat">
       <div className="label">{label}</div>
       <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1.25rem', fontWeight: 600, color }}>
         {value ?? '\u2014'}
       </div>
     </div>
   );
+}
+
+function StatusBadge({ status }) {
+  const colors = {
+    open: 'var(--blue)', scheduled: 'var(--blue)', in_progress: 'var(--orange)',
+    completed: 'var(--green)', cancelled: 'var(--gray)', confirmed: 'var(--green)',
+  };
+  const bg = {
+    open: 'rgba(74,124,207,0.1)', scheduled: 'rgba(74,124,207,0.1)', in_progress: 'rgba(212,112,10,0.1)',
+    completed: 'rgba(43,122,58,0.1)', cancelled: 'rgba(107,101,96,0.1)', confirmed: 'rgba(43,122,58,0.1)',
+  };
+
+  return (
+    <span className="badge" style={{ color: colors[status] || 'var(--gray)', background: bg[status] || 'var(--lgray)' }}>
+      {(status || 'unknown').replace(/_/g, ' ')}
+    </span>
+  );
+}
+
+function Spinner() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0' }}>
+      <span className="spinner" />
+      <span className="text-muted" style={{ fontSize: '0.8125rem' }}>Loading...</span>
+    </div>
+  );
+}
+
+function ErrMsg({ msg }) {
+  return <div className="alert alert-error" style={{ fontSize: '0.8125rem' }}>{msg}</div>;
 }

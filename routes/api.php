@@ -199,17 +199,22 @@ $router->with(permit('INVENTORY_VIEW'))->get('/api/tires/search', function (arra
 });
 
 $router->with(permit('INVENTORY_VIEW'))->get('/api/tires/search/advanced', function (array $params, array $body) {
+    $brandId = Router::query('brand_id');
+    $minPrice = Router::query('min_price');
+    $maxPrice = Router::query('max_price');
+    $minTread = Router::query('min_tread');
+
     return ['results' => searchTiresAdvanced(
         Router::query('size'),
-        Router::query('brand'),
-        Router::query('min_price'),
-        Router::query('max_price'),
+        $brandId !== null ? (int) $brandId : null,
         Router::query('condition'),
+        $minPrice !== null ? (float) $minPrice : null,
+        $maxPrice !== null ? (float) $maxPrice : null,
         Router::query('status', 'available'),
+        $minTread !== null ? (int) $minTread : null,
+        Router::query('bin_facility'),
         (int) Router::query('limit', '50'),
-        (int) Router::query('offset', '0'),
-        Router::query('sort_by', 'created_at'),
-        Router::query('sort_dir', 'DESC')
+        (int) Router::query('offset', '0')
     )];
 });
 
@@ -1154,4 +1159,21 @@ $router->with(permit('CONFIG_MANAGE'))->patch('/api/config/{key}', function (arr
     $value = $body['value'] ?? '';
     updateConfig($params['key'], (string) $value, Middleware::userId());
     return ['message' => 'Configuration updated.', 'key' => $params['key']];
+});
+
+
+// ============================================================================
+// Lookup Tables (auth only, used by UI dropdowns)
+// ============================================================================
+
+$router->with($auth)->get('/api/lookups/brands', function () {
+    return ['brands' => Database::query("SELECT brand_id, brand_name FROM lkp_brands WHERE is_active = 1 ORDER BY brand_name")];
+});
+
+$router->with($auth)->get('/api/lookups/tire-types', function () {
+    return ['tire_types' => Database::query("SELECT tire_type_id, type_name FROM lkp_tire_types WHERE is_active = 1 ORDER BY type_name")];
+});
+
+$router->with($auth)->get('/api/lookups/construction-types', function () {
+    return ['construction_types' => Database::query("SELECT construction_type_id, construction_name FROM lkp_construction_types ORDER BY construction_name")];
 });

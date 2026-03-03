@@ -1,0 +1,98 @@
+/* ================================================================
+   Dashboard (P2c)
+   Grid layout for KPI cards, embedded tables, stat displays.
+   ================================================================ */
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.dash-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.dash-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.dash-card-title {
+  font-family: var(--font-heading);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gray);
+}
+
+.dash-card-count {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+.dash-card-body {
+  flex: 1;
+}
+
+/* Stats row inside a card */
+.dash-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.dash-stat {
+  min-width: 80px;
+}
+
+/* Compact table inside dashboard cards */
+.dash-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.dash-table th {
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  font-family: var(--font-heading);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gray);
+  border-bottom: 1px solid var(--mgray);
+}
+
+.dash-table td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--lgray);
+  color: var(--dgray);
+}
+
+.dash-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Simple list inside dashboard cards */
+.dash-list {
+  list-style: none;
+  font-size: 0.8125rem;
+}
+
+.dash-list li {
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--lgray);
+}
+
+.dash-list li:last-child {
+  border-bottom: none;
+}

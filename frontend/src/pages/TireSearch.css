@@ -1,0 +1,108 @@
+/* ================================================================
+   TireSearch (P2c)
+   Filter form, results table, pagination.
+   ================================================================ */
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+/* Filter panel */
+.tire-filters {
+  margin-bottom: 0;
+}
+
+.filter-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.filter-field {
+  flex: 1;
+  min-width: 120px;
+  max-width: 200px;
+}
+
+.filter-field-lg {
+  max-width: 260px;
+}
+
+.filter-field input,
+.filter-field select {
+  font-size: 0.875rem;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+  padding-bottom: 1px;
+}
+
+/* Results header */
+.results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+/* Tire results table */
+.table-wrap {
+  overflow-x: auto;
+}
+
+.tire-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.tire-table th {
+  text-align: left;
+  padding: 0.5rem 0.625rem;
+  font-family: var(--font-heading);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gray);
+  border-bottom: 2px solid var(--mgray);
+  white-space: nowrap;
+}
+
+.tire-table td {
+  padding: 0.5rem 0.625rem;
+  border-bottom: 1px solid var(--lgray);
+  vertical-align: middle;
+}
+
+.tire-table tr:hover td {
+  background: var(--lgray);
+}
+
+.tire-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0 0.25rem;
+  border-top: 1px solid var(--lgray);
+  margin-top: 0.5rem;
+}
