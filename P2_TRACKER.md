@@ -12,7 +12,7 @@ boot, authenticate, authorize, dispatch, respond, backup.
 
 | Chunk | Description | Status | Commit | Date |
 |-------|-------------|--------|--------|------|
-| P2a | Frontend scaffold: Vite, React Router, AuthContext, API client, layout shell | DONE | (pending) | 2026-03-03 |
+| P2a | Frontend scaffold: Vite, React Router, AuthContext, API client, layout shell | DONE | d0643bf | 2026-03-03 |
 | P2b | CRUD API completion: remaining 12 permissions, all entity endpoints | TODO | | |
 | P2c | Dashboard (live KPIs) + tire inventory screens + photo upload UI | TODO | | |
 | P2d | Customer/vehicle CRUD + VehicleLookupService integration | TODO | | |
