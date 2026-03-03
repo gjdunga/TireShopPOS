@@ -1,6 +1,6 @@
 # Tire Shop POS System
 
-**Dungan Soft Technologies** | March 2026
+**DunganSoft Technologies** | March 2026
 
 Point-of-sale system for tire shops with integrated vehicle lookup, torque specification management, Colorado tax/fee compliance, and full RBAC security.
 

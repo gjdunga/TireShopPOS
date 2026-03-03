@@ -2,7 +2,7 @@
 /**
  * ============================================================================
  * Tire Shop POS System: PHP Helpers and Business Logic
- * Dungan Soft Technologies, March 2026
+ * DunganSoft Technologies, March 2026
  * Schema Version: 2.3 (40 tables, 13 views) + 2.4 extension (3 tables, 1 view)
  * Target: PHP 8.1+, MySQL 8.x / MariaDB 10.6+
  * ============================================================================

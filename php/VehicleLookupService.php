@@ -2,7 +2,7 @@
 /**
  * ============================================================================
  * Tire Shop POS: Vehicle Lookup Service
- * Dungan Soft Technologies, March 2026
+ * DunganSoft Technologies, March 2026
  * Schema Version: 2.4 (extends v2.3 with plate_lookup_cache, plate_lookup_log,
  *                       lkp_torque_specs)
  * Target: PHP 8.1+, MySQL 8.x / MariaDB 10.6+

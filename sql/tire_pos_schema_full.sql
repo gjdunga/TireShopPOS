@@ -2,7 +2,7 @@
 -- Tire Shop POS System: Consolidated Database Schema v2.4
 -- Target: MySQL 8.x / MariaDB 10.6+
 -- Charset: utf8mb4 throughout
--- Generated for Dungan Soft Technologies
+-- Generated for DunganSoft Technologies
 -- Date: March 2026
 -- ============================================================================
 -- Table count: 44 tables, 14 views
