@@ -14,7 +14,7 @@ boot, authenticate, authorize, dispatch, respond, backup.
 |-------|-------------|--------|--------|------|
 | P2a | Frontend scaffold: Vite, React Router, AuthContext, API client, layout shell | DONE | d0643bf | 2026-03-03 |
 | P2b | CRUD API completion: remaining 12 permissions, all entity endpoints | DONE | de3c3b8 | 2026-03-03 |
-| P2c | Dashboard (live KPIs) + tire inventory screens + photo upload UI | TODO | | |
+| P2c | Dashboard (live KPIs) + tire inventory screens + photo upload UI | DONE | b87ad4e | 2026-03-03 |
 | P2d | Customer/vehicle CRUD + VehicleLookupService integration | TODO | | |
 | P2e | Work order + invoice + waiver + checkout (core transaction flow) | TODO | | |
 | P2f | Cash drawer, appointments, PO, refunds, quotes | TODO | | |
@@ -76,14 +76,18 @@ boot, authenticate, authorize, dispatch, respond, backup.
 
 ---
 
-## P2c: Dashboard + Inventory (TODO)
+## P2c: Dashboard + Inventory (DONE)
 
-**Scope:** Wire dashboard to live API queries. Tire search and inventory management screens.
-- Dashboard KPI cards: open work orders, today's appointments, re-torque due, cash drawer status, deposit alerts
-- Tire search: parsed size, brand, type, tread depth, age filters
-- Tire detail/edit form
-- Photo upload UI (camera icon, drag-drop, multipart POST)
-- BIN location assignment
+**Deliverables:**
+- Dashboard rewrite: 8 live KPI widgets (open WOs, today's appointments, re-torque due, cash drawer, expiring deposits, expired deposits, inventory count, system health). Each widget fetches independently, permission-aware (403 silently hidden).
+- TireSearch page: advanced filter panel (size with auto-parse, brand dropdown, condition, status, tread depth, price range, BIN facility). Paginated table (25/page) with condition badges and status pills.
+- TireDetail page: edit form (INVENTORY_EDIT) or read-only view. Photo gallery with upload/delete/primary badge. DOT/TIN parser display with age warning. Waiver detection panel. Write-off action with reason.
+- TireCreate page: creation form with size auto-parse preview, brand dropdown, navigates to detail on success.
+- Backend fix: searchTiresAdvanced route corrected to match function signature.
+- New endpoints: /api/lookups/brands, /api/lookups/tire-types, /api/lookups/construction-types.
+
+**File count:** 6 new files (3 JSX, 3 CSS), 3 modified (App.jsx, Dashboard.jsx, api.php). 1,567 insertions.
+**Build:** 272 KB (84 KB gzipped), 61 modules, zero warnings.
 
 ---
 
