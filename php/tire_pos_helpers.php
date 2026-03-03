@@ -39,9 +39,21 @@
 
 /**
  * Returns a singleton PDO connection.
- * Config values should come from a .env or config.php file, not hardcoded.
+ *
+ * When running inside the framework (App\Core\Database is loaded), delegates
+ * to Database::pdo() so all code shares one connection with consistent
+ * config (strict mode, timezone, FOUND_ROWS). Falls back to standalone
+ * connection for any use outside the framework.
+ *
+ * DunganSoft Technologies, March 2026
  */
 function getDB(): PDO {
+    // Framework bridge: use the shared PDO singleton
+    if (class_exists('App\Core\Database', false)) {
+        return \App\Core\Database::pdo();
+    }
+
+    // Standalone fallback (original implementation)
     static $pdo = null;
     if ($pdo === null) {
         $host = getenv('DB_HOST') ?: '127.0.0.1';
@@ -54,8 +66,8 @@ function getDB(): PDO {
         $pdo = new PDO($dsn, $user, $pass, [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false, // Real prepared statements
-            PDO::MYSQL_ATTR_FOUND_ROWS   => true,  // UPDATE returns matched rows
+            PDO::ATTR_EMULATE_PREPARES   => false,
+            PDO::MYSQL_ATTR_FOUND_ROWS   => true,
         ]);
     }
     return $pdo;

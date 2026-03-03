@@ -49,37 +49,48 @@ class Router
 
     public function get(string $path, callable $handler): self
     {
-        return $this->addRoute('GET', $path, $handler);
+        return $this->registerWithMiddleware('GET', $path, $handler);
     }
 
     public function post(string $path, callable $handler): self
     {
-        return $this->addRoute('POST', $path, $handler);
+        return $this->registerWithMiddleware('POST', $path, $handler);
     }
 
     public function put(string $path, callable $handler): self
     {
-        return $this->addRoute('PUT', $path, $handler);
+        return $this->registerWithMiddleware('PUT', $path, $handler);
     }
 
     public function patch(string $path, callable $handler): self
     {
-        return $this->addRoute('PATCH', $path, $handler);
+        return $this->registerWithMiddleware('PATCH', $path, $handler);
     }
 
     public function delete(string $path, callable $handler): self
     {
-        return $this->addRoute('DELETE', $path, $handler);
+        return $this->registerWithMiddleware('DELETE', $path, $handler);
+    }
+
+    /**
+     * Register route, consuming any pending middleware from with().
+     */
+    private function registerWithMiddleware(string $method, string $path, callable $handler): self
+    {
+        $mw = $this->pendingMiddleware;
+        $this->pendingMiddleware = [];
+        return $this->addRoute($method, $path, $handler, $mw);
     }
 
     /**
      * Register a route.
      *
-     * @param string   $method  HTTP method
-     * @param string   $path    Route path, e.g. "/api/tires/{id}"
-     * @param callable $handler Function receiving (array $params, array $body)
+     * @param string   $method     HTTP method
+     * @param string   $path       Route path, e.g. "/api/tires/{id}"
+     * @param callable $handler    Function receiving (array $params, array $body)
+     * @param array    $middleware List of middleware callables to run before handler
      */
-    private function addRoute(string $method, string $path, callable $handler): self
+    private function addRoute(string $method, string $path, callable $handler, array $middleware = []): self
     {
         $path = '/' . ltrim($path, '/');
 
@@ -96,8 +107,27 @@ class Router
             'pattern'    => $pattern,
             'handler'    => $handler,
             'paramNames' => $paramNames,
+            'middleware'  => $middleware,
         ];
 
+        return $this;
+    }
+
+    // ---- Middleware-aware route registration ----
+
+    /** @var array Middleware stack to apply to the next registered route */
+    private array $pendingMiddleware = [];
+
+    /**
+     * Attach middleware to the next registered route.
+     * Chainable: $router->with([...])->get(...)
+     *
+     * @param array $middleware List of middleware callables
+     * @return self
+     */
+    public function with(array $middleware): self
+    {
+        $this->pendingMiddleware = $middleware;
         return $this;
     }
 
@@ -134,6 +164,13 @@ class Router
 
         // Execute handler with error wrapping
         try {
+            // Run middleware chain
+            foreach ($match['middleware'] as $mw) {
+                $mw($match['params'], self::jsonBody());
+                // Middleware calls Router::sendError() and exits if checks fail.
+                // If it returns normally, continue to next middleware.
+            }
+
             $result = ($match['handler'])($match['params'], self::jsonBody());
             $this->sendResult($result);
         } catch (\Throwable $e) {
@@ -144,7 +181,7 @@ class Router
     /**
      * Match the current request against registered routes.
      *
-     * @return array{handler: callable, params: array<string, string>}|null
+     * @return array{handler: callable, params: array<string, string>, middleware: array}|null
      */
     private function matchRoute(): ?array
     {
@@ -158,8 +195,9 @@ class Router
                     $params[$name] = urldecode($matches[$i] ?? '');
                 }
                 return [
-                    'handler' => $route['handler'],
-                    'params'  => $params,
+                    'handler'    => $route['handler'],
+                    'params'     => $params,
+                    'middleware' => $route['middleware'],
                 ];
             }
         }

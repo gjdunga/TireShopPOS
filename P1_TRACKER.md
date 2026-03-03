@@ -10,7 +10,7 @@
 | P1b | Database layer: PDO factory, connection health, `GET /api/health` with DB status | P1a | COMPLETE | 871b75f |
 | P1c | Auth system: login, logout, password change. Database-backed sessions. Wires to existing helpers.php auth functions | P1a, P1b | COMPLETE | 17b1b09 |
 | P1d | API router: method+path dispatcher, JSON envelope, global error handler, CORS | P1a | COMPLETE | f0e14b9 |
-| P1e | RBAC middleware: session-to-role, permission check per endpoint, 403 response. All business logic exposed as REST behind RBAC | P1c, P1d | NOT STARTED | |
+| P1e | RBAC middleware: session-to-role, permission check per endpoint, 403 response. All business logic exposed as REST behind RBAC | P1c, P1d | COMPLETE | (pending) |
 | P1f | Backup and ops: daily MySQL dump script, photo rsync, cron template, expanded health endpoint | P1b | NOT STARTED | |
 
 ## P1a: Project Skeleton
@@ -186,8 +186,94 @@ public/index.php       Replaced inline route stubs with Router creation, route l
 - Exception handler: uncaught throw -> structured 500 with trace (debug) or generic (prod)
 - Method enforcement: GET /api/auth/login -> 404 (only POST registered)
 
+## P1e: RBAC Middleware and Business API
+
+**Files created:**
+
+```
+app/
+  Http/
+    Middleware.php     Auth guard + permission check middleware factories
+```
+
+**Files modified:**
+
+```
+app/Http/Router.php        Added middleware support: with(), pendingMiddleware, middleware execution in dispatch
+routes/api.php             Expanded from 5 routes to 56 routes with RBAC protection
+public/index.php           Loads tire_pos_helpers.php after boot (bridge to business logic)
+php/tire_pos_helpers.php   getDB() now delegates to Database::pdo() when framework is loaded
+```
+
+**Middleware system:**
+
+Router now supports `$router->with([...middleware...])->get(...)` chaining. Middleware callables run in order before the handler. If a middleware calls `Router::sendError()`, execution halts (exits). If it returns normally, the next middleware (or handler) runs.
+
+**Middleware factories (Middleware class):**
+
+| Factory | Purpose |
+|---------|---------|
+| `Middleware::auth()` | Validates Bearer token, stores session. Blocks force_password_change users with PASSWORD_CHANGE_REQUIRED (403). |
+| `Middleware::permit(...$keys)` | OR logic: user needs at least one of the listed permissions. Returns FORBIDDEN (403) with required keys in message. |
+| `Middleware::permitAll(...$keys)` | AND logic: user needs all listed permissions. Returns FORBIDDEN (403) listing missing keys. |
+
+**Handler helpers (static, available after auth middleware):**
+
+| Method | Returns |
+|--------|---------|
+| `Middleware::session()` | Full session array (user_id, username, display_name, role_name, etc.) |
+| `Middleware::userId()` | Current user ID (int) |
+| `Middleware::role()` | Current user role name |
+| `Middleware::can($key)` | Bool check without exiting (for conditional logic in handlers) |
+
+**Route summary (56 total):**
+
+| Category | Routes | Permission(s) |
+|----------|--------|---------------|
+| Health | 1 | None (public) |
+| Auth | 4 | None (token validated internally) |
+| Tax | 1 | Auth only (any role) |
+| Tires/Inventory | 6 | INVENTORY_VIEW, WAIVER_CREATE |
+| Customers | 2 | CUSTOMER_MANAGE |
+| Vehicles | 5 | VEHICLE_MANAGE, CUSTOMER_MANAGE |
+| Work Orders | 2 | WORK_ORDER_CREATE, WORK_ORDER_ASSIGN |
+| Torque/Re-torque | 3 | WORK_ORDER_CREATE |
+| Invoices | 4 | INVOICE_CREATE |
+| Price Override | 1 | PRICE_OVERRIDE or PRICE_OVERRIDE_HIGH |
+| Deposits | 3 | DEPOSIT_ACCEPT, DEPOSIT_FORFEIT |
+| Refunds | 2 | REFUND_REQUEST, REFUND_APPROVE |
+| Cash Drawer | 4 | CASH_DRAWER_OPEN, CASH_DRAWER_CLOSE |
+| Appointments | 1 | APPOINTMENT_MANAGE |
+| Purchase Orders | 1 | PO_CREATE or PO_RECEIVE |
+| Reports | 5 | REPORT_VIEW |
+| Audit | 1 | AUDIT_VIEW |
+| User Management | 8 | USER_MANAGE |
+| Sequences | 3 | INVOICE_CREATE, WORK_ORDER_CREATE, PO_CREATE |
+
+**helpers.php bridge:** getDB() checks `class_exists('App\Core\Database', false)` and delegates to Database::pdo() when the framework is loaded. Falls back to standalone connection for any use outside the framework. All 50+ business functions now run through the framework's PDO singleton with consistent config (strict mode, timezone, FOUND_ROWS).
+
+**18 of 30 permissions are actively enforced by routes.** Remaining 12 (INVENTORY_ADD, INVENTORY_EDIT, INVENTORY_WRITE_OFF, INVOICE_VOID, PAYMENT_ACCEPT, DEPOSIT_ACCEPT on create, FEE_WAIVE, PHOTO_UPLOAD, CONFIG_MANAGE, PO_RECEIVE on create, WORK_ORDER_ASSIGN on create, REFUND_APPROVE_HIGH standalone) will be wired as those CRUD endpoints are built in Phase 2.
+
+**Verified (15 test scenarios):**
+
+1. Health: no auth required, returns OK
+2. Protected route without token: 401 NOT_AUTHENTICATED
+3. Owner accesses /api/users: 200, returns user list
+4. Owner accesses /api/roles: 200, returns 3 roles
+5. Owner accesses /api/roles/3/permissions: 200, returns 30 permissions
+6. Create tire_tech user via DB
+7. Tech denied /api/users (USER_MANAGE): 403 FORBIDDEN
+8. Tech denied /api/audit (AUDIT_VIEW): 403 FORBIDDEN
+9. Tech allowed /api/tires/parse-size (INVENTORY_VIEW): 200, parsed 225/65R17
+10. Force password change gate: tech blocked with PASSWORD_CHANGE_REQUIRED
+11. Owner views audit log: 200, returns LOGIN entries
+12. Auth-only route /api/tax/current-rate: 200, rate 0.0790
+13. /api/retorque/due: 200, returns array
+14. /api/work-orders/open: 200, returns array
+15. /api/appointments/today: 200, returns array
+
 ## Notes
 
 Each P1 chunk is built in a single session: pull, build, test, push. The tracker is updated with the delivering commit hash when each chunk completes.
 
-The existing php/ directory (tire_pos_helpers.php, VehicleLookupService.php) will be wired into the class structure in P1c/P1e. Until then they remain standalone files, unchanged.
+The existing php/ directory (tire_pos_helpers.php, VehicleLookupService.php) is bridged into the framework via getDB() shim (P1e). helpers.php is loaded by index.php after boot, and getDB() delegates to Database::pdo() when the framework is present.

@@ -28,6 +28,11 @@ $autoloader->register();
 $app = new \App\Core\App(BASE_PATH);
 $app->boot();
 
+// ---- Load business logic functions ----
+// Procedural helpers bridged to use Database::pdo() via getDB() shim.
+// These functions are called by route handlers behind RBAC middleware.
+require_once BASE_PATH . '/php/tire_pos_helpers.php';
+
 // ---- Create router and load routes ----
 $router = new \App\Http\Router();
 
