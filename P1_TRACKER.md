@@ -11,7 +11,7 @@
 | P1c | Auth system: login, logout, password change. Database-backed sessions. Wires to existing helpers.php auth functions | P1a, P1b | COMPLETE | 17b1b09 |
 | P1d | API router: method+path dispatcher, JSON envelope, global error handler, CORS | P1a | COMPLETE | f0e14b9 |
 | P1e | RBAC middleware: session-to-role, permission check per endpoint, 403 response. All business logic exposed as REST behind RBAC | P1c, P1d | COMPLETE | eaa609d |
-| P1f | Backup and ops: daily MySQL dump script, photo rsync, cron template, expanded health endpoint | P1b | NOT STARTED | |
+| P1f | Backup and ops: daily MySQL dump script, photo rsync, cron template, expanded health endpoint | P1b | COMPLETE | (pending) |
 
 ## P1a: Project Skeleton
 
@@ -272,8 +272,76 @@ Router now supports `$router->with([...middleware...])->get(...)` chaining. Midd
 14. /api/work-orders/open: 200, returns array
 15. /api/appointments/today: 200, returns array
 
+## P1f: Backup and Operations
+
+**Files created:**
+
+```
+scripts/
+  backup-db.sh           Daily MySQL dump with gzip, verification, 30-day rotation
+  backup-photos.sh       Rsync photos to backup directory (checksum mode)
+  cleanup-sessions.sh    Remove expired sessions from database
+  cron.template          Crontab template with all scheduled tasks
+app/
+  Core/
+    Ops.php              Operations health checks (disk, backups, sessions, storage, system)
+```
+
+**Files modified:**
+
+```
+routes/api.php           Expanded /api/health with ops data; added /api/ops/health (REPORT_VIEW)
+```
+
+**Backup scripts:**
+
+| Script | Schedule | What it does |
+|--------|----------|-------------|
+| backup-db.sh | Daily 2:00 AM | mysqldump (single-transaction, gzipped), verifies table count + completion marker, rotates backups older than RETENTION_DAYS, writes last_backup.json |
+| backup-photos.sh | Daily 2:30 AM | rsync with checksum and delete, writes last_photo_backup.json |
+| cleanup-sessions.sh | Every 15 min | DELETE FROM sessions WHERE expires_at <= NOW() |
+
+All scripts source .env for configuration. Exit codes: 0 success, 1 config error, 2 operation failed, 3 verification failed.
+
+**Ops health checks (Ops class):**
+
+| Check | Data returned |
+|-------|-------------|
+| disk | total_gb, used_gb, free_gb, used_pct, warning (>90%), critical (>95%) |
+| backups | db_backup status/timestamp/size/tables/age_hours/stale, photo_backup status, backup_count, total_size_mb |
+| sessions | active_sessions, expired_pending, oldest_active |
+| storage | logs/photos/backups: exists, writable, file_count |
+| system | php_version, php_sapi, os, hostname, memory_limit, max_upload, timezone, extensions_ok, missing_extensions, uptime |
+
+**Health endpoint changes:**
+
+`GET /api/health` (public) now includes full ops data. Status escalates from "ok" to "degraded" (disk >90%, stale backup) or "critical" (disk >95%, DB disconnected).
+
+`GET /api/ops/health` (REPORT_VIEW) returns structured issues list with specific problem descriptions, plus all ops and DB data.
+
+**Backup verification (tested):**
+
+- DB dump: 45 tables, 25K gzipped, completion marker present
+- Full restore test: 45 tables, 3 roles, 30 permissions, 14 views, admin user intact
+- Session cleanup: expired sessions deleted, count verified
+
 ## Notes
 
 Each P1 chunk is built in a single session: pull, build, test, push. The tracker is updated with the delivering commit hash when each chunk completes.
 
 The existing php/ directory (tire_pos_helpers.php, VehicleLookupService.php) is bridged into the framework via getDB() shim (P1e). helpers.php is loaded by index.php after boot, and getDB() delegates to Database::pdo() when the framework is present.
+
+## Phase 1 Complete
+
+All 6 sub-tasks delivered. The system has:
+
+- PSR-4 autoloaded class structure with env/config management
+- PDO singleton with query helpers and health monitoring
+- Token-based auth with bcrypt, lockout, password history, sliding sessions
+- Method+path router with JSON envelope, CORS, path parameters, error handling
+- RBAC middleware enforcing 18 of 30 permissions across 57 API routes
+- Daily backup scripts with integrity verification and rotation
+- Ops health monitoring (disk, backups, sessions, storage, system)
+- All business logic from helpers.php exposed as REST API behind RBAC
+
+**Ready for Phase 2:** CRUD operations, VehicleLookupService integration, photo upload, invoice workflow.

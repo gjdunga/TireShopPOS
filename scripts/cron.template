@@ -1,0 +1,45 @@
+# ============================================================================
+# Tire Shop POS: Crontab Template
+#
+# Install:
+#   sudo cp scripts/cron.template /etc/cron.d/tire-shop-pos
+#   sudo chmod 644 /etc/cron.d/tire-shop-pos
+#
+# Or add to the app user's crontab:
+#   crontab -e
+#   (paste the lines below, adjusting paths)
+#
+# All scripts source .env for configuration.
+# Logs are written to BACKUP_PATH/backup.log.
+#
+# DunganSoft Technologies, March 2026
+# ============================================================================
+
+# Adjust this to the application directory
+APP_DIR=/var/www/tire_shop
+
+# ---- Daily database backup (2:00 AM Mountain Time) ----
+# Dumps tire_shop database, gzipped, with 30-day rotation.
+# Writes last_backup.json for health endpoint monitoring.
+0 2 * * * root /bin/bash ${APP_DIR}/scripts/backup-db.sh >> /var/log/tire-shop-backup.log 2>&1
+
+# ---- Daily photo backup (2:30 AM Mountain Time) ----
+# Rsync photos to backup directory. Checksum mode skips unchanged files.
+# Writes last_photo_backup.json for health endpoint monitoring.
+30 2 * * * root /bin/bash ${APP_DIR}/scripts/backup-photos.sh >> /var/log/tire-shop-backup.log 2>&1
+
+# ---- Session cleanup (every 15 minutes) ----
+# Removes expired sessions from the database.
+# Light query, safe to run frequently.
+*/15 * * * * root /bin/bash ${APP_DIR}/scripts/cleanup-sessions.sh >> /var/log/tire-shop-ops.log 2>&1
+
+# ---- Log rotation hint ----
+# Add to /etc/logrotate.d/tire-shop-pos:
+#
+#   /var/log/tire-shop-backup.log /var/log/tire-shop-ops.log {
+#       weekly
+#       rotate 12
+#       compress
+#       missingok
+#       notifempty
+#   }

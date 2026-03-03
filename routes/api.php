@@ -15,6 +15,7 @@ declare(strict_types=1);
  */
 
 use App\Core\Database;
+use App\Core\Ops;
 use App\Core\Session;
 use App\Http\Auth;
 use App\Http\Middleware;
@@ -47,6 +48,23 @@ $router->get('/api/health', function () use ($app) {
         try { $cleaned = Session::cleanup(); } catch (\Throwable $e) {}
     }
 
+    // Ops summary: lightweight checks only (no full ops report)
+    $opsHealth = Ops::health();
+
+    // Escalate status based on ops checks
+    if ($overall === 'ok') {
+        $disk = $opsHealth['disk'] ?? [];
+        if (!empty($disk['critical'])) {
+            $overall = 'critical';
+        } elseif (!empty($disk['warning'])) {
+            $overall = 'degraded';
+        }
+        $dbBackup = $opsHealth['backups']['db_backup'] ?? null;
+        if ($dbBackup !== null && !empty($dbBackup['stale'])) {
+            $overall = ($overall === 'ok') ? 'degraded' : $overall;
+        }
+    }
+
     return [
         'status' => $overall,
         'app' => $app->name(),
@@ -55,7 +73,66 @@ $router->get('/api/health', function () use ($app) {
         'timestamp' => date('c'),
         'php' => PHP_VERSION,
         'database' => $dbHealth,
+        'ops' => $opsHealth,
         'expired_sessions_cleaned' => $cleaned,
+    ];
+});
+
+// Full ops health (auth required, owner/manager only)
+$router->with(permit('REPORT_VIEW'))->get('/api/ops/health', function () use ($app) {
+    $dbHealth = Database::health();
+    $opsHealth = Ops::health();
+
+    // Compute overall status
+    $issues = [];
+    if (!$dbHealth['connected']) {
+        $issues[] = 'database disconnected';
+    }
+
+    $disk = $opsHealth['disk'] ?? [];
+    if (!empty($disk['critical'])) {
+        $issues[] = 'disk usage critical (' . ($disk['used_pct'] ?? '?') . '%)';
+    } elseif (!empty($disk['warning'])) {
+        $issues[] = 'disk usage high (' . ($disk['used_pct'] ?? '?') . '%)';
+    }
+
+    $dbBackup = $opsHealth['backups']['db_backup'] ?? null;
+    if ($dbBackup === null) {
+        $issues[] = 'no database backup found';
+    } elseif (!empty($dbBackup['stale'])) {
+        $issues[] = 'database backup stale (' . ($dbBackup['age_hours'] ?? '?') . 'h old)';
+    }
+
+    $photoBackup = $opsHealth['backups']['photo_backup'] ?? null;
+    if ($photoBackup !== null && !empty($photoBackup['stale'])) {
+        $issues[] = 'photo backup stale (' . ($photoBackup['age_hours'] ?? '?') . 'h old)';
+    }
+
+    $system = $opsHealth['system'] ?? [];
+    if (isset($system['extensions_ok']) && !$system['extensions_ok']) {
+        $issues[] = 'missing PHP extensions: ' . implode(', ', $system['missing_extensions'] ?? []);
+    }
+
+    $storage = $opsHealth['storage'] ?? [];
+    foreach ($storage as $dir => $info) {
+        if (!($info['writable'] ?? true)) {
+            $issues[] = "storage/{$dir} not writable";
+        }
+    }
+
+    $expired = $opsHealth['sessions']['expired_pending'] ?? 0;
+    if ($expired > 100) {
+        $issues[] = "{$expired} expired sessions pending cleanup";
+    }
+
+    $status = empty($issues) ? 'ok' : (count($issues) > 2 ? 'critical' : 'degraded');
+
+    return [
+        'status' => $status,
+        'issues' => $issues,
+        'app' => ['name' => $app->name(), 'version' => $app->version()],
+        'database' => $dbHealth,
+        'ops' => $opsHealth,
     ];
 });
 
