@@ -1,0 +1,591 @@
+import { useState, useEffect, useRef } from "react";
+
+/* ============================================================
+   COLOR SYSTEM - Pulled directly from the shop sign:
+   Bold red (FLATS FIXED), navy blue (TIRES), warm cream storefront
+   ============================================================ */
+const C = {
+  red: "#C9202F",
+  redDark: "#941520",
+  redGlow: "rgba(201,32,47,0.25)",
+  navy: "#1A2744",
+  navyMid: "#263A5E",
+  navyLight: "#3A5280",
+  blue: "#4A7CCF",
+  cream: "#F4F0E8",
+  warmWhite: "#FAF8F4",
+  sand: "#E2DDD3",
+  asphalt: "#22252A",
+  carbon: "#181B20",
+  white: "#FFFFFF",
+  textHard: "#141414",
+  textMid: "#6B6560",
+  textSoft: "#9E9890",
+  ok: "#2B7A3A",
+  warn: "#D4700A",
+};
+
+/* ============================================================
+   FONT INJECTION
+   Oswald: condensed, bold, sign-painter feel (headers/labels)
+   Bitter: slab-serif with warmth (body text, tables)
+   ============================================================ */
+const fontLink = document.createElement("link");
+fontLink.href = "https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Bitter:wght@400;500;600;700&display=swap";
+fontLink.rel = "stylesheet";
+document.head.appendChild(fontLink);
+
+/* ============================================================
+   SVG ICONS
+   ============================================================ */
+function TireWheel({ size = 48, color = C.navy, spin = false }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" style={spin ? { animation: "tireSpin 6s linear infinite" } : {}}>
+      <circle cx="50" cy="50" r="46" fill="none" stroke={color} strokeWidth="7"/>
+      <circle cx="50" cy="50" r="46" fill="none" stroke={color} strokeWidth="2" strokeDasharray="5 7" opacity="0.5"/>
+      <circle cx="50" cy="50" r="34" fill="none" stroke={color} strokeWidth="3.5"/>
+      <circle cx="50" cy="50" r="13" fill={color}/>
+      <circle cx="50" cy="50" r="5" fill={spin ? C.red : "#666"}/>
+      {[0,72,144,216,288].map((a,i) => {
+        const r = (a * Math.PI) / 180;
+        return <line key={i} x1={50+16*Math.cos(r)} y1={50+16*Math.sin(r)} x2={50+30*Math.cos(r)} y2={50+30*Math.sin(r)} stroke={color} strokeWidth="4" strokeLinecap="round"/>;
+      })}
+    </svg>
+  );
+}
+
+const Icon = ({ d, size = 20 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d}/></svg>
+);
+
+const icons = {
+  wrench: "M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z",
+  search: "M11 11m-8 0a8 8 0 1016 0 8 8 0 00-16 0M21 21l-4.35-4.35",
+  file: "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M8 13h8M8 17h8M8 9h2",
+  users: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7m-4 0a4 4 0 108 0 4 4 0 00-8 0M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75",
+  dollar: "M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6",
+  calendar: "M3 4h18a2 2 0 012 2v14a2 2 0 01-2 2H3a2 2 0 01-2-2V6a2 2 0 012-2zM16 2v4M8 2v4M1 10h22",
+  gauge: "M12 12m-10 0a10 10 0 1020 0 10 10 0 00-20 0M12 6v6l4 2",
+  chart: "M3 20h4v-8H3zM10 20h4V4h-4zM17 20h4v-12h-4z",
+  truck: "M1 3h15v13H1zM16 8h4l3 3v5h-7V8zM5.5 18.5m-2.5 0a2.5 2.5 0 105 0 2.5 2.5 0 00-5 0M18.5 18.5m-2.5 0a2.5 2.5 0 105 0 2.5 2.5 0 00-5 0",
+  shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
+  logout: "M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9",
+};
+
+/* ============================================================
+   TREAD PATTERN - CSS background texture
+   ============================================================ */
+const treadBg = `
+  repeating-linear-gradient(55deg, transparent, transparent 28px, rgba(255,255,255,0.018) 28px, rgba(255,255,255,0.018) 30px),
+  repeating-linear-gradient(-55deg, transparent, transparent 28px, rgba(255,255,255,0.018) 28px, rgba(255,255,255,0.018) 30px)
+`;
+
+/* ============================================================
+   LOGIN PAGE
+   ============================================================ */
+function LoginPage({ onLogin }) {
+  const [user, setUser] = useState("");
+  const [pass, setPass] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [vis, setVis] = useState(false);
+  const inputRef = useRef();
+
+  useEffect(() => {
+    requestAnimationFrame(() => setVis(true));
+    inputRef.current?.focus();
+  }, []);
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!user.trim() || !pass.trim()) { setErr("Username and password required."); return; }
+    setErr(""); setBusy(true);
+    setTimeout(() => { setBusy(false); onLogin(user.trim()); }, 900);
+  };
+
+  const inp = (val, set, type, placeholder, ref) => (
+    <input
+      ref={ref} type={type} value={val}
+      onChange={e => { set(e.target.value); setErr(""); }}
+      placeholder={placeholder}
+      style={{
+        width:"100%", padding:"13px 16px", fontSize:15,
+        fontFamily:"'Bitter',serif", border:`2px solid ${C.sand}`,
+        borderRadius:8, outline:"none", background:C.cream,
+        boxSizing:"border-box", transition:"border-color 0.2s, box-shadow 0.2s",
+      }}
+      onFocus={e => { e.target.style.borderColor=C.navy; e.target.style.boxShadow=`0 0 0 3px rgba(26,39,68,0.1)`; }}
+      onBlur={e => { e.target.style.borderColor=C.sand; e.target.style.boxShadow="none"; }}
+    />
+  );
+
+  return (
+    <div style={{
+      minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center",
+      background:`linear-gradient(160deg, ${C.carbon} 0%, ${C.navy} 50%, ${C.asphalt} 100%)`,
+      backgroundImage:treadBg+`,linear-gradient(160deg, ${C.carbon} 0%, ${C.navy} 50%, ${C.asphalt} 100%)`,
+      fontFamily:"'Bitter',serif", position:"relative", overflow:"hidden",
+    }}>
+      {/* Large diagonal red sash, like the sign's bold stripe energy */}
+      <div style={{
+        position:"absolute", top:-200, right:-300, width:800, height:400,
+        background:`linear-gradient(135deg, ${C.red}, ${C.redDark})`,
+        transform:"rotate(20deg)", opacity:0.07,
+      }}/>
+      <div style={{
+        position:"absolute", bottom:-250, left:-200, width:700, height:350,
+        background:C.red, transform:"rotate(-18deg)", opacity:0.04,
+      }}/>
+
+      <div style={{
+        width:420, maxWidth:"90vw",
+        opacity:vis?1:0, transform:vis?"translateY(0) scale(1)":"translateY(40px) scale(0.97)",
+        transition:"all 0.7s cubic-bezier(0.16,1,0.3,1)",
+      }}>
+        {/* Logo */}
+        <div style={{ textAlign:"center", marginBottom:32 }}>
+          <div style={{ display:"inline-flex", alignItems:"center", gap:16 }}>
+            <TireWheel size={56} color={C.red} spin/>
+            <div style={{ textAlign:"left" }}>
+              <div style={{
+                fontFamily:"'Oswald',sans-serif", fontSize:32, fontWeight:700,
+                color:C.white, letterSpacing:3, lineHeight:1, textTransform:"uppercase",
+              }}>Tire Shop</div>
+              <div style={{
+                fontFamily:"'Oswald',sans-serif", fontSize:12, fontWeight:500,
+                color:C.red, letterSpacing:6, textTransform:"uppercase", marginTop:2,
+              }}>Point of Sale</div>
+            </div>
+          </div>
+          <div style={{
+            marginTop:12, fontSize:11, fontWeight:600,
+            color:"rgba(255,255,255,0.25)", letterSpacing:2, textTransform:"uppercase",
+            fontFamily:"'Oswald',sans-serif",
+          }}>Dungan Soft Technologies</div>
+        </div>
+
+        {/* Card */}
+        <div style={{
+          background:C.warmWhite, borderRadius:14,
+          boxShadow:"0 25px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03)",
+          overflow:"hidden",
+        }}>
+          <div style={{ height:5, background:`linear-gradient(90deg, ${C.red}, ${C.redDark}, ${C.red})` }}/>
+          <div style={{ padding:"30px 34px 34px" }}>
+            <h2 style={{
+              fontFamily:"'Oswald',sans-serif", fontSize:22, fontWeight:600,
+              color:C.navy, margin:"0 0 22px", textTransform:"uppercase", letterSpacing:1.5,
+            }}>Sign In</h2>
+
+            <form onSubmit={submit}>
+              <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.textMid, textTransform:"uppercase", letterSpacing:1, marginBottom:6 }}>
+                Username
+              </label>
+              {inp(user, setUser, "text", "Enter your username", inputRef)}
+
+              <div style={{ height:16 }}/>
+
+              <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.textMid, textTransform:"uppercase", letterSpacing:1, marginBottom:6 }}>
+                Password
+              </label>
+              {inp(pass, setPass, "password", "Enter your password", null)}
+
+              {err && <div style={{ color:C.red, fontSize:13, fontWeight:600, marginTop:10 }}>{err}</div>}
+
+              <button type="submit" disabled={busy} style={{
+                width:"100%", padding:15, marginTop:22,
+                fontFamily:"'Oswald',sans-serif", fontSize:16, fontWeight:700,
+                textTransform:"uppercase", letterSpacing:3, color:C.white,
+                background:busy?C.textMid:`linear-gradient(135deg, ${C.red}, ${C.redDark})`,
+                border:"none", borderRadius:8, cursor:busy?"wait":"pointer",
+                boxShadow:busy?"none":`0 4px 20px ${C.redGlow}`,
+                transition:"all 0.25s",
+              }}
+              onMouseEnter={e => { if(!busy) e.target.style.transform="translateY(-1px)"; }}
+              onMouseLeave={e => { e.target.style.transform="translateY(0)"; }}>
+                {busy ? "Authenticating..." : "Sign In"}
+              </button>
+            </form>
+
+            {/* Security note */}
+            <div style={{
+              marginTop:20, padding:"10px 14px", borderRadius:6,
+              background:"rgba(26,39,68,0.04)", display:"flex", alignItems:"center", gap:8,
+            }}>
+              <span style={{ color:C.navy, opacity:0.4, display:"flex" }}><Icon d={icons.shield} size={16}/></span>
+              <span style={{ fontSize:11, color:C.textSoft, lineHeight:1.4 }}>
+                5 failed attempts locks account for 15 minutes. All sessions are logged.
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{
+          textAlign:"center", marginTop:20, fontSize:11,
+          color:"rgba(255,255,255,0.22)", fontFamily:"'Oswald',sans-serif",
+          letterSpacing:1.5,
+        }}>
+          v2.4 &nbsp;&bull;&nbsp; 784-0400 &nbsp;&bull;&nbsp; TUE-SAT 10 to 5
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes tireSpin { from{transform:rotate(0deg)}to{transform:rotate(360deg)} }
+        input::placeholder { color:#B5B0A8; }
+      `}</style>
+    </div>
+  );
+}
+
+/* ============================================================
+   DASHBOARD / LANDING PAGE
+   ============================================================ */
+function Dashboard({ user, onLogout }) {
+  const [vis, setVis] = useState(false);
+  const [now, setNow] = useState(new Date());
+  const [nav, setNav] = useState("dashboard");
+
+  useEffect(() => {
+    requestAnimationFrame(() => setVis(true));
+    const t = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const sideItems = [
+    { k:"dashboard", l:"Dashboard", i:icons.chart },
+    { k:"workorders", l:"Work Orders", i:icons.wrench },
+    { k:"inventory", l:"Inventory", i:icons.truck },
+    { k:"customers", l:"Customers", i:icons.users },
+    { k:"invoices", l:"Invoices", i:icons.file },
+    { k:"appointments", l:"Schedule", i:icons.calendar },
+    { k:"cash", l:"Cash Drawer", i:icons.dollar },
+    { k:"reports", l:"Reports", i:icons.chart },
+  ];
+
+  const stats = [
+    { label:"Open Work Orders", val:"7", sub:"+2 today", accent:C.red },
+    { label:"Today's Revenue", val:"$2,340", sub:"12 invoices", accent:C.ok },
+    { label:"Appointments", val:"4", sub:"Next: 11:30 AM", accent:C.blue },
+    { label:"Re-Torque Due", val:"3", sub:"1 overdue", accent:C.warn },
+  ];
+
+  const actions = [
+    { l:"New Work Order", d:"Start a service ticket", bg:C.red, i:icons.wrench },
+    { l:"Plate Lookup", d:"License plate search", bg:C.navy, i:icons.search },
+    { l:"Tire Search", d:"Search inventory by size", bg:C.navyMid, i:icons.search },
+    { l:"New Invoice", d:"Create customer invoice", bg:C.redDark, i:icons.file },
+  ];
+
+  const orders = [
+    { wo:"WO-0147", cust:"Martinez, R.", veh:"2019 Ford F-150", torque:"150 ft-lbs", st:"In Progress" },
+    { wo:"WO-0146", cust:"Chen, L.", veh:"2021 Toyota Camry", torque:"76 ft-lbs", st:"Waiting Parts" },
+    { wo:"WO-0145", cust:"Davis, K.", veh:"2018 Chevy Silverado", torque:"140 ft-lbs", st:"Complete" },
+    { wo:"WO-0144", cust:"Wilson, J.", veh:"2020 Honda Civic", torque:"80 ft-lbs", st:"Complete" },
+    { wo:"WO-0143", cust:"Lopez, M.", veh:"2017 Jeep Wrangler", torque:"95 ft-lbs", st:"In Progress" },
+  ];
+
+  const stColor = s => s==="Complete"?C.ok:s==="In Progress"?C.blue:C.warn;
+
+  return (
+    <div style={{ minHeight:"100vh", background:C.cream, fontFamily:"'Bitter',serif", display:"flex" }}>
+      {/* ===== SIDEBAR ===== */}
+      <aside style={{
+        width:230, flexShrink:0, position:"fixed", top:0, left:0, bottom:0, zIndex:10,
+        background:`linear-gradient(180deg, ${C.navy} 0%, ${C.carbon} 100%)`,
+        backgroundImage:treadBg+`,linear-gradient(180deg, ${C.navy} 0%, ${C.carbon} 100%)`,
+        display:"flex", flexDirection:"column",
+        opacity:vis?1:0, transform:vis?"translateX(0)":"translateX(-30px)",
+        transition:"all 0.6s cubic-bezier(0.16,1,0.3,1)",
+      }}>
+        <div style={{ padding:"22px 20px 18px", borderBottom:"1px solid rgba(255,255,255,0.07)" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <TireWheel size={34} color={C.red} spin/>
+            <div>
+              <div style={{
+                fontFamily:"'Oswald',sans-serif", fontSize:17, fontWeight:700,
+                color:C.white, letterSpacing:2, textTransform:"uppercase", lineHeight:1,
+              }}>Tire Shop</div>
+              <div style={{
+                fontFamily:"'Oswald',sans-serif", fontSize:9, fontWeight:500,
+                color:C.red, letterSpacing:4, textTransform:"uppercase", marginTop:1,
+              }}>Point of Sale</div>
+            </div>
+          </div>
+        </div>
+
+        <nav style={{ flex:1, padding:"10px 10px", overflowY:"auto" }}>
+          {sideItems.map((it,i) => {
+            const active = nav===it.k;
+            return (
+              <button key={it.k} onClick={() => setNav(it.k)} style={{
+                width:"100%", display:"flex", alignItems:"center", gap:12,
+                padding:"11px 14px", marginBottom:2, border:"none", borderRadius:8,
+                cursor:"pointer", background:active?"rgba(201,32,47,0.12)":"transparent",
+                transition:"all 0.15s",
+                opacity:vis?1:0, transform:vis?"translateX(0)":"translateX(-12px)",
+                transitionDelay:`${i*50+200}ms`,
+              }}
+              onMouseEnter={e => { if(!active) e.currentTarget.style.background="rgba(255,255,255,0.05)"; }}
+              onMouseLeave={e => { if(!active) e.currentTarget.style.background="transparent"; }}>
+                <span style={{ color:active?C.red:"rgba(255,255,255,0.35)", display:"flex" }}>
+                  <Icon d={it.i} size={18}/>
+                </span>
+                <span style={{
+                  fontFamily:"'Oswald',sans-serif", fontSize:13, fontWeight:active?600:400,
+                  color:active?C.white:"rgba(255,255,255,0.5)", letterSpacing:0.8,
+                  textTransform:"uppercase",
+                }}>{it.l}</span>
+                {active && <div style={{
+                  width:3, height:16, background:C.red, borderRadius:2, marginLeft:"auto",
+                }}/>}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div style={{ padding:"14px 18px", borderTop:"1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.2)", fontFamily:"'Oswald',sans-serif", letterSpacing:1.5 }}>
+            784-0400 &bull; TUE-SAT 10-5
+          </div>
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.13)", fontFamily:"'Oswald',sans-serif", letterSpacing:1, marginTop:3 }}>
+            v2.4 &bull; Dungan Soft Technologies
+          </div>
+        </div>
+      </aside>
+
+      {/* ===== MAIN ===== */}
+      <main style={{ flex:1, marginLeft:230, minWidth:0 }}>
+        {/* Top bar */}
+        <header style={{
+          background:C.warmWhite, padding:"12px 30px", display:"flex",
+          alignItems:"center", justifyContent:"space-between",
+          borderBottom:`1px solid ${C.sand}`, position:"sticky", top:0, zIndex:5,
+          opacity:vis?1:0, transition:"opacity 0.5s 0.25s",
+        }}>
+          <div style={{ fontSize:13, color:C.textMid, fontWeight:500 }}>
+            {now.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"})}
+            <span style={{ margin:"0 10px", color:C.sand }}>|</span>
+            <span style={{ fontWeight:600 }}>{now.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}</span>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+            <div style={{
+              width:34, height:34, borderRadius:"50%", background:C.navy,
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontFamily:"'Oswald',sans-serif", fontSize:15, fontWeight:700, color:C.white,
+            }}>{user.charAt(0).toUpperCase()}</div>
+            <span style={{ fontSize:14, fontWeight:600, color:C.textHard }}>{user}</span>
+            <button onClick={onLogout} style={{
+              display:"flex", alignItems:"center", gap:5,
+              padding:"6px 12px", fontSize:11, fontWeight:700,
+              fontFamily:"'Oswald',sans-serif", color:C.red,
+              background:"transparent", border:`1.5px solid ${C.red}`,
+              borderRadius:6, cursor:"pointer", textTransform:"uppercase",
+              letterSpacing:1, transition:"all 0.15s",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background=C.red; e.currentTarget.style.color=C.white; }}
+            onMouseLeave={e => { e.currentTarget.style.background="transparent"; e.currentTarget.style.color=C.red; }}>
+              <Icon d={icons.logout} size={14}/> Sign Out
+            </button>
+          </div>
+        </header>
+
+        <div style={{ padding:"26px 30px" }}>
+          {/* Page title */}
+          <div style={{
+            marginBottom:24,
+            opacity:vis?1:0, transform:vis?"translateY(0)":"translateY(15px)",
+            transition:"all 0.5s 0.2s cubic-bezier(0.16,1,0.3,1)",
+          }}>
+            <h1 style={{
+              fontFamily:"'Oswald',sans-serif", fontSize:30, fontWeight:700,
+              color:C.navy, margin:0, textTransform:"uppercase", letterSpacing:1.5,
+            }}>Dashboard</h1>
+            <p style={{ margin:"3px 0 0", fontSize:14, color:C.textMid }}>Shop overview and quick actions</p>
+          </div>
+
+          {/* Stat cards */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:24 }}>
+            {stats.map((s,i) => (
+              <div key={s.label} style={{
+                background:C.warmWhite, borderRadius:10, padding:"18px 20px",
+                borderLeft:`4px solid ${s.accent}`,
+                boxShadow:"0 2px 10px rgba(26,39,68,0.06)",
+                opacity:vis?1:0, transform:vis?"translateY(0)":"translateY(20px)",
+                transition:`all 0.5s ${0.25+i*0.07}s cubic-bezier(0.16,1,0.3,1)`,
+              }}>
+                <div style={{ fontSize:11, fontWeight:700, color:C.textMid, textTransform:"uppercase", letterSpacing:0.8, marginBottom:5, fontFamily:"'Oswald',sans-serif" }}>
+                  {s.label}
+                </div>
+                <div style={{ fontFamily:"'Oswald',sans-serif", fontSize:34, fontWeight:700, color:C.textHard, lineHeight:1 }}>
+                  {s.val}
+                </div>
+                <div style={{ fontSize:12, color:C.textSoft, marginTop:6 }}>{s.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Quick actions */}
+          <div style={{
+            marginBottom:24,
+            opacity:vis?1:0, transform:vis?"translateY(0)":"translateY(12px)",
+            transition:"all 0.5s 0.45s cubic-bezier(0.16,1,0.3,1)",
+          }}>
+            <h2 style={{
+              fontFamily:"'Oswald',sans-serif", fontSize:15, fontWeight:600,
+              color:C.navy, margin:"0 0 12px", textTransform:"uppercase", letterSpacing:1.5,
+            }}>Quick Actions</h2>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
+              {actions.map(a => (
+                <button key={a.l} style={{
+                  display:"flex", alignItems:"center", gap:14,
+                  padding:"16px 16px", background:C.warmWhite, border:"none",
+                  borderRadius:10, cursor:"pointer",
+                  boxShadow:"0 2px 10px rgba(26,39,68,0.06)",
+                  transition:"all 0.2s", textAlign:"left",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.transform="translateY(-3px)"; e.currentTarget.style.boxShadow="0 8px 24px rgba(26,39,68,0.12)"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform="translateY(0)"; e.currentTarget.style.boxShadow="0 2px 10px rgba(26,39,68,0.06)"; }}>
+                  <div style={{
+                    width:42, height:42, borderRadius:10, background:a.bg, flexShrink:0,
+                    display:"flex", alignItems:"center", justifyContent:"center", color:"#fff",
+                  }}><Icon d={a.i} size={20}/></div>
+                  <div>
+                    <div style={{ fontFamily:"'Oswald',sans-serif", fontSize:13, fontWeight:600, color:C.textHard, textTransform:"uppercase", letterSpacing:0.5 }}>{a.l}</div>
+                    <div style={{ fontSize:12, color:C.textSoft, marginTop:1 }}>{a.d}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Recent Work Orders */}
+          <div style={{
+            background:C.warmWhite, borderRadius:10,
+            boxShadow:"0 2px 10px rgba(26,39,68,0.06)", overflow:"hidden",
+            opacity:vis?1:0, transform:vis?"translateY(0)":"translateY(12px)",
+            transition:"all 0.5s 0.55s cubic-bezier(0.16,1,0.3,1)",
+          }}>
+            <div style={{
+              padding:"16px 22px", display:"flex", justifyContent:"space-between",
+              alignItems:"center", borderBottom:`1px solid ${C.sand}`,
+            }}>
+              <h2 style={{
+                fontFamily:"'Oswald',sans-serif", fontSize:15, fontWeight:600,
+                color:C.navy, margin:0, textTransform:"uppercase", letterSpacing:1.5,
+              }}>Recent Work Orders</h2>
+              <button style={{
+                fontSize:12, fontWeight:700, color:C.blue, background:"none",
+                border:"none", cursor:"pointer", fontFamily:"'Oswald',sans-serif",
+                textTransform:"uppercase", letterSpacing:1,
+              }}>View All</button>
+            </div>
+
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead>
+                <tr style={{ background:"rgba(26,39,68,0.03)" }}>
+                  {["WO #","Customer","Vehicle","Torque","Status"].map(h => (
+                    <th key={h} style={{
+                      padding:"10px 22px", textAlign:"left",
+                      fontFamily:"'Oswald',sans-serif", fontWeight:600,
+                      color:C.textMid, textTransform:"uppercase",
+                      fontSize:10, letterSpacing:1.2,
+                      borderBottom:`1px solid ${C.sand}`,
+                    }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map(o => (
+                  <tr key={o.wo} style={{
+                    borderBottom:`1px solid rgba(226,221,211,0.6)`,
+                    cursor:"pointer", transition:"background 0.1s",
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background="rgba(26,39,68,0.02)"}
+                  onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                    <td style={{
+                      padding:"13px 22px", fontFamily:"'Oswald',sans-serif",
+                      fontWeight:600, color:C.navy, letterSpacing:0.5, fontSize:14,
+                    }}>{o.wo}</td>
+                    <td style={{ padding:"13px 22px", color:C.textHard, fontWeight:500, fontSize:13 }}>{o.cust}</td>
+                    <td style={{ padding:"13px 22px", color:C.textMid, fontSize:13 }}>{o.veh}</td>
+                    <td style={{ padding:"13px 22px" }}>
+                      <span style={{
+                        display:"inline-flex", alignItems:"center", gap:5,
+                        padding:"3px 10px", borderRadius:5, background:"rgba(26,39,68,0.05)",
+                        fontFamily:"'Oswald',sans-serif", fontSize:12, fontWeight:600,
+                        color:C.textHard, letterSpacing:0.3,
+                      }}>
+                        <Icon d={icons.gauge} size={13}/>{o.torque}
+                      </span>
+                    </td>
+                    <td style={{ padding:"13px 22px" }}>
+                      <span style={{
+                        padding:"4px 10px", borderRadius:5, fontSize:10,
+                        fontFamily:"'Oswald',sans-serif", fontWeight:700,
+                        textTransform:"uppercase", letterSpacing:0.8,
+                        color:stColor(o.st), background:`${stColor(o.st)}12`,
+                      }}>{o.st}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Torque reminder banner */}
+          <div style={{
+            marginTop:20, padding:"16px 22px", borderRadius:10,
+            background:`linear-gradient(135deg, ${C.navy}, ${C.navyMid})`,
+            display:"flex", alignItems:"center", gap:16,
+            opacity:vis?1:0, transition:"opacity 0.5s 0.65s",
+          }}>
+            <div style={{
+              width:44, height:44, borderRadius:10, background:"rgba(255,255,255,0.1)",
+              display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0,
+            }}>
+              <TireWheel size={26} color={C.red} spin/>
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{
+                fontFamily:"'Oswald',sans-serif", fontSize:14, fontWeight:600,
+                color:C.white, textTransform:"uppercase", letterSpacing:1,
+              }}>Torque Verification Gate Active</div>
+              <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", marginTop:2 }}>
+                All tire services require torque spec confirmation before invoice finalization.
+                3 vehicles due for 7-day re-torque callback.
+              </div>
+            </div>
+            <button style={{
+              padding:"8px 16px", fontFamily:"'Oswald',sans-serif",
+              fontSize:12, fontWeight:600, color:C.white, textTransform:"uppercase",
+              letterSpacing:1.5, background:"rgba(201,32,47,0.8)",
+              border:"none", borderRadius:6, cursor:"pointer",
+              transition:"background 0.15s", whiteSpace:"nowrap",
+            }}
+            onMouseEnter={e => e.target.style.background=C.red}
+            onMouseLeave={e => e.target.style.background="rgba(201,32,47,0.8)"}>
+              View Callbacks
+            </button>
+          </div>
+        </div>
+      </main>
+
+      <style>{`
+        @keyframes tireSpin { from{transform:rotate(0deg)}to{transform:rotate(360deg)} }
+        ::-webkit-scrollbar { width:6px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.1); border-radius:3px; }
+      `}</style>
+    </div>
+  );
+}
+
+/* ============================================================
+   APP ROOT
+   ============================================================ */
+export default function App() {
+  const [user, setUser] = useState(null);
+  return user
+    ? <Dashboard user={user} onLogout={() => setUser(null)}/>
+    : <LoginPage onLogin={u => setUser(u)}/>;
+}
