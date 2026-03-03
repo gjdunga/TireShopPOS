@@ -9,7 +9,7 @@
 | P1a | Project skeleton: front controller, autoloader, .env, config, error handling | None | COMPLETE | 9016527 |
 | P1b | Database layer: PDO factory, connection health, `GET /api/health` with DB status | P1a | COMPLETE | 871b75f |
 | P1c | Auth system: login, logout, password change. Database-backed sessions. Wires to existing helpers.php auth functions | P1a, P1b | COMPLETE | 17b1b09 |
-| P1d | API router: method+path dispatcher, JSON envelope, global error handler, CORS | P1a | NOT STARTED | |
+| P1d | API router: method+path dispatcher, JSON envelope, global error handler, CORS | P1a | COMPLETE | (pending) |
 | P1e | RBAC middleware: session-to-role, permission check per endpoint, 403 response. All business logic exposed as REST behind RBAC | P1c, P1d | NOT STARTED | |
 | P1f | Backup and ops: daily MySQL dump script, photo rsync, cron template, expanded health endpoint | P1b | NOT STARTED | |
 
@@ -41,7 +41,7 @@ storage/
 
 **Verification:** `GET /api/health` returns JSON with app name, version, debug flag, timestamp, PHP version. Any unmatched route returns structured 404.
 
-**Boot sequence:** index.php -> Autoloader (manual require) -> App::boot() -> Env::load(.env) -> Config::init(/config) -> error handlers -> timezone -> (router, P1d)
+**Boot sequence:** index.php -> Autoloader (manual require) -> App::boot() -> Env::load(.env) -> Config::init(/config) -> error handlers -> timezone -> Router() -> routes/api.php -> dispatch()
 
 ## P1b: Database Layer
 
@@ -137,6 +137,54 @@ public/index.php       Added auth routes + jsonBody/jsonResponse helpers
 
 **Auth class wraps these helpers.php functions using Database:: instead of getDB():**
 recordFailedLogin, recordSuccessfulLogin, isPasswordReused, isPasswordExpired, getUserPermissions, auditLog
+
+## P1d: API Router
+
+**Files created:**
+
+```
+app/
+  Http/
+    Router.php         Method+path dispatcher with path params, JSON envelope, CORS, error handler
+routes/
+  api.php              Route definitions (health, auth/login, auth/logout, auth/password, auth/session)
+```
+
+**Files modified:**
+
+```
+public/index.php       Replaced inline route stubs with Router creation, route loading, and dispatch
+```
+
+**Router features:**
+
+| Feature | Implementation |
+|---------|---------------|
+| Route registration | `$router->get()`, `post()`, `put()`, `patch()`, `delete()` |
+| Path parameters | `{name}` placeholders, e.g. `/api/tires/{id}` -> `$params['id']` |
+| Handler signature | `function(array $params, array $body): array` |
+| JSON envelope | Success: `{ success: true, data: {...} }`, Error: `{ success: false, error: true, code, message }` |
+| CORS | Allow-Origin (configurable via app.cors_origin), Allow-Methods, Allow-Headers, Max-Age |
+| OPTIONS preflight | Auto-handled, returns 204 |
+| Error handling | Uncaught exceptions -> structured JSON (debug: full trace, prod: generic message + error_log) |
+| Request helpers | `Router::jsonBody()` (cached), `Router::query()`, `Router::bearerToken()` |
+| Response helpers | `Router::send()`, `Router::sendError()`, null return -> 204 |
+
+**Route file pattern:** `routes/api.php` receives `$router` and `$app` from index.php. Handlers return arrays (auto-wrapped) or Auth-style arrays with `success` key (sent as-is with status extraction).
+
+**Front controller is now 37 lines:** boot, create router, load routes, dispatch. All route logic lives in `routes/api.php`.
+
+**Verified:**
+
+- Health endpoint: routed, DB health, session cleanup, success envelope
+- Login: POST dispatch, MISSING_FIELDS on empty body, full login with token
+- Session: GET with Bearer token, returns user + permissions
+- Logout: POST with Bearer token, destroys session, confirms on re-check
+- 404: structured error with method + path
+- OPTIONS: 204, no body
+- Path params: `/api/test/{id}/details` extracts `id` correctly
+- Exception handler: uncaught throw -> structured 500 with trace (debug) or generic (prod)
+- Method enforcement: GET /api/auth/login -> 404 (only POST registered)
 
 ## Notes
 
