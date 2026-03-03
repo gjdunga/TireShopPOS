@@ -13,7 +13,7 @@ boot, authenticate, authorize, dispatch, respond, backup.
 | Chunk | Description | Status | Commit | Date |
 |-------|-------------|--------|--------|------|
 | P2a | Frontend scaffold: Vite, React Router, AuthContext, API client, layout shell | DONE | d0643bf | 2026-03-03 |
-| P2b | CRUD API completion: remaining 12 permissions, all entity endpoints | TODO | | |
+| P2b | CRUD API completion: remaining 12 permissions, all entity endpoints | DONE | de3c3b8 | 2026-03-03 |
 | P2c | Dashboard (live KPIs) + tire inventory screens + photo upload UI | TODO | | |
 | P2d | Customer/vehicle CRUD + VehicleLookupService integration | TODO | | |
 | P2e | Work order + invoice + waiver + checkout (core transaction flow) | TODO | | |
@@ -47,21 +47,32 @@ boot, authenticate, authorize, dispatch, respond, backup.
 
 ---
 
-## P2b: CRUD API Completion (TODO)
+## P2b: CRUD API Completion (DONE)
 
-**Scope:** Backend endpoints for the 12 permissions that P1e wired as "will enforce when CRUD routes exist."
-- Tire CRUD (add, edit, write-off, photo upload via multipart)
-- Customer CRUD (create, edit, search)
-- Vehicle CRUD (create, edit, link to customer M:M)
-- Work order CRUD (create, assign, torque gate enforcement)
-- Invoice CRUD (create, void)
-- PO CRUD (create, receive against)
-- Appointment CRUD
-- Waiver record creation
-- Config management endpoints
-- Cash drawer open/close/transactions
+**Deliverables:**
+- 53 new CRUD functions in `php/tire_pos_crud.php` (1,194 lines)
+- 53 new API routes in `routes/api.php` (110 total, up from 57)
+- All 30 schema permissions now enforced end-to-end via Middleware::permit()
+- Every mutation audited via auditLog() + logActivity()
 
-**Acceptance:** All 30 permissions from schema enforced end-to-end. curl tests pass.
+**Entity coverage:**
+- Tires: get, create, update, write-off, photo upload/delete (multipart, MIME validation, 10 MB limit)
+- Customers: get, create, update
+- Vehicles: get, create, update, link/unlink customer M:M
+- Work orders: get, create, update, assign, positions CRUD, complete (torque gate enforced)
+- Invoices: get, create, line items add/remove, void (with reason)
+- Payments: record, list per invoice, auto-status to "paid" when fully covered
+- Deposits: create (with config-driven expiration), apply to invoice, forfeit
+- Refunds: create request (with validation), approve (tiered: manager <$60, owner >$60)
+- Purchase orders: get, create, line items, receive (partial/full auto-status)
+- Appointments: get, list by date range, create, update, cancel
+- Waivers: create with template auto-fill and acknowledgment timestamp
+- Vendors: list, get, create
+- Service catalog: list, get (read-only, auth only)
+- Configuration: list, get, update (CONFIG_MANAGE / owner only)
+- Fee waiver: zero out line item price with audit trail (FEE_WAIVE / owner only)
+
+**Permission gap closed:** INVENTORY_ADD, INVENTORY_EDIT, INVENTORY_WRITE_OFF, INVOICE_VOID, PAYMENT_ACCEPT, FEE_WAIVE, CONFIG_MANAGE, PO_RECEIVE, PHOTO_UPLOAD, WORK_ORDER_ASSIGN (10 permissions that had no standalone routes in P1e)
 
 ---
 
