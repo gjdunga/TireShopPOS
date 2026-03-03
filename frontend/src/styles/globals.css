@@ -1,0 +1,271 @@
+/* ================================================================
+   Tire Shop POS: Global Styles
+   DunganSoft Technologies, March 2026
+
+   Brand palette:
+     Navy   #1A2744   (primary bg, headings)
+     Red    #C9202F   (accent, CTAs, alerts)
+     Cream  #F4F0E8   (page bg)
+     White  #FFFFFF   (cards, inputs)
+     Gray   #6B6560   (muted text)
+     LGray  #F5F3EF   (zebra rows, hover)
+     MGray  #E2DDD3   (borders)
+
+   Typography:
+     Headings: Oswald (condensed, industrial)
+     Body:     Bitter (sturdy serif, readable at small sizes)
+     Mono:     'Courier New' (codes, tokens)
+   ================================================================ */
+
+:root {
+  --navy:    #1A2744;
+  --red:     #C9202F;
+  --red-dk:  #A01824;
+  --cream:   #F4F0E8;
+  --white:   #FFFFFF;
+  --gray:    #6B6560;
+  --lgray:   #F5F3EF;
+  --mgray:   #E2DDD3;
+  --dgray:   #3A3632;
+  --green:   #2B7A3A;
+  --green-lt:#E8F5E9;
+  --orange:  #D4700A;
+  --orange-lt:#FFF3E0;
+  --blue:    #4A7CCF;
+
+  --font-heading: 'Oswald', 'Arial Narrow', sans-serif;
+  --font-body:    'Bitter', Georgia, serif;
+  --font-mono:    'Courier New', monospace;
+
+  --sidebar-w:    240px;
+  --topbar-h:     56px;
+  --radius:       6px;
+  --radius-sm:    4px;
+  --shadow:       0 1px 3px rgba(26, 39, 68, 0.12);
+  --shadow-md:    0 2px 8px rgba(26, 39, 68, 0.15);
+  --transition:   0.15s ease;
+}
+
+/* ---- Reset ---- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--dgray);
+  background: var(--cream);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--navy);
+  letter-spacing: 0.01em;
+}
+
+a {
+  color: var(--blue);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* ---- Form elements ---- */
+input, select, textarea, button {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+input[type="search"],
+input[type="tel"],
+select,
+textarea {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--mgray);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--dgray);
+  transition: border-color var(--transition);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--navy);
+  box-shadow: 0 0 0 2px rgba(26, 39, 68, 0.1);
+}
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-heading);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background var(--transition), opacity var(--transition);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--red);
+  color: var(--white);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--red-dk);
+}
+
+.btn-secondary {
+  background: var(--navy);
+  color: var(--white);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #0F1A30;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--navy);
+  border: 1px solid var(--mgray);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--lgray);
+}
+
+.btn-sm {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8125rem;
+}
+
+/* ---- Cards ---- */
+.card {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+}
+
+/* ---- Labels and badges ---- */
+.label {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--gray);
+  margin-bottom: 0.25rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  font-family: var(--font-heading);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.badge-owner   { background: var(--navy);  color: var(--white); }
+.badge-manager { background: var(--blue);  color: var(--white); }
+.badge-tech    { background: var(--gray);  color: var(--white); }
+
+/* ---- Alerts ---- */
+.alert {
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.alert-error {
+  background: #FDE8E8;
+  color: var(--red-dk);
+  border-left: 3px solid var(--red);
+}
+
+.alert-success {
+  background: var(--green-lt);
+  color: var(--green);
+  border-left: 3px solid var(--green);
+}
+
+.alert-warning {
+  background: var(--orange-lt);
+  color: var(--orange);
+  border-left: 3px solid var(--orange);
+}
+
+/* ---- Spinner ---- */
+.spinner {
+  display: inline-block;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--mgray);
+  border-top-color: var(--navy);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---- Utilities ---- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--gray);
+}
+
+.text-muted { color: var(--gray); }
+.text-red   { color: var(--red); }
+.text-green { color: var(--green); }
+.text-navy  { color: var(--navy); }

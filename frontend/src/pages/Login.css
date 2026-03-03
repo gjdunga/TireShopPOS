@@ -1,0 +1,84 @@
+/* ================================================================
+   Login Page
+   Full viewport, navy background, centered white card.
+   ================================================================ */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--navy);
+  padding: 2rem;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+  padding: 2.5rem 2rem 2rem;
+}
+
+.login-brand {
+  text-align: center;
+  margin-bottom: 1.75rem;
+}
+
+.login-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  background: var(--red);
+  color: var(--white);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1.75rem;
+  border-radius: var(--radius);
+  margin-bottom: 0.75rem;
+}
+
+.login-brand-title {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--navy);
+  margin: 0;
+}
+
+.login-brand-sub {
+  font-family: var(--font-heading);
+  font-size: 0.6875rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gray);
+  margin-top: 0.15rem;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.login-submit {
+  width: 100%;
+  justify-content: center;
+  padding: 0.65rem;
+  margin-top: 0.25rem;
+}
+
+.login-submit .spinner {
+  border-top-color: var(--white);
+  border-color: rgba(255, 255, 255, 0.3);
+  border-top-color: var(--white);
+}

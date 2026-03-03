@@ -1,0 +1,15 @@
+/* ================================================================
+   AppShell
+   Content area fills remaining space beside sidebar and below topbar.
+   ================================================================ */
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-content {
+  margin-left: var(--sidebar-w);
+  margin-top: var(--topbar-h);
+  padding: 1.5rem;
+  min-height: calc(100vh - var(--topbar-h));
+}

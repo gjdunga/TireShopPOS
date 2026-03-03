@@ -1,0 +1,147 @@
+# Phase 2: Core Operations UI -- Tracker
+
+**Goal:** Shop can run daily operations entirely through browser.
+Production-ready for in-shop use after P2.
+
+**Baseline:** P1 complete (19 commits, 9b98407). Backend is a full API server:
+boot, authenticate, authorize, dispatch, respond, backup.
+
+---
+
+## Sub-task Status
+
+| Chunk | Description | Status | Commit | Date |
+|-------|-------------|--------|--------|------|
+| P2a | Frontend scaffold: Vite, React Router, AuthContext, API client, layout shell | DONE | (pending) | 2026-03-03 |
+| P2b | CRUD API completion: remaining 12 permissions, all entity endpoints | TODO | | |
+| P2c | Dashboard (live KPIs) + tire inventory screens + photo upload UI | TODO | | |
+| P2d | Customer/vehicle CRUD + VehicleLookupService integration | TODO | | |
+| P2e | Work order + invoice + waiver + checkout (core transaction flow) | TODO | | |
+| P2f | Cash drawer, appointments, PO, refunds, quotes | TODO | | |
+| P2g | Print/PDF templates + 25 report charts | TODO | | |
+
+---
+
+## P2a: Frontend Scaffold (DONE)
+
+**Deliverables:**
+- Vite 7 build with React 19, React Router 7, dev proxy to PHP backend
+- API client: Bearer token injection, JSON envelope unwrap, 401 interception, ApiError class, FormData support
+- AuthContext: login/logout, session check on mount, permission loading from roles API, can/canAny/canAll helpers
+- ProtectedRoute: auth guard, force-password-change redirect, single/any/all permission gates, 403 fallback
+- AppShell: fixed sidebar (permission-filtered nav groups), fixed topbar (user info, role badge, logout), scrollable content
+- Login page: full-screen, redirect to origin after auth
+- PasswordChange page: client-side validation (8+ chars, upper, lower, digit, match), calls /auth/password
+- Dashboard: fetches /api/health, displays system status cards, proves full pipeline works
+- Placeholder routes for all P2b-P2g pages with chunk labels
+- Global CSS: brand palette (Navy #1A2744, Red #C9202F, Cream #F4F0E8), Oswald/Bitter fonts, card/badge/alert/spinner/button system
+- Google Fonts loaded from CDN (Oswald + Bitter)
+
+**File count:** 18 source files (JSX, JS, CSS, HTML, config)
+
+**Dependency decisions:**
+- React SPA served behind PHP API (not Alpine.js with PHP templates)
+- Token in memory only (no localStorage), clears on hard refresh (intentional security posture)
+- Vite dev server proxies /api to php -S on :8080
+- Production: build to dist/, Apache/Nginx serves static + proxies /api to PHP
+
+---
+
+## P2b: CRUD API Completion (TODO)
+
+**Scope:** Backend endpoints for the 12 permissions that P1e wired as "will enforce when CRUD routes exist."
+- Tire CRUD (add, edit, write-off, photo upload via multipart)
+- Customer CRUD (create, edit, search)
+- Vehicle CRUD (create, edit, link to customer M:M)
+- Work order CRUD (create, assign, torque gate enforcement)
+- Invoice CRUD (create, void)
+- PO CRUD (create, receive against)
+- Appointment CRUD
+- Waiver record creation
+- Config management endpoints
+- Cash drawer open/close/transactions
+
+**Acceptance:** All 30 permissions from schema enforced end-to-end. curl tests pass.
+
+---
+
+## P2c: Dashboard + Inventory (TODO)
+
+**Scope:** Wire dashboard to live API queries. Tire search and inventory management screens.
+- Dashboard KPI cards: open work orders, today's appointments, re-torque due, cash drawer status, deposit alerts
+- Tire search: parsed size, brand, type, tread depth, age filters
+- Tire detail/edit form
+- Photo upload UI (camera icon, drag-drop, multipart POST)
+- BIN location assignment
+
+---
+
+## P2d: Customers + Vehicles + VehicleLookup (TODO)
+
+**Scope:** Customer and vehicle management, VehicleLookupService integration.
+- Customer search + create/edit
+- Vehicle search + create/edit
+- Customer-vehicle M:M linking UI
+- VIN entry with validation
+- Plate lookup (PlateToVIN, NHTSA VPIC decode, torque match)
+- Torque spec display and manual override
+
+---
+
+## P2e: Work Order + Invoice + Checkout (TODO)
+
+**Scope:** Core transaction flow (heaviest chunk).
+- Work order form: vehicle selection, per-position tire assignment (5/7 positions), action type, tread in/out, PSI, condition notes
+- Torque verification gate: hard block in UI, cannot proceed without torque confirmation
+- Invoice builder: 7 line item types, auto-insert CO tire fees, tax calc (labor/parts split), deposit application
+- Waiver auto-detection modal: template display, customer acknowledgment capture
+- Payment recording: cash, check, card stub
+
+---
+
+## P2f: Supporting Operations (TODO)
+
+**Scope:** Cash drawer, appointments, vendor/PO, refunds, quotes.
+- Cash drawer UI: open, record transactions, close with variance calculation
+- Appointment scheduler: calendar view, create/edit/cancel
+- Vendor/PO management: create PO, receive against PO, link received tires to inventory
+- Refund processing: tiered auth modal (tech requests, manager <$60, owner >$60), anti-split validation
+- Out-the-door pricing quote tool: select tires + services, calculate total with tax/fees, print/email
+
+---
+
+## P2g: Print Templates + Reports (TODO)
+
+**Scope:** PDF generation and reporting suite.
+- Receipt/print templates: invoice (with CO fee disclosure), deposit receipt (with forfeit policy), work order printout, estimate
+- PDF generation (browser-side or server-side TBD)
+- Reporting suite: 25+ charts (Chart.js)
+  - Sales performance, inventory turnover, fee compliance
+  - Employee activity, service usage
+  - Cash reconciliation, outstanding deposits, pending refunds
+  - CDPHE quarterly report generation
+
+---
+
+## Dependency Graph
+
+```
+P1 (complete)
+  |
+  +-- P2a (frontend scaffold) ----+
+  |                                |
+  +-- P2b (CRUD API) -------------+
+       |                           |
+       +-- P2c (dashboard/inventory)
+       |
+       +-- P2d (customers/vehicles/lookup)
+       |         |
+       +-- P2e --+ (work order/invoice/checkout)
+       |
+       +-- P2f (cash drawer/appointments/PO/refunds/quotes)
+       |         |
+       +-- P2g --+ (print templates + reports)
+```
+
+P2a and P2b can run in parallel. P2c and P2d can run in parallel after both.
+P2e depends on P2c + P2d. P2f is independent of P2e. P2g is the caboose.
