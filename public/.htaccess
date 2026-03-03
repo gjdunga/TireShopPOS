@@ -1,0 +1,23 @@
+# Tire Shop POS, public directory
+# Route all non-file, non-directory requests to the front controller.
+# DunganSoft Technologies, March 2026
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # If the request is for an existing file or directory, serve it directly
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+
+    # Everything else goes to index.php
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+# Prevent directory listing
+Options -Indexes
+
+# Block access to hidden files (.env, .git, etc.) if they somehow land here
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>

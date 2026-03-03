@@ -1,8 +1,31 @@
+# Environment
 .env
+
+# Logs
 *.log
+storage/logs/*
+!storage/logs/.gitkeep
+
+# Uploaded files and backups
+storage/photos/*
+!storage/photos/.gitkeep
+storage/backups/*
+!storage/backups/.gitkeep
+
+# Dependencies
 vendor/
 node_modules/
+
+# OS
 .DS_Store
 Thumbs.db
+
+# Editor swap files
 *.swp
 *.swo
+
+# IDE
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
