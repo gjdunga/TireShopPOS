@@ -161,7 +161,7 @@ function LoginPage({ onLogin }) {
             marginTop:12, fontSize:11, fontWeight:600,
             color:"rgba(255,255,255,0.25)", letterSpacing:2, textTransform:"uppercase",
             fontFamily:"'Oswald',sans-serif",
-          }}>Dungan Soft Technologies</div>
+          }}>Created by DunganSoft Technologies, All Rights Reserved Copyright 2026</div>
         </div>
 
         {/* Card */}
@@ -348,7 +348,7 @@ function Dashboard({ user, onLogout }) {
             784-0400 &bull; TUE-SAT 10-5
           </div>
           <div style={{ fontSize:10, color:"rgba(255,255,255,0.13)", fontFamily:"'Oswald',sans-serif", letterSpacing:1, marginTop:3 }}>
-            v2.4 &bull; Dungan Soft Technologies
+            v2.4 &bull; Created by DunganSoft Technologies, All Rights Reserved Copyright 2026
           </div>
         </div>
       </aside>
