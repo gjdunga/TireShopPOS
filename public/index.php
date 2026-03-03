@@ -45,13 +45,17 @@ header('Content-Type: application/json; charset=utf-8');
 
 // Temporary route handling (replaced in P1d by App\Http\Router)
 if ($uri === '/api/health' && $method === 'GET') {
+    $dbHealth = \App\Core\Database::health();
+    $overall = $dbHealth['connected'] ? 'ok' : 'degraded';
+
     echo json_encode([
-        'status' => 'ok',
+        'status' => $overall,
         'app' => $app->name(),
         'version' => $app->version(),
         'debug' => $app->isDebug(),
         'timestamp' => date('c'),
         'php' => PHP_VERSION,
+        'database' => $dbHealth,
     ], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
     exit;
 }

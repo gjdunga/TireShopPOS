@@ -7,7 +7,7 @@
 | Chunk | Deliverable | Depends On | Status | Commit |
 |-------|-------------|------------|--------|--------|
 | P1a | Project skeleton: front controller, autoloader, .env, config, error handling | None | COMPLETE | 9016527 |
-| P1b | Database layer: PDO factory, connection health, `GET /api/health` with DB status | P1a | NOT STARTED | |
+| P1b | Database layer: PDO factory, connection health, `GET /api/health` with DB status | P1a | COMPLETE | (pending) |
 | P1c | Auth system: login, logout, password change. Database-backed sessions. Wires to existing helpers.php auth functions | P1a, P1b | NOT STARTED | |
 | P1d | API router: method+path dispatcher, JSON envelope, global error handler, CORS | P1a | NOT STARTED | |
 | P1e | RBAC middleware: session-to-role, permission check per endpoint, 403 response. All business logic exposed as REST behind RBAC | P1c, P1d | NOT STARTED | |
@@ -42,6 +42,47 @@ storage/
 **Verification:** `GET /api/health` returns JSON with app name, version, debug flag, timestamp, PHP version. Any unmatched route returns structured 404.
 
 **Boot sequence:** index.php -> Autoloader (manual require) -> App::boot() -> Env::load(.env) -> Config::init(/config) -> error handlers -> timezone -> (router, P1d)
+
+## P1b: Database Layer
+
+**Files created:**
+
+```
+app/
+  Core/
+    Database.php       PDO singleton, query helpers, health check, transactions
+```
+
+**Files modified:**
+
+```
+public/index.php       Health endpoint now includes database status
+```
+
+**Database class API:**
+
+| Method | Purpose |
+|--------|---------|
+| `connection()` | Returns singleton PDO (creates on first call, runs session vars) |
+| `query($sql, $params)` | SELECT, returns all rows as assoc arrays |
+| `queryOne($sql, $params)` | SELECT, returns first row or null |
+| `scalar($sql, $params)` | SELECT, returns single value |
+| `execute($sql, $params)` | INSERT/UPDATE/DELETE, returns affected row count |
+| `lastInsertId()` | Last auto-increment ID |
+| `transaction($callback)` | Runs callback in transaction, rollback on throw |
+| `health()` | Returns connection status, version, table count, strict mode |
+| `pdo()` | Raw PDO access (legacy getDB() compatibility) |
+| `disconnect()` | Reset singleton (testing) |
+
+**Compatibility note:** Carries forward `MYSQL_ATTR_FOUND_ROWS => true` from legacy `getDB()` in tire_pos_helpers.php. UPDATE statements return matched rows (not changed rows), which existing business logic functions depend on.
+
+**Health endpoint response (`GET /api/health`):**
+
+- `status: "ok"` when DB connected, `"degraded"` when not
+- `database.connected`, `database.server_version`, `database.table_count` (44), `database.strict_mode` (true), `database.connected_at`
+- Graceful failure: DB unavailable returns structured JSON (no crash)
+
+**Verified against live MySQL 8.0.45 with full v2.4 schema (44 tables, 14 views, 410 torque specs).**
 
 ## Notes
 
