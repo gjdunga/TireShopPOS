@@ -273,6 +273,20 @@ CREATE TABLE IF NOT EXISTS password_history (
     INDEX idx_pwdhist_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Default admin user: username 'admin', password 'admin'
+-- force_password_change = 1: must set a real password on first login
+-- role_id = 3 (owner): full access
+-- password_changed_at is NULL so isPasswordExpired() also returns true
+INSERT INTO users (username, password_hash, display_name, role_id, is_active, force_password_change)
+VALUES (
+    'admin',
+    '$2y$12$Gvm5xtbc8X5LpIx.phZUUOUJTmWHqJ1UaprV7nA2oSqFNFmG4Lk.K',
+    'Administrator',
+    3,
+    1,
+    1
+);
+
 CREATE TABLE IF NOT EXISTS permissions (
     permission_id   INT AUTO_INCREMENT PRIMARY KEY,
     permission_key  VARCHAR(60) NOT NULL UNIQUE,
