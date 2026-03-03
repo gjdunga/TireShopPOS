@@ -1163,6 +1163,53 @@ $router->with(permit('CONFIG_MANAGE'))->patch('/api/config/{key}', function (arr
 
 
 // ============================================================================
+// Vehicle Lookup (PlateToVIN + NHTSA + torque spec pipeline)
+// ============================================================================
+
+$router->with(permit('VEHICLE_MANAGE'))->post('/api/vehicles/lookup/plate', function (array $params, array $body) {
+    $plate = trim($body['plate'] ?? '');
+    $state = trim($body['state'] ?? '');
+    if ($plate === '' || $state === '') {
+        Router::sendError('MISSING_FIELDS', 'Fields "plate" and "state" are required.', 400);
+    }
+    $svc = new VehicleLookupService();
+    $result = $svc->lookupByPlate($plate, $state, Middleware::userId());
+    if ($result === null) {
+        Router::sendError('LOOKUP_FAILED', 'Plate lookup failed. The API may be unavailable or the plate was not found.', 404);
+    }
+    return $result;
+});
+
+$router->with(permit('VEHICLE_MANAGE'))->post('/api/vehicles/lookup/vin', function (array $params, array $body) {
+    $vin = trim($body['vin'] ?? '');
+    if ($vin === '') {
+        Router::sendError('MISSING_FIELD', 'Field "vin" is required.', 400);
+    }
+    $svc = new VehicleLookupService();
+    $result = $svc->lookupByVin($vin, Middleware::userId());
+    if ($result === null) {
+        Router::sendError('LOOKUP_FAILED', 'VIN decode failed. Check the VIN and try again.', 404);
+    }
+    return $result;
+});
+
+$router->with(permit('VEHICLE_MANAGE'))->get('/api/vehicles/torque-spec', function () {
+    $make = Router::query('make', '');
+    $model = Router::query('model', '');
+    $year = (int) Router::query('year', '0');
+    if ($make === '' || $year === 0) {
+        Router::sendError('MISSING_PARAMS', 'Query parameters "make" and "year" are required.', 400);
+    }
+    $svc = new VehicleLookupService();
+    $result = $svc->lookupTorqueSpec($make, $model, $year);
+    if ($result === null) {
+        return ['match' => false, 'spec' => null];
+    }
+    return ['match' => true, 'spec' => $result];
+});
+
+
+// ============================================================================
 // Lookup Tables (auth only, used by UI dropdowns)
 // ============================================================================
 

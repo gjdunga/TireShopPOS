@@ -1,0 +1,109 @@
+/* ================================================================
+   CustomerSearch / VehicleSearch (P2d)
+   ================================================================ */
+
+.search-bar {
+  position: relative;
+}
+
+.search-bar input {
+  width: 100%;
+  font-size: 1rem;
+  padding: 0.625rem 2.5rem 0.625rem 0.75rem;
+}
+
+/* Shared entity table style (customers, vehicles) */
+.entity-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.entity-table th {
+  text-align: left;
+  padding: 0.5rem 0.625rem;
+  font-family: var(--font-heading);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gray);
+  border-bottom: 2px solid var(--mgray);
+  white-space: nowrap;
+}
+
+.entity-table td {
+  padding: 0.5rem 0.625rem;
+  border-bottom: 1px solid var(--lgray);
+  vertical-align: middle;
+}
+
+.entity-table tr:hover td {
+  background: var(--lgray);
+}
+
+.entity-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Detail page grids */
+.detail-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .detail-two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Linked entities list */
+.linked-list {
+  list-style: none;
+}
+
+.linked-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--lgray);
+}
+
+.linked-item:last-child {
+  border-bottom: none;
+}
+
+.linked-item-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.linked-item-title {
+  font-weight: 500;
+  font-size: 0.9375rem;
+}
+
+.linked-item-sub {
+  font-size: 0.8125rem;
+  color: var(--gray);
+}
+
+.linked-item-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Lookup result panel */
+.lookup-result {
+  background: var(--lgray);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  margin-top: 0.5rem;
+}
+
+.lookup-result .form-grid {
+  gap: 0.5rem 1rem;
+}

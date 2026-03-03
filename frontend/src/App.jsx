@@ -10,8 +10,10 @@
 //     /tires           Tire search & inventory (P2c)
 //     /tires/new       Add new tire (P2c)
 //     /tires/:id       Tire detail/edit (P2c)
-//     /customers       (P2d placeholder)
-//     /vehicles        (P2d placeholder)
+//     /customers       Customer search (P2d)
+//     /customers/:id   Customer detail/create/edit (P2d)
+//     /vehicles        Vehicle search (P2d)
+//     /vehicles/:id    Vehicle detail/create/edit + lookup (P2d)
 //     /work-orders     (P2e placeholder)
 //     /invoices        (P2e placeholder)
 //     /cash-drawer     (P2f placeholder)
@@ -35,6 +37,10 @@ import Dashboard from './pages/Dashboard.jsx';
 import TireSearch from './pages/TireSearch.jsx';
 import TireDetail from './pages/TireDetail.jsx';
 import TireCreate from './pages/TireCreate.jsx';
+import CustomerSearch from './pages/CustomerSearch.jsx';
+import CustomerDetail from './pages/CustomerDetail.jsx';
+import VehicleSearch from './pages/VehicleSearch.jsx';
+import VehicleDetail from './pages/VehicleDetail.jsx';
 import NotFound from './pages/NotFound.jsx';
 
 // Placeholder component for pages not yet built.
@@ -69,8 +75,12 @@ export default function App() {
               <Route path="tires"       element={<TireSearch />} />
               <Route path="tires/new"   element={<TireCreate />} />
               <Route path="tires/:id"   element={<TireDetail />} />
-              <Route path="customers"   element={<Placeholder title="Customers" chunk="P2d" />} />
-              <Route path="vehicles"    element={<Placeholder title="Vehicles" chunk="P2d" />} />
+              {/* Customers (P2d) */}
+              <Route path="customers"     element={<CustomerSearch />} />
+              <Route path="customers/:id" element={<CustomerDetail />} />
+              {/* Vehicles (P2d) */}
+              <Route path="vehicles"      element={<VehicleSearch />} />
+              <Route path="vehicles/:id"  element={<VehicleDetail />} />
               <Route path="work-orders" element={<Placeholder title="Work Orders" chunk="P2e" />} />
               <Route path="invoices"    element={<Placeholder title="Invoices & Checkout" chunk="P2e" />} />
 

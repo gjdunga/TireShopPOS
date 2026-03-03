@@ -194,21 +194,23 @@ function createCustomer(array $data, int $createdBy): int {
     }
 
     Database::execute(
-        "INSERT INTO customers (first_name, last_name, phone, alt_phone, email, address_line1, address_line2, city, state, zip, notes, preferred_contact)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO customers (first_name, last_name, phone_primary, phone_secondary, email, address_line1, address_line2, city, state, zip, is_tax_exempt, tax_exempt_id, notes, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             trim($data['first_name']),
             trim($data['last_name']),
-            $data['phone'] ?? null,
-            $data['alt_phone'] ?? null,
+            $data['phone_primary'] ?? null,
+            $data['phone_secondary'] ?? null,
             $data['email'] ?? null,
             $data['address_line1'] ?? null,
             $data['address_line2'] ?? null,
             $data['city'] ?? null,
             $data['state'] ?? null,
             $data['zip'] ?? null,
+            (int) ($data['is_tax_exempt'] ?? 0),
+            $data['tax_exempt_id'] ?? null,
             $data['notes'] ?? null,
-            $data['preferred_contact'] ?? 'phone',
+            $createdBy,
         ]
     );
 
@@ -224,9 +226,9 @@ function updateCustomer(int $customerId, array $data, int $updatedBy): array {
         throw new \RuntimeException('Customer not found.');
     }
 
-    $editable = ['first_name', 'last_name', 'phone', 'alt_phone', 'email',
+    $editable = ['first_name', 'last_name', 'phone_primary', 'phone_secondary', 'email',
                  'address_line1', 'address_line2', 'city', 'state', 'zip',
-                 'notes', 'preferred_contact'];
+                 'is_tax_exempt', 'tax_exempt_id', 'notes'];
     $sets = [];
     $binds = [];
     $changes = [];
@@ -261,9 +263,8 @@ function updateCustomer(int $customerId, array $data, int $updatedBy): array {
 
 function getVehicle(int $vehicleId): ?array {
     return Database::queryOne(
-        "SELECT v.*, ts.lug_nut_torque_ft_lbs, ts.wheel_size, ts.bolt_pattern
+        "SELECT v.*
          FROM vehicles v
-         LEFT JOIN lkp_torque_specs ts ON v.year = ts.year AND v.make = ts.make AND v.model = ts.model
          WHERE v.vehicle_id = ?",
         [$vehicleId]
     );
@@ -278,22 +279,26 @@ function createVehicle(array $data, int $createdBy): int {
     }
 
     Database::execute(
-        "INSERT INTO vehicles (year, make, model, submodel, engine, drivetrain, is_dually,
-                               vin, license_plate, plate_state, color, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO vehicles (year, make, model, trim_level, vin, license_plate, license_state,
+                               color, drivetrain, lug_count, lug_pattern, torque_spec_ftlbs,
+                               oem_tire_size, notes, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (int) $data['year'],
             trim($data['make']),
             trim($data['model']),
-            $data['submodel'] ?? null,
-            $data['engine'] ?? null,
-            $data['drivetrain'] ?? null,
-            (int) ($data['is_dually'] ?? 0),
+            $data['trim_level'] ?? null,
             $data['vin'] ?? null,
             $data['license_plate'] ?? null,
-            $data['plate_state'] ?? null,
+            $data['license_state'] ?? null,
             $data['color'] ?? null,
+            $data['drivetrain'] ?? null,
+            isset($data['lug_count']) ? (int) $data['lug_count'] : null,
+            $data['lug_pattern'] ?? null,
+            isset($data['torque_spec_ftlbs']) ? (int) $data['torque_spec_ftlbs'] : null,
+            $data['oem_tire_size'] ?? null,
             $data['notes'] ?? null,
+            $createdBy,
         ]
     );
 
@@ -309,8 +314,9 @@ function updateVehicle(int $vehicleId, array $data, int $updatedBy): array {
         throw new \RuntimeException('Vehicle not found.');
     }
 
-    $editable = ['year', 'make', 'model', 'submodel', 'engine', 'drivetrain',
-                 'is_dually', 'vin', 'license_plate', 'plate_state', 'color', 'notes'];
+    $editable = ['year', 'make', 'model', 'trim_level', 'vin', 'license_plate',
+                 'license_state', 'color', 'drivetrain', 'lug_count', 'lug_pattern',
+                 'torque_spec_ftlbs', 'oem_tire_size', 'notes'];
     $sets = [];
     $binds = [];
     $changes = [];
