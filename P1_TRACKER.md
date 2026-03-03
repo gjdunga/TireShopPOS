@@ -11,7 +11,7 @@
 | P1c | Auth system: login, logout, password change. Database-backed sessions. Wires to existing helpers.php auth functions | P1a, P1b | COMPLETE | 17b1b09 |
 | P1d | API router: method+path dispatcher, JSON envelope, global error handler, CORS | P1a | COMPLETE | f0e14b9 |
 | P1e | RBAC middleware: session-to-role, permission check per endpoint, 403 response. All business logic exposed as REST behind RBAC | P1c, P1d | COMPLETE | eaa609d |
-| P1f | Backup and ops: daily MySQL dump script, photo rsync, cron template, expanded health endpoint | P1b | COMPLETE | (pending) |
+| P1f | Backup and ops: daily MySQL dump script, photo rsync, cron template, expanded health endpoint | P1b | COMPLETE | 6d84a32 |
 
 ## P1a: Project Skeleton
 
