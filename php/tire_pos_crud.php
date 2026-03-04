@@ -1368,3 +1368,160 @@ function listInvoices(string $status = '', int $limit = 50, int $offset = 0): ar
 
     return ['rows' => $rows, 'total' => $total, 'limit' => $limit, 'offset' => $offset];
 }
+
+
+// ============================================================================
+// P2g Report Functions
+// ============================================================================
+
+function getSalesSummary(string $period = 'daily', ?string $start = null, ?string $end = null): array {
+    $end = $end ?: date('Y-m-d');
+
+    if ($period === 'daily') {
+        $start = $start ?: date('Y-m-d', strtotime('-30 days'));
+        $groupBy = "DATE(i.created_at)";
+        $label = "DATE(i.created_at) AS label";
+    } elseif ($period === 'weekly') {
+        $start = $start ?: date('Y-m-d', strtotime('-26 weeks'));
+        $groupBy = "YEARWEEK(i.created_at, 1)";
+        $label = "CONCAT(YEAR(i.created_at), '-W', LPAD(WEEK(i.created_at, 1), 2, '0')) AS label";
+    } else {
+        $start = $start ?: date('Y-m-d', strtotime('-12 months'));
+        $groupBy = "DATE_FORMAT(i.created_at, '%Y-%m')";
+        $label = "DATE_FORMAT(i.created_at, '%Y-%m') AS label";
+    }
+
+    return Database::query(
+        "SELECT {$label},
+                COUNT(*) AS invoice_count,
+                COALESCE(SUM(i.total), 0) AS total_revenue,
+                COALESCE(SUM(i.tax_amount), 0) AS total_tax,
+                COALESCE(SUM(i.subtotal_fees), 0) AS total_fees,
+                COALESCE(SUM(i.amount_paid), 0) AS total_collected,
+                COALESCE(SUM(i.balance_due), 0) AS total_outstanding
+         FROM invoices i
+         WHERE i.status IN ('open', 'completed')
+           AND i.created_at >= ? AND i.created_at < DATE_ADD(?, INTERVAL 1 DAY)
+         GROUP BY {$groupBy}
+         ORDER BY label ASC",
+        [$start, $end]
+    );
+}
+
+function getInventoryStats(): array {
+    $byCondition = Database::query(
+        "SELECT `condition`, COUNT(*) AS cnt, COALESCE(SUM(retail_price), 0) AS total_value
+         FROM tires WHERE status = 'available'
+         GROUP BY `condition`"
+    );
+
+    $byBrand = Database::query(
+        "SELECT b.brand_name, COUNT(*) AS cnt
+         FROM tires t
+         JOIN lkp_brands b ON t.brand_id = b.brand_id
+         WHERE t.status = 'available'
+         GROUP BY b.brand_id
+         ORDER BY cnt DESC
+         LIMIT 15"
+    );
+
+    $aging = Database::query(
+        "SELECT
+            CASE
+                WHEN DATEDIFF(CURDATE(), acquired_at) <= 30 THEN '0-30 days'
+                WHEN DATEDIFF(CURDATE(), acquired_at) <= 90 THEN '31-90 days'
+                WHEN DATEDIFF(CURDATE(), acquired_at) <= 180 THEN '91-180 days'
+                ELSE '180+ days'
+            END AS age_bucket,
+            COUNT(*) AS cnt
+         FROM tires WHERE status = 'available'
+         GROUP BY age_bucket
+         ORDER BY FIELD(age_bucket, '0-30 days', '31-90 days', '91-180 days', '180+ days')"
+    );
+
+    $totalCount = (int) Database::scalar("SELECT COUNT(*) FROM tires WHERE status = 'available'");
+    $totalValue = (float) Database::scalar("SELECT COALESCE(SUM(retail_price), 0) FROM tires WHERE status = 'available'");
+
+    return [
+        'total_count' => $totalCount,
+        'total_value' => $totalValue,
+        'by_condition' => $byCondition,
+        'by_brand' => $byBrand,
+        'aging' => $aging,
+    ];
+}
+
+function getCashReconciliation(?string $start = null, ?string $end = null): array {
+    $start = $start ?: date('Y-m-d', strtotime('-30 days'));
+    $end = $end ?: date('Y-m-d');
+
+    return Database::query(
+        "SELECT cd.drawer_id, cd.drawer_date, cd.opening_balance, cd.closing_count,
+                cd.expected_balance, cd.variance, cd.status,
+                u_open.display_name AS opened_by_name,
+                u_close.display_name AS closed_by_name
+         FROM cash_drawers cd
+         LEFT JOIN users u_open ON cd.opened_by = u_open.user_id
+         LEFT JOIN users u_close ON cd.closed_by = u_close.user_id
+         WHERE cd.drawer_date BETWEEN ? AND ?
+         ORDER BY cd.drawer_date DESC",
+        [$start, $end]
+    );
+}
+
+function getOutstandingDeposits(): array {
+    return Database::query("SELECT * FROM v_deposits_active ORDER BY expires_at ASC");
+}
+
+function getPaymentMethodBreakdown(?string $start = null, ?string $end = null): array {
+    $start = $start ?: date('Y-m-d', strtotime('-30 days'));
+    $end = $end ?: date('Y-m-d');
+
+    return Database::query(
+        "SELECT p.payment_method, COUNT(*) AS txn_count, COALESCE(SUM(p.amount), 0) AS total_amount
+         FROM payments p
+         WHERE p.processed_at >= ? AND p.processed_at < DATE_ADD(?, INTERVAL 1 DAY)
+         GROUP BY p.payment_method
+         ORDER BY total_amount DESC",
+        [$start, $end]
+    );
+}
+
+function getTopSellingTires(int $limit = 10, ?string $start = null, ?string $end = null): array {
+    $start = $start ?: date('Y-m-d', strtotime('-90 days'));
+    $end = $end ?: date('Y-m-d');
+
+    return Database::query(
+        "SELECT t.full_size_string, b.brand_name, t.model, COUNT(*) AS sold_count,
+                AVG(li.unit_price) AS avg_price
+         FROM invoice_line_items li
+         JOIN tires t ON li.tire_id = t.tire_id
+         LEFT JOIN lkp_brands b ON t.brand_id = b.brand_id
+         JOIN invoices i ON li.invoice_id = i.invoice_id
+         WHERE li.line_type = 'tire'
+           AND i.status IN ('open', 'completed')
+           AND i.created_at >= ? AND i.created_at < DATE_ADD(?, INTERVAL 1 DAY)
+         GROUP BY t.full_size_string, b.brand_name, t.model
+         ORDER BY sold_count DESC
+         LIMIT ?",
+        [$start, $end, $limit]
+    );
+}
+
+function getLookupCostReport(?string $start = null, ?string $end = null): array {
+    $start = $start ?: date('Y-m-01');
+    $end = $end ?: date('Y-m-d');
+
+    return Database::query(
+        "SELECT DATE_FORMAT(created_at, '%Y-%m') AS month,
+                COUNT(*) AS lookup_count,
+                SUM(CASE WHEN source = 'api' THEN 1 ELSE 0 END) AS api_calls,
+                SUM(CASE WHEN source = 'cache' THEN 1 ELSE 0 END) AS cache_hits,
+                SUM(CASE WHEN source = 'api' THEN 0.05 ELSE 0 END) AS api_cost
+         FROM plate_lookup_cache
+         WHERE created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)
+         GROUP BY month
+         ORDER BY month ASC",
+        [$start, $end]
+    );
+}

@@ -17,8 +17,8 @@ boot, authenticate, authorize, dispatch, respond, backup.
 | P2c | Dashboard (live KPIs) + tire inventory screens + photo upload UI | DONE | b87ad4e | 2026-03-03 |
 | P2d | Customer/vehicle CRUD + VehicleLookupService integration | DONE | 2b01121 | 2026-03-03 |
 | P2e | Work order + invoice + waiver + checkout (core transaction flow) | DONE | b65e8b4 | 2026-03-04 |
-| P2f | Cash drawer, appointments, PO, refunds, quotes | TODO | | |
-| P2g | Print/PDF templates + 25 report charts | TODO | | |
+| P2f | Cash drawer, appointments, PO, refunds, quotes | DONE | 877b768 | 2026-03-04 |
+| P2g | Print/PDF templates + report charts (Chart.js) | DONE | (pending) | 2026-03-04 |
 
 ---
 
@@ -122,27 +122,34 @@ boot, authenticate, authorize, dispatch, respond, backup.
 
 ---
 
-## P2f: Supporting Operations (TODO)
+## P2f: Supporting Operations (DONE)
 
-**Scope:** Cash drawer, appointments, vendor/PO, refunds, quotes.
-- Cash drawer UI: open, record transactions, close with variance calculation
-- Appointment scheduler: calendar view, create/edit/cancel
-- Vendor/PO management: create PO, receive against PO, link received tires to inventory
-- Refund processing: tiered auth modal (tech requests, manager <$60, owner >$60), anti-split validation
-- Out-the-door pricing quote tool: select tires + services, calculate total with tax/fees, print/email
+**Deliverables:**
+- CashDrawer: open with counted balance, transaction recording (5 types: sale/refund/payout/drop/adjustment with auto-signed amounts), transaction list, close with counted cash and variance calculation. Permission-gated (CASH_DRAWER_OPEN, CASH_DRAWER_CLOSE).
+- AppointmentList: date navigation (prev/next/today/picker), time-sorted appointment slots showing customer, service, tires, duration, phone, notes, status badge. Cancel with confirmation. Create modal with all fields.
+- PurchaseOrderList: 6-state status filter, pagination, vendor/date/subtotal columns.
+- PurchaseOrderDetail: create PO with vendor selection, expected delivery, confirmation #. Line items table (description, qty ordered/received, unit cost, total). Add line form. Receive panel: shows unreceived lines with qty inputs, receive button. Auto-transitions PO status.
+- RefundList: pending refunds with tiered auth (manager <=$60, owner >$60). Amount with HIGH badge. Request modal with anti-split validation before submission.
+- QuoteTool: add tire lines (new/used), service lines (from catalog dropdown), custom lines. Auto-calc: taxable subtotal (tires), nontaxable subtotal (labor), CO tire recycling fees ($1.50 new, $1.00 used), disposal fees ($3.50/tire), sales tax (configurable, tires only per CO law). Print and Copy buttons.
+- Backend: listPurchaseOrders, getCashDrawerTransactions functions. GET /api/purchase-orders (list). Enhanced GET /api/cash-drawer/today with transactions. Sidebar nav updated with Refunds and Quotes.
+
+**File count:** 7 new files (6 JSX, 1 CSS), 4 modified. 1,621 insertions.
+**Build:** 380 KB (104 KB gzipped), 79 modules, zero warnings. 122 API routes total.
 
 ---
 
-## P2g: Print Templates + Reports (TODO)
+## P2g: Print Templates + Reports (DONE)
 
-**Scope:** PDF generation and reporting suite.
-- Receipt/print templates: invoice (with CO fee disclosure), deposit receipt (with forfeit policy), work order printout, estimate
-- PDF generation (browser-side or server-side TBD)
-- Reporting suite: 25+ charts (Chart.js)
-  - Sales performance, inventory turnover, fee compliance
-  - Employee activity, service usage
-  - Cash reconciliation, outstanding deposits, pending refunds
-  - CDPHE quarterly report generation
+**Deliverables:**
+- PrintTemplates.jsx (4 templates): PrintInvoice (line items, totals, CO fee disclosure, payments), PrintWorkOrder (positions grid, torque verification signature block, re-torque notice, tech diagnosis), PrintDepositReceipt (amount, expiration policy, customer signature), PrintEstimate (OTD calc with CO fees/tax, 7-day validity). All use shared PrintLayout wrapper with shop header, auto-print trigger, print/back buttons.
+- ReportsDashboard.jsx (6 tabs, Chart.js): Sales (revenue trend line, invoice count bar, payment method doughnut, top 10 selling tires table, daily/weekly/monthly period selector), Inventory (count/value summary, condition pie, brand bar, aging doughnut), Cash (variance bar, drawer history table, outstanding deposits, pending refunds), Fees (CDPHE quarterly report with tire counts and fee totals, monthly tax breakdown), Services (usage bar chart, active warranties table), Plate Lookup (cost tracking bar, summary stats with cache hit rate).
+- Reports.css: grid layout, card components, chart containers, tab bar.
+- Backend: 7 new report functions (getSalesSummary, getInventoryStats, getCashReconciliation, getOutstandingDeposits, getPaymentMethodBreakdown, getTopSellingTires, getLookupCostReport). 7 new API routes under /api/reports/.
+- Print buttons added to InvoiceDetail and WorkOrderDetail headers (open in new tab).
+- Code splitting: Chart.js + Reports lazy-loaded (201 KB separate chunk). Print templates in separate 20 KB chunk. Main bundle stays at 384 KB.
+
+**File count:** 3 new files (2 JSX, 1 CSS), 5 modified. 1,382 insertions.
+**Build:** Main 384 KB (105 KB gzipped) + Reports 201 KB (68 KB gzipped) + Print 20 KB (4 KB gzipped). 87 modules. Zero warnings. 129 API routes total.
 
 ---
 

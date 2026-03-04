@@ -551,6 +551,46 @@ $router->with(permit('REPORT_VIEW'))->get('/api/reports/active-warranties', func
     return ['warranties' => getActiveWarranties()];
 });
 
+$router->with(permit('REPORT_VIEW'))->get('/api/reports/sales-summary', function () {
+    $period = Router::query('period', 'daily');
+    $start = Router::query('start', null);
+    $end = Router::query('end', null);
+    return ['period' => $period, 'data' => getSalesSummary($period, $start, $end)];
+});
+
+$router->with(permit('REPORT_VIEW'))->get('/api/reports/inventory-stats', function () {
+    return getInventoryStats();
+});
+
+$router->with(permit('REPORT_VIEW'))->get('/api/reports/cash-reconciliation', function () {
+    $start = Router::query('start', null);
+    $end = Router::query('end', null);
+    return ['drawers' => getCashReconciliation($start, $end)];
+});
+
+$router->with(permit('REPORT_VIEW'))->get('/api/reports/outstanding-deposits', function () {
+    return ['deposits' => getOutstandingDeposits()];
+});
+
+$router->with(permit('REPORT_VIEW'))->get('/api/reports/payment-methods', function () {
+    $start = Router::query('start', null);
+    $end = Router::query('end', null);
+    return ['breakdown' => getPaymentMethodBreakdown($start, $end)];
+});
+
+$router->with(permit('REPORT_VIEW'))->get('/api/reports/top-selling-tires', function () {
+    $limit = (int) Router::query('limit', '10');
+    $start = Router::query('start', null);
+    $end = Router::query('end', null);
+    return ['tires' => getTopSellingTires($limit, $start, $end)];
+});
+
+$router->with(permit('REPORT_VIEW'))->get('/api/reports/lookup-cost', function () {
+    $start = Router::query('start', null);
+    $end = Router::query('end', null);
+    return ['data' => getLookupCostReport($start, $end)];
+});
+
 
 // ============================================================================
 // Audit (owner only)

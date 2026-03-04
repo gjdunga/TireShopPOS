@@ -105,7 +105,11 @@ export default function InvoiceDetail() {
             {inv.work_order_id && <> &middot; <Link to={`/work-orders/${inv.work_order_id}`}>WO #{inv.work_order_id}</Link></>}
           </div>
         </div>
-        <InvStatusBadge status={inv.status} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <InvStatusBadge status={inv.status} />
+          <a href={`/print/invoice/${inv.invoice_id}`} target="_blank" rel="noopener noreferrer"
+            className="btn btn-ghost btn-sm">Print</a>
+        </div>
       </div>
 
       {error && <div className="alert alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}

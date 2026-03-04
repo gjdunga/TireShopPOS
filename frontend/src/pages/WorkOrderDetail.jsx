@@ -205,10 +205,16 @@ export default function WorkOrderDetail() {
   return (
     <div>
       <Link to="/work-orders" className="text-muted" style={{ fontSize: '0.8125rem' }}>&larr; Back to Work Orders</Link>
-      <h1 style={{ fontSize: '1.5rem', marginTop: '0.25rem', marginBottom: '1.25rem' }}>
-        {isNew ? 'New Work Order' : `${wo?.wo_number || 'Work Order'}`}
-        {wo && <StatusBadge status={wo.status} style={{ marginLeft: '0.75rem', verticalAlign: 'middle' }} />}
-      </h1>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem', marginBottom: '1.25rem' }}>
+        <h1 style={{ fontSize: '1.5rem', margin: 0 }}>
+          {isNew ? 'New Work Order' : `${wo?.wo_number || 'Work Order'}`}
+          {wo && <StatusBadge status={wo.status} style={{ marginLeft: '0.75rem', verticalAlign: 'middle' }} />}
+        </h1>
+        {!isNew && wo && (
+          <a href={`/print/work-order/${wo.work_order_id}`} target="_blank" rel="noopener noreferrer"
+            className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }}>Print</a>
+        )}
+      </div>
 
       {error && <div className="alert alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
       {msg && <div className="alert alert-success" style={{ marginBottom: '1rem' }}>{msg}</div>}

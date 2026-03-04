@@ -1,0 +1,60 @@
+/* ================================================================
+   Reports (P2g)
+   Chart grid, report cards, tab bar.
+   ================================================================ */
+
+.report-tabs {
+  display: flex;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--lgray);
+}
+
+.report-period-bar {
+  display: flex;
+  gap: 0.375rem;
+  margin-bottom: 1rem;
+}
+
+.report-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .report-grid { grid-template-columns: 1fr; }
+}
+
+.report-card {
+  background: white;
+  border: 1px solid var(--lgray);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.report-card-wide {
+  grid-column: 1 / -1;
+}
+
+.report-card-title {
+  font-family: var(--font-heading);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--navy);
+  margin: 0 0 0.75rem 0;
+  letter-spacing: 0.02em;
+}
+
+.chart-container {
+  position: relative;
+  height: 280px;
+  width: 100%;
+}
+
+.report-card-wide .chart-container {
+  height: 320px;
+}

@@ -24,8 +24,12 @@
 //     /purchase-orders/:id  PO detail/create/receive (P2f)
 //     /refunds              Refund management (P2f)
 //     /quotes               OTD quote tool (P2f)
-//     /reports         (P2g placeholder)
-//     /audit           (P2g placeholder)
+//     /reports              Reports dashboard with charts (P2g)
+//     /audit                (P2g placeholder)
+//     /print/invoice/:id    Printable invoice (P2g)
+//     /print/work-order/:id Printable work order (P2g)
+//     /print/deposit        Printable deposit receipt (P2g)
+//     /print/estimate       Printable estimate (P2g)
 //     /users           (admin placeholder)
 //     *                404
 //
@@ -56,6 +60,13 @@ import PurchaseOrderList from './pages/PurchaseOrderList.jsx';
 import PurchaseOrderDetail from './pages/PurchaseOrderDetail.jsx';
 import RefundList from './pages/RefundList.jsx';
 import QuoteTool from './pages/QuoteTool.jsx';
+import { lazy, Suspense } from 'react';
+const ReportsDashboard = lazy(() => import('./pages/ReportsDashboard.jsx'));
+const LazyPrintInvoice = lazy(() => import('./pages/PrintTemplates.jsx').then(m => ({ default: m.PrintInvoice })));
+const LazyPrintWorkOrder = lazy(() => import('./pages/PrintTemplates.jsx').then(m => ({ default: m.PrintWorkOrder })));
+const LazyPrintDeposit = lazy(() => import('./pages/PrintTemplates.jsx').then(m => ({ default: m.PrintDepositReceipt })));
+const LazyPrintEstimate = lazy(() => import('./pages/PrintTemplates.jsx').then(m => ({ default: m.PrintEstimate })));
+const SuspenseFallback = <div style={{padding:'2rem',textAlign:'center'}}>Loading...</div>;
 import NotFound from './pages/NotFound.jsx';
 
 // Placeholder component for pages not yet built.
@@ -82,6 +93,12 @@ export default function App() {
 
           {/* Protected routes (require auth, wrapped in AppShell) */}
           <Route element={<ProtectedRoute />}>
+            {/* Print routes (no shell, own layout) */}
+            <Route path="/print/invoice/:id" element={<Suspense fallback={SuspenseFallback}><LazyPrintInvoice /></Suspense>} />
+            <Route path="/print/work-order/:id" element={<Suspense fallback={SuspenseFallback}><LazyPrintWorkOrder /></Suspense>} />
+            <Route path="/print/deposit" element={<Suspense fallback={SuspenseFallback}><LazyPrintDeposit /></Suspense>} />
+            <Route path="/print/estimate" element={<Suspense fallback={SuspenseFallback}><LazyPrintEstimate /></Suspense>} />
+
             <Route element={<AppShell />}>
               <Route index element={<Dashboard />} />
 
@@ -112,7 +129,8 @@ export default function App() {
               <Route path="quotes"               element={<QuoteTool />} />
 
               {/* Admin (P2g) */}
-              <Route path="reports" element={<Placeholder title="Reports" chunk="P2g" />} />
+              {/* Admin / Reports (P2g) */}
+              <Route path="reports" element={<Suspense fallback={SuspenseFallback}><ReportsDashboard /></Suspense>} />
               <Route path="audit"   element={<Placeholder title="Audit Log" chunk="P2g" />} />
               <Route path="users"   element={<Placeholder title="User Management" chunk="P2g" />} />
 
