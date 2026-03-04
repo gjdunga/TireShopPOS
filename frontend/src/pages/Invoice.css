@@ -1,0 +1,75 @@
+/* ================================================================
+   Invoice (P2e)
+   Layout, totals card, line item table, waiver text.
+   ================================================================ */
+
+.inv-layout {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .inv-layout { grid-template-columns: 1fr; }
+}
+
+.inv-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+/* Totals panel */
+.inv-totals-card {
+  position: sticky;
+  top: 1rem;
+}
+
+.inv-totals {
+  font-size: 0.875rem;
+}
+
+.inv-total-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--lgray);
+}
+
+.inv-total-row:last-child {
+  border-bottom: none;
+}
+
+.inv-grand-total {
+  font-family: var(--font-heading);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--navy);
+  border-top: 2px solid var(--navy);
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+}
+
+.inv-balance {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.inv-balance.inv-paid {
+  color: var(--green);
+}
+
+/* Waiver text display */
+.waiver-text {
+  background: var(--lgray);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-family: var(--font-body);
+}

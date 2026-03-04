@@ -313,6 +313,13 @@ $router->with(permit('VEHICLE_MANAGE'))->get('/api/vehicles/wheel-positions', fu
 // Work Orders
 // ============================================================================
 
+$router->with(permit('WORK_ORDER_CREATE', 'WORK_ORDER_ASSIGN'))->get('/api/work-orders', function () {
+    $status = Router::query('status', '');
+    $limit = (int) Router::query('limit', '50');
+    $offset = (int) Router::query('offset', '0');
+    return ['results' => listWorkOrders($status, $limit, $offset)];
+});
+
 $router->with(permit('WORK_ORDER_CREATE', 'WORK_ORDER_ASSIGN'))->get('/api/work-orders/open', function () {
     return ['work_orders' => getOpenWorkOrders()];
 });
@@ -940,6 +947,13 @@ $router->with(permit('WORK_ORDER_CREATE'))->post('/api/work-orders/{id}/complete
 
 // ---- Invoices: single, create, line items, void ----
 
+$router->with(permit('INVOICE_CREATE'))->get('/api/invoices', function () {
+    $status = Router::query('status', '');
+    $limit = (int) Router::query('limit', '50');
+    $offset = (int) Router::query('offset', '0');
+    return ['results' => listInvoices($status, $limit, $offset)];
+});
+
 $router->with(permit('INVOICE_CREATE'))->get('/api/invoices/{id}', function (array $params) {
     $inv = getInvoice((int) $params['id']);
     if ($inv === null) {
@@ -954,13 +968,17 @@ $router->with(permit('INVOICE_CREATE'))->post('/api/invoices', function (array $
 });
 
 $router->with(permit('INVOICE_CREATE'))->post('/api/invoices/{id}/line-items', function (array $params, array $body) {
-    $itemId = addInvoiceLineItem((int) $params['id'], $body, Middleware::userId());
-    return ['message' => 'Line item added.', 'line_item_id' => $itemId];
+    $invoiceId = (int) $params['id'];
+    $itemId = addInvoiceLineItem($invoiceId, $body, Middleware::userId());
+    $totals = recalcInvoiceTotals($invoiceId);
+    return ['message' => 'Line item added.', 'line_id' => $itemId, 'totals' => $totals];
 });
 
 $router->with(permit('INVOICE_CREATE'))->delete('/api/invoices/line-items/{id}', function (array $params) {
+    $item = Database::queryOne("SELECT invoice_id FROM invoice_line_items WHERE line_id = ?", [(int) $params['id']]);
     removeInvoiceLineItem((int) $params['id'], Middleware::userId());
-    return ['message' => 'Line item removed.', 'line_item_id' => (int) $params['id']];
+    if ($item) { recalcInvoiceTotals((int) $item['invoice_id']); }
+    return ['message' => 'Line item removed.'];
 });
 
 $router->with(permit('INVOICE_VOID'))->post('/api/invoices/{id}/void', function (array $params, array $body) {
@@ -970,6 +988,50 @@ $router->with(permit('INVOICE_VOID'))->post('/api/invoices/{id}/void', function 
     }
     voidInvoice((int) $params['id'], $reason, Middleware::userId());
     return ['message' => 'Invoice voided.', 'invoice_id' => (int) $params['id']];
+});
+
+$router->with(permit('INVOICE_CREATE'))->post('/api/invoices/{id}/recalc', function (array $params) {
+    $totals = recalcInvoiceTotals((int) $params['id']);
+    return ['message' => 'Totals recalculated.', 'totals' => $totals];
+});
+
+// Users list for tech assignment dropdown (needs auth, not just USER_MANAGE)
+$router->with($auth)->get('/api/users/techs', function () {
+    return ['techs' => Database::query(
+        "SELECT u.user_id, u.display_name, u.username
+         FROM users u
+         JOIN user_roles ur ON u.user_id = ur.user_id
+         JOIN roles r ON ur.role_id = r.role_id
+         WHERE u.is_active = 1
+         GROUP BY u.user_id
+         ORDER BY u.display_name"
+    )];
+});
+
+$router->with(permit('INVOICE_CREATE'))->post('/api/invoices/{id}/auto-fees', function (array $params) {
+    $invoiceId = (int) $params['id'];
+    // Check invoice line items for tires and auto-insert CO tire/disposal fees
+    $tireLines = Database::query(
+        "SELECT li.*, t.`condition` AS tire_condition
+         FROM invoice_line_items li
+         JOIN tires t ON li.tire_id = t.tire_id
+         WHERE li.invoice_id = ? AND li.line_type = 'tire'",
+        [$invoiceId]
+    );
+
+    $newCount = 0;
+    $usedCount = 0;
+    foreach ($tireLines as $line) {
+        if (($line['tire_condition'] ?? '') === 'new') $newCount++;
+        else $usedCount++;
+    }
+
+    if ($newCount > 0) { insertTireFees($invoiceId, 'new', $newCount); }
+    if ($usedCount > 0) { insertTireFees($invoiceId, 'used', $usedCount); }
+    if ($newCount + $usedCount > 0) { insertDisposalFee($invoiceId, $newCount + $usedCount); }
+
+    recalcInvoiceTotals($invoiceId);
+    return ['message' => 'Auto-fees inserted.', 'new_tires' => $newCount, 'used_tires' => $usedCount];
 });
 
 

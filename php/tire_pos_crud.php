@@ -379,7 +379,8 @@ function getWorkOrder(int $woId): ?array {
     $wo = Database::queryOne(
         "SELECT wo.*, u.display_name AS assigned_tech_name,
                 c.first_name AS customer_first, c.last_name AS customer_last,
-                v.year AS vehicle_year, v.make AS vehicle_make, v.model AS vehicle_model, v.vin
+                v.year AS vehicle_year, v.make AS vehicle_make, v.model AS vehicle_model,
+                v.vin, v.torque_spec_ftlbs AS vehicle_torque_spec
          FROM work_orders wo
          LEFT JOIN users u ON wo.assigned_tech_id = u.user_id
          LEFT JOIN vehicles v ON wo.vehicle_id = v.vehicle_id
@@ -389,7 +390,14 @@ function getWorkOrder(int $woId): ?array {
     );
     if ($wo !== null) {
         $wo['positions'] = Database::query(
-            "SELECT * FROM work_order_positions WHERE work_order_id = ? ORDER BY position_label",
+            "SELECT wop.*,
+                    t_ex.full_size_string AS existing_tire_size, t_ex.brand_name AS existing_tire_brand,
+                    t_new.full_size_string AS new_tire_size, t_new.brand_name AS new_tire_brand
+             FROM work_order_positions wop
+             LEFT JOIN v_tire_inventory t_ex ON wop.tire_id_existing = t_ex.tire_id
+             LEFT JOIN v_tire_inventory t_new ON wop.tire_id_new = t_new.tire_id
+             WHERE wop.work_order_id = ?
+             ORDER BY FIELD(wop.position_code, 'LF','RF','LR','RR','SPARE','LRI','RRI','LFI','RFI')",
             [$woId]
         );
     }
@@ -400,17 +408,17 @@ function createWorkOrder(array $data, int $createdBy): int {
     $woNumber = nextWorkOrderNumber();
 
     Database::execute(
-        "INSERT INTO work_orders (work_order_number, customer_id, vehicle_id, assigned_tech_id,
-                                   status, mileage_in, customer_complaint, notes, created_by)
-         VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?)",
+        "INSERT INTO work_orders (wo_number, customer_id, vehicle_id, assigned_tech_id,
+                                   status, mileage_in, customer_complaint, special_notes, created_by)
+         VALUES (?, ?, ?, ?, 'intake', ?, ?, ?, ?)",
         [
             $woNumber,
-            isset($data['customer_id']) ? (int) $data['customer_id'] : null,
+            (int) ($data['customer_id'] ?? 0),
             isset($data['vehicle_id']) ? (int) $data['vehicle_id'] : null,
             isset($data['assigned_tech_id']) ? (int) $data['assigned_tech_id'] : null,
             $data['mileage_in'] ?? null,
             $data['customer_complaint'] ?? null,
-            $data['notes'] ?? null,
+            $data['special_notes'] ?? null,
             $createdBy,
         ]
     );
@@ -428,7 +436,8 @@ function updateWorkOrder(int $woId, array $data, int $updatedBy): array {
     }
 
     $editable = ['customer_id', 'vehicle_id', 'mileage_in', 'mileage_out',
-                 'customer_complaint', 'notes', 'status'];
+                 'customer_complaint', 'tech_diagnosis', 'special_notes', 'status',
+                 'torque_spec_used', 'torque_verified_by', 'torque_verified_at'];
     $sets = [];
     $binds = [];
     $changes = [];
@@ -477,22 +486,24 @@ function addWorkOrderPosition(int $woId, array $data, int $createdBy): int {
     }
 
     Database::execute(
-        "INSERT INTO work_order_positions (work_order_id, position_label, tire_id, action_type,
-                                            tread_depth_in, tread_depth_out, psi_set, condition_notes,
-                                            torque_verified, torque_ft_lbs, torque_verified_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO work_order_positions (work_order_id, position_code, action_requested,
+                                            rotate_to_position, tire_id_existing, tire_id_new,
+                                            tread_depth_in, tread_depth_out, psi_in, psi_out,
+                                            condition_notes, condition_grade)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             $woId,
-            $data['position_label'] ?? 'LF',
-            isset($data['tire_id']) ? (int) $data['tire_id'] : null,
-            $data['action_type'] ?? 'install',
+            $data['position_code'] ?? 'LF',
+            $data['action_requested'] ?? 'none',
+            $data['rotate_to_position'] ?? null,
+            isset($data['tire_id_existing']) ? (int) $data['tire_id_existing'] : null,
+            isset($data['tire_id_new']) ? (int) $data['tire_id_new'] : null,
             $data['tread_depth_in'] ?? null,
             $data['tread_depth_out'] ?? null,
-            $data['psi_set'] ?? null,
+            $data['psi_in'] ?? null,
+            $data['psi_out'] ?? null,
             $data['condition_notes'] ?? null,
-            (int) ($data['torque_verified'] ?? 0),
-            $data['torque_ft_lbs'] ?? null,
-            isset($data['torque_verified_by']) ? (int) $data['torque_verified_by'] : null,
+            $data['condition_grade'] ?? 'not_inspected',
         ]
     );
 
@@ -507,9 +518,11 @@ function updateWorkOrderPosition(int $posId, array $data, int $updatedBy): array
         throw new \RuntimeException('Position not found.');
     }
 
-    $editable = ['position_label', 'tire_id', 'action_type', 'tread_depth_in',
-                 'tread_depth_out', 'psi_set', 'condition_notes',
-                 'torque_verified', 'torque_ft_lbs', 'torque_verified_by'];
+    $editable = ['position_code', 'action_requested', 'rotate_to_position',
+                 'tire_id_existing', 'tire_id_new',
+                 'tread_depth_in', 'tread_depth_out', 'psi_in', 'psi_out',
+                 'condition_notes', 'condition_grade',
+                 'is_completed', 'completed_by', 'completed_at'];
     $sets = [];
     $binds = [];
     $changes = [];
@@ -544,11 +557,11 @@ function completeWorkOrder(int $woId, int $completedBy): array {
     }
 
     Database::execute(
-        "UPDATE work_orders SET status = 'completed', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE work_order_id = ?",
+        "UPDATE work_orders SET status = 'complete', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE work_order_id = ?",
         [$woId]
     );
 
-    auditLog('work_orders', $woId, 'UPDATE', 'status', 'open', 'completed', $completedBy);
+    auditLog('work_orders', $woId, 'UPDATE', 'status', 'in_progress', 'complete', $completedBy);
     logActivity($completedBy, 'WO_COMPLETE', 'work_orders', $woId, 'Completed work order');
 
     return $check;
@@ -569,11 +582,17 @@ function getInvoice(int $invoiceId): ?array {
     );
     if ($inv !== null) {
         $inv['line_items'] = Database::query(
-            "SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY line_item_id",
+            "SELECT li.*, t.full_size_string AS tire_size
+             FROM invoice_line_items li
+             LEFT JOIN v_tire_inventory t ON li.tire_id = t.tire_id
+             WHERE li.invoice_id = ? ORDER BY li.display_order, li.line_id",
             [$invoiceId]
         );
         $inv['payments'] = Database::query(
-            "SELECT * FROM payments WHERE invoice_id = ? ORDER BY paid_at",
+            "SELECT p.*, u.display_name AS processed_by_name
+             FROM payments p
+             LEFT JOIN users u ON p.processed_by = u.user_id
+             WHERE p.invoice_id = ? ORDER BY p.processed_at",
             [$invoiceId]
         );
     }
@@ -583,16 +602,18 @@ function getInvoice(int $invoiceId): ?array {
 function createInvoice(array $data, int $createdBy): int {
     $invNumber = nextInvoiceNumber();
 
+    // Get tax rate from config
+    $taxRate = getConfigValue('tax_rate') ?? '0.0790';
+
     Database::execute(
-        "INSERT INTO invoices (invoice_number, customer_id, vehicle_id, work_order_id,
-                                status, notes, created_by)
-         VALUES (?, ?, ?, ?, 'open', ?, ?)",
+        "INSERT INTO invoices (invoice_number, customer_id, work_order_id,
+                                tax_rate, status, created_by)
+         VALUES (?, ?, ?, ?, 'open', ?)",
         [
             $invNumber,
-            isset($data['customer_id']) ? (int) $data['customer_id'] : null,
-            isset($data['vehicle_id']) ? (int) $data['vehicle_id'] : null,
+            (int) ($data['customer_id'] ?? 0),
             isset($data['work_order_id']) ? (int) $data['work_order_id'] : null,
-            $data['notes'] ?? null,
+            $taxRate,
             $createdBy,
         ]
     );
@@ -612,21 +633,27 @@ function addInvoiceLineItem(int $invoiceId, array $data, int $addedBy): int {
         throw new \RuntimeException('Cannot add items to a voided invoice.');
     }
 
+    $qty = (float) ($data['quantity'] ?? 1);
+    $price = (float) ($data['unit_price'] ?? 0);
+    $lineTotal = round($qty * $price, 2);
+
     Database::execute(
         "INSERT INTO invoice_line_items (invoice_id, line_type, description, tire_id, service_id,
-                                          quantity, unit_price, is_taxable, discount_amount, tax_amount)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                          fee_config_id, quantity, unit_price, line_total,
+                                          is_taxable, display_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             $invoiceId,
             $data['line_type'] ?? 'custom',
             $data['description'] ?? '',
             isset($data['tire_id']) ? (int) $data['tire_id'] : null,
             isset($data['service_id']) ? (int) $data['service_id'] : null,
-            (int) ($data['quantity'] ?? 1),
-            $data['unit_price'] ?? '0.00',
+            isset($data['fee_config_id']) ? (int) $data['fee_config_id'] : null,
+            $qty,
+            $price,
+            $lineTotal,
             (int) ($data['is_taxable'] ?? 1),
-            $data['discount_amount'] ?? '0.00',
-            $data['tax_amount'] ?? '0.00',
+            (int) ($data['display_order'] ?? 0),
         ]
     );
 
@@ -639,17 +666,17 @@ function removeInvoiceLineItem(int $itemId, int $removedBy): void {
     $item = Database::queryOne(
         "SELECT li.*, i.status AS invoice_status FROM invoice_line_items li
          JOIN invoices i ON li.invoice_id = i.invoice_id
-         WHERE li.line_item_id = ?",
+         WHERE li.line_id = ?",
         [$itemId]
     );
     if ($item === null) {
         throw new \RuntimeException('Line item not found.');
     }
-    if ($item['invoice_status'] === 'void') {
+    if ($item['invoice_status'] === 'voided') {
         throw new \RuntimeException('Cannot remove items from a voided invoice.');
     }
 
-    Database::execute("DELETE FROM invoice_line_items WHERE line_item_id = ?", [$itemId]);
+    Database::execute("DELETE FROM invoice_line_items WHERE line_id = ?", [$itemId]);
     auditLog('invoice_line_items', $itemId, 'DELETE', null, null, null, $removedBy);
 }
 
@@ -680,19 +707,21 @@ function recordPayment(int $invoiceId, array $data, int $recordedBy): int {
     if ($inv === null) {
         throw new \RuntimeException('Invoice not found.');
     }
-    if ($inv['status'] === 'void') {
+    if ($inv['status'] === 'voided') {
         throw new \RuntimeException('Cannot accept payment on a voided invoice.');
     }
 
     Database::execute(
-        "INSERT INTO payments (invoice_id, payment_method, amount, reference_number, received_by)
-         VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO payments (invoice_id, payment_method, amount, reference_number, is_deposit, processed_by, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?)",
         [
             $invoiceId,
             $data['payment_method'] ?? 'cash',
             $data['amount'] ?? '0.00',
             $data['reference_number'] ?? null,
+            (int) ($data['is_deposit'] ?? 0),
             $recordedBy,
+            $data['notes'] ?? null,
         ]
     );
 
@@ -700,15 +729,12 @@ function recordPayment(int $invoiceId, array $data, int $recordedBy): int {
     auditLog('payments', $paymentId, 'INSERT', null, null, null, $recordedBy);
     logActivity($recordedBy, 'PAYMENT_ACCEPT', 'payments', $paymentId, ($data['payment_method'] ?? 'cash') . ' $' . ($data['amount'] ?? '0'));
 
-    // Recalculate invoice status
-    $totals = calculateInvoiceTotals($invoiceId);
-    $paidSum = (float) Database::scalar(
-        "SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = ?",
-        [$invoiceId]
-    );
-    if ($paidSum >= (float) ($totals['grand_total'] ?? 0)) {
-        Database::execute("UPDATE invoices SET status = 'paid', updated_at = CURRENT_TIMESTAMP WHERE invoice_id = ?", [$invoiceId]);
-        auditLog('invoices', $invoiceId, 'UPDATE', 'status', 'open', 'paid', $recordedBy);
+    // Recalculate: if fully paid, mark invoice completed
+    recalcInvoiceTotals($invoiceId);
+    $updated = Database::queryOne("SELECT total, amount_paid FROM invoices WHERE invoice_id = ?", [$invoiceId]);
+    if ($updated && (float) $updated['amount_paid'] >= (float) $updated['total'] && (float) $updated['total'] > 0) {
+        Database::execute("UPDATE invoices SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE invoice_id = ? AND status = 'open'", [$invoiceId]);
+        auditLog('invoices', $invoiceId, 'UPDATE', 'status', 'open', 'completed', $recordedBy);
     }
 
     return $paymentId;
@@ -716,10 +742,10 @@ function recordPayment(int $invoiceId, array $data, int $recordedBy): int {
 
 function getInvoicePayments(int $invoiceId): array {
     return Database::query(
-        "SELECT p.*, u.display_name AS received_by_name
+        "SELECT p.*, u.display_name AS processed_by_name
          FROM payments p
-         LEFT JOIN users u ON p.received_by = u.user_id
-         WHERE p.invoice_id = ? ORDER BY p.paid_at",
+         LEFT JOIN users u ON p.processed_by = u.user_id
+         WHERE p.invoice_id = ? ORDER BY p.processed_at",
         [$invoiceId]
     );
 }
@@ -1186,15 +1212,117 @@ function updateConfig(string $key, string $value, int $updatedBy): void {
 }
 
 function waiveFee(int $lineItemId, string $reason, int $waivedBy): void {
-    $item = Database::queryOne("SELECT * FROM invoice_line_items WHERE line_item_id = ?", [$lineItemId]);
+    $item = Database::queryOne("SELECT * FROM invoice_line_items WHERE line_id = ?", [$lineItemId]);
     if ($item === null) {
         throw new \RuntimeException('Line item not found.');
     }
 
     Database::execute(
-        "UPDATE invoice_line_items SET unit_price = '0.00', discount_amount = ?, description = CONCAT(description, ' [FEE WAIVED: ', ?, ']') WHERE line_item_id = ?",
-        [$item['unit_price'], $reason, $lineItemId]
+        "UPDATE invoice_line_items SET unit_price = '0.00', line_total = '0.00', description = CONCAT(description, ' [FEE WAIVED: ', ?, ']') WHERE line_id = ?",
+        [$reason, $lineItemId]
     );
     auditLog('invoice_line_items', $lineItemId, 'UPDATE', 'unit_price', $item['unit_price'], '0.00', $waivedBy);
     logActivity($waivedBy, 'FEE_WAIVE', 'invoice_line_items', $lineItemId, 'Waived: ' . $reason);
+}
+
+
+// ============================================================================
+// Invoice recalculation (persist totals to invoices table)
+// ============================================================================
+
+function recalcInvoiceTotals(int $invoiceId): array {
+    $totals = calculateInvoiceTotals($invoiceId);
+
+    Database::execute(
+        "UPDATE invoices SET
+            subtotal_taxable    = ?,
+            subtotal_nontaxable = ?,
+            subtotal_fees       = ?,
+            tax_amount          = ?,
+            discount_amount     = ?,
+            total               = ?,
+            amount_paid         = ?,
+            balance_due         = ?,
+            updated_at          = CURRENT_TIMESTAMP
+         WHERE invoice_id = ?",
+        [
+            $totals['subtotal_taxable'],
+            $totals['subtotal_nontaxable'],
+            $totals['subtotal_fees'],
+            $totals['tax_amount'],
+            $totals['discount_amount'],
+            $totals['total'],
+            $totals['amount_paid'],
+            $totals['balance_due'],
+            $invoiceId,
+        ]
+    );
+
+    return $totals;
+}
+
+
+// ============================================================================
+// Work Order / Invoice list helpers
+// ============================================================================
+
+function listWorkOrders(string $status = '', int $limit = 50, int $offset = 0): array {
+    $where = '';
+    $params = [];
+    if ($status !== '') {
+        $where = 'WHERE wo.status = ?';
+        $params[] = $status;
+    }
+
+    $total = (int) Database::scalar(
+        "SELECT COUNT(*) FROM work_orders wo {$where}", $params
+    );
+
+    $params[] = $limit;
+    $params[] = $offset;
+    $rows = Database::query(
+        "SELECT wo.wo_number, wo.work_order_id, wo.status, wo.created_at,
+                wo.assigned_tech_id, u.display_name AS assigned_tech_name,
+                c.first_name AS customer_first, c.last_name AS customer_last,
+                v.year AS vehicle_year, v.make AS vehicle_make, v.model AS vehicle_model
+         FROM work_orders wo
+         LEFT JOIN users u ON wo.assigned_tech_id = u.user_id
+         LEFT JOIN customers c ON wo.customer_id = c.customer_id
+         LEFT JOIN vehicles v ON wo.vehicle_id = v.vehicle_id
+         {$where}
+         ORDER BY wo.created_at DESC
+         LIMIT ? OFFSET ?",
+        $params
+    );
+
+    return ['rows' => $rows, 'total' => $total, 'limit' => $limit, 'offset' => $offset];
+}
+
+function listInvoices(string $status = '', int $limit = 50, int $offset = 0): array {
+    $where = '';
+    $params = [];
+    if ($status !== '') {
+        $where = 'WHERE i.status = ?';
+        $params[] = $status;
+    }
+
+    $total = (int) Database::scalar(
+        "SELECT COUNT(*) FROM invoices i {$where}", $params
+    );
+
+    $params[] = $limit;
+    $params[] = $offset;
+    $rows = Database::query(
+        "SELECT i.invoice_id, i.invoice_number, i.status, i.total, i.balance_due, i.created_at,
+                c.first_name AS customer_first, c.last_name AS customer_last,
+                i.work_order_id
+         FROM invoices i
+         LEFT JOIN customers c ON i.customer_id = c.customer_id
+         {$where}
+         ORDER BY i.created_at DESC
+         LIMIT ? OFFSET ?",
+        $params
+    );
+
+    return ['rows' => $rows, 'total' => $total, 'limit' => $limit, 'offset' => $offset];
 }

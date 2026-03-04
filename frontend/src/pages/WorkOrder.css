@@ -1,0 +1,115 @@
+/* ================================================================
+   WorkOrder (P2e)
+   Layout, position grid, torque gate.
+   ================================================================ */
+
+.wo-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .wo-layout { grid-template-columns: 1fr; }
+}
+
+.textarea {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--mgray);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  resize: vertical;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--navy);
+  box-shadow: 0 0 0 2px rgba(26, 39, 68, 0.1);
+}
+
+/* Position grid */
+.pos-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+@media (max-width: 600px) {
+  .pos-grid { grid-template-columns: 1fr; }
+}
+
+.pos-card {
+  border: 1px solid var(--mgray);
+  border-radius: var(--radius-sm);
+  padding: 0.625rem;
+  background: white;
+  transition: border-color 0.15s;
+}
+
+.pos-card:hover {
+  border-color: var(--navy);
+}
+
+.pos-card.pos-done {
+  border-color: var(--green);
+  background: rgba(43, 122, 58, 0.03);
+}
+
+.pos-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.pos-code {
+  font-family: var(--font-heading);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.pos-action {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gray);
+}
+
+.pos-body {
+  font-size: 0.8125rem;
+}
+
+.pos-tire {
+  margin-bottom: 0.25rem;
+}
+
+.pos-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem 0.75rem;
+  margin-top: 0.375rem;
+  color: var(--gray);
+  font-size: 0.75rem;
+}
+
+.pos-notes {
+  margin-top: 0.375rem;
+  font-style: italic;
+  color: var(--gray);
+  font-size: 0.75rem;
+}
+
+.pos-grade {
+  margin-top: 0.375rem;
+}
+
+.pos-grade select {
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--mgray);
+  border-radius: 3px;
+}
