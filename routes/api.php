@@ -461,9 +461,10 @@ $router->with(permit('CASH_DRAWER_OPEN'))->post('/api/cash-drawer/open', functio
 $router->with(permit('CASH_DRAWER_OPEN'))->get('/api/cash-drawer/today', function () {
     $drawer = getCashDrawerToday();
     if ($drawer === null) {
-        return ['open' => false, 'drawer' => null];
+        return ['open' => false, 'drawer' => null, 'transactions' => []];
     }
-    return ['open' => true, 'drawer' => $drawer];
+    $txns = getCashDrawerTransactions((int) $drawer['drawer_id']);
+    return ['open' => true, 'drawer' => $drawer, 'transactions' => $txns];
 });
 
 $router->with(permit('CASH_DRAWER_CLOSE'))->post('/api/cash-drawer/close', function (array $params, array $body) {
@@ -502,6 +503,13 @@ $router->with(permit('APPOINTMENT_MANAGE'))->get('/api/appointments/today', func
 // ============================================================================
 // Purchase Orders
 // ============================================================================
+
+$router->with(permit('PO_CREATE', 'PO_RECEIVE'))->get('/api/purchase-orders', function () {
+    $status = Router::query('status', '');
+    $limit = (int) Router::query('limit', '50');
+    $offset = (int) Router::query('offset', '0');
+    return ['results' => listPurchaseOrders($status, $limit, $offset)];
+});
 
 $router->with(permit('PO_CREATE', 'PO_RECEIVE'))->get('/api/purchase-orders/open', function () {
     return ['purchase_orders' => getOpenPurchaseOrders()];

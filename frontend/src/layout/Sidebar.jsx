@@ -37,6 +37,8 @@ const NAV = [
       { label: 'Cash Drawer',    path: '/cash-drawer',   icon: '\u2338', need: ['CASH_DRAWER_OPEN', 'CASH_DRAWER_CLOSE'] },
       { label: 'Appointments',   path: '/appointments',  icon: '\u25F7', need: 'APPOINTMENT_MANAGE' },
       { label: 'Purchase Orders', path: '/purchase-orders', icon: '\u2263', need: ['PO_CREATE', 'PO_RECEIVE'] },
+      { label: 'Refunds',        path: '/refunds',       icon: '\u21A9', need: ['REFUND_REQUEST', 'REFUND_APPROVE'] },
+      { label: 'Quotes',         path: '/quotes',        icon: '\u2696', need: 'INVOICE_CREATE' },
     ],
   },
   {

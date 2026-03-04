@@ -982,6 +982,48 @@ function receivePurchaseOrder(int $poId, array $receivedItems, int $receivedBy):
 
 
 // ============================================================================
+function listPurchaseOrders(string $status = '', int $limit = 50, int $offset = 0): array {
+    $where = '';
+    $params = [];
+    if ($status !== '') {
+        $where = 'WHERE po.status = ?';
+        $params[] = $status;
+    }
+
+    $total = (int) Database::scalar(
+        "SELECT COUNT(*) FROM purchase_orders po {$where}", $params
+    );
+
+    $params[] = $limit;
+    $params[] = $offset;
+    $rows = Database::query(
+        "SELECT po.po_id, po.po_number, po.status, po.order_date, po.expected_delivery,
+                po.subtotal, po.shipping_cost, po.vendor_confirmation,
+                v.vendor_name
+         FROM purchase_orders po
+         LEFT JOIN vendors v ON po.vendor_id = v.vendor_id
+         {$where}
+         ORDER BY po.order_date DESC
+         LIMIT ? OFFSET ?",
+        $params
+    );
+
+    return ['rows' => $rows, 'total' => $total, 'limit' => $limit, 'offset' => $offset];
+}
+
+function getCashDrawerTransactions(int $drawerId): array {
+    return Database::query(
+        "SELECT cdt.*, u.display_name AS created_by_name
+         FROM cash_drawer_transactions cdt
+         LEFT JOIN users u ON cdt.created_by = u.user_id
+         WHERE cdt.drawer_id = ?
+         ORDER BY cdt.created_at DESC",
+        [$drawerId]
+    );
+}
+
+
+// ============================================================================
 // Appointments CRUD
 // ============================================================================
 

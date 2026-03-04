@@ -18,9 +18,12 @@
 //     /work-orders/:id Work order detail/create (P2e)
 //     /invoices        Invoice list (P2e)
 //     /invoices/:id    Invoice detail/checkout (P2e)
-//     /cash-drawer     (P2f placeholder)
-//     /appointments    (P2f placeholder)
-//     /purchase-orders (P2f placeholder)
+//     /cash-drawer          Cash drawer (P2f)
+//     /appointments         Appointment scheduler (P2f)
+//     /purchase-orders      PO list (P2f)
+//     /purchase-orders/:id  PO detail/create/receive (P2f)
+//     /refunds              Refund management (P2f)
+//     /quotes               OTD quote tool (P2f)
 //     /reports         (P2g placeholder)
 //     /audit           (P2g placeholder)
 //     /users           (admin placeholder)
@@ -47,6 +50,12 @@ import WorkOrderList from './pages/WorkOrderList.jsx';
 import WorkOrderDetail from './pages/WorkOrderDetail.jsx';
 import InvoiceList from './pages/InvoiceList.jsx';
 import InvoiceDetail from './pages/InvoiceDetail.jsx';
+import CashDrawer from './pages/CashDrawer.jsx';
+import AppointmentList from './pages/AppointmentList.jsx';
+import PurchaseOrderList from './pages/PurchaseOrderList.jsx';
+import PurchaseOrderDetail from './pages/PurchaseOrderDetail.jsx';
+import RefundList from './pages/RefundList.jsx';
+import QuoteTool from './pages/QuoteTool.jsx';
 import NotFound from './pages/NotFound.jsx';
 
 // Placeholder component for pages not yet built.
@@ -95,9 +104,12 @@ export default function App() {
               <Route path="invoices/:id"    element={<InvoiceDetail />} />
 
               {/* Shop operations (P2f) */}
-              <Route path="cash-drawer"     element={<Placeholder title="Cash Drawer" chunk="P2f" />} />
-              <Route path="appointments"    element={<Placeholder title="Appointments" chunk="P2f" />} />
-              <Route path="purchase-orders" element={<Placeholder title="Purchase Orders" chunk="P2f" />} />
+              <Route path="cash-drawer"          element={<CashDrawer />} />
+              <Route path="appointments"         element={<AppointmentList />} />
+              <Route path="purchase-orders"      element={<PurchaseOrderList />} />
+              <Route path="purchase-orders/:id"  element={<PurchaseOrderDetail />} />
+              <Route path="refunds"              element={<RefundList />} />
+              <Route path="quotes"               element={<QuoteTool />} />
 
               {/* Admin (P2g) */}
               <Route path="reports" element={<Placeholder title="Reports" chunk="P2g" />} />

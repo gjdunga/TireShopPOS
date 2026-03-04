@@ -1,0 +1,120 @@
+/* ================================================================
+   SupportOps (P2f)
+   Cash drawer, appointments, PO, refunds, quote tool.
+   ================================================================ */
+
+.ops-two-col {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .ops-two-col { grid-template-columns: 1fr; }
+}
+
+.ops-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+}
+
+.ops-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.ops-stat-val {
+  font-family: var(--font-heading);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+/* Appointment calendar strip */
+.appt-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.appt-date-nav h2 {
+  font-family: var(--font-heading);
+  font-size: 1.125rem;
+  margin: 0;
+}
+
+/* Appointment slot list */
+.appt-slot {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--lgray);
+}
+
+.appt-slot:last-child {
+  border-bottom: none;
+}
+
+.appt-time {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  font-weight: 600;
+  min-width: 55px;
+  color: var(--navy);
+}
+
+.appt-info {
+  flex: 1;
+}
+
+.appt-customer {
+  font-weight: 500;
+}
+
+.appt-service {
+  font-size: 0.8125rem;
+  color: var(--gray);
+}
+
+/* PO receive form */
+.receive-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0;
+  border-bottom: 1px solid var(--lgray);
+}
+
+.receive-row:last-child {
+  border-bottom: none;
+}
+
+/* Quote tool totals */
+.quote-totals {
+  background: var(--lgray);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  margin-top: 0.75rem;
+}
+
+.quote-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.25rem 0;
+  font-size: 0.875rem;
+}
+
+.quote-grand {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--navy);
+  border-top: 2px solid var(--navy);
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+}
