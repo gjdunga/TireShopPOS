@@ -16,7 +16,7 @@ boot, authenticate, authorize, dispatch, respond, backup.
 | P2b | CRUD API completion: remaining 12 permissions, all entity endpoints | DONE | de3c3b8 | 2026-03-03 |
 | P2c | Dashboard (live KPIs) + tire inventory screens + photo upload UI | DONE | b87ad4e | 2026-03-03 |
 | P2d | Customer/vehicle CRUD + VehicleLookupService integration | DONE | 2b01121 | 2026-03-03 |
-| P2e | Work order + invoice + waiver + checkout (core transaction flow) | TODO | | |
+| P2e | Work order + invoice + waiver + checkout (core transaction flow) | DONE | b65e8b4 | 2026-03-04 |
 | P2f | Cash drawer, appointments, PO, refunds, quotes | TODO | | |
 | P2g | Print/PDF templates + 25 report charts | TODO | | |
 
@@ -108,14 +108,17 @@ boot, authenticate, authorize, dispatch, respond, backup.
 
 ---
 
-## P2e: Work Order + Invoice + Checkout (TODO)
+## P2e: Work Order + Invoice + Checkout (DONE)
 
-**Scope:** Core transaction flow (heaviest chunk).
-- Work order form: vehicle selection, per-position tire assignment (5/7 positions), action type, tread in/out, PSI, condition notes
-- Torque verification gate: hard block in UI, cannot proceed without torque confirmation
-- Invoice builder: 7 line item types, auto-insert CO tire fees, tax calc (labor/parts split), deposit application
-- Waiver auto-detection modal: template display, customer acknowledgment capture
-- Payment recording: cash, check, card stub
+**Deliverables:**
+- WorkOrderList: status filter (5 states), pagination, customer/vehicle/tech columns, status badges.
+- WorkOrderDetail: create/edit WO with customer search (live debounce), vehicle selection from linked vehicles, tech assignment dropdown, mileage in/out, complaint/diagnosis/notes. Position grid: 5 standard + 2 dually inner positions, per-position action/tire/tread/PSI/grade/notes. Torque verification gate: spec entry, verified-by selector, hard block (UI + server) when wheel work performed without verification. Re-torque scheduling (7 days / 75 miles default).
+- InvoiceList: status filter (open/held/completed/voided), pagination, customer/total/balance columns.
+- InvoiceDetail: two-column layout (line items left, sticky totals + payments right). 7 line item types (tire, labor, part, fee, warranty, discount, custom). Add/remove with auto-recalc. Auto-fees button (scans tires, inserts CO tire fees by condition + disposal fees). Tax calc (taxable/nontaxable split, configurable rate). Payment recording (cash/card/check/other with ref number). Waiver auto-detection (aged tire, used tire, shoulder repair) with modal template display and customer acknowledgment. Void with reason (permission-gated).
+- Backend: CRUD column alignment for work_orders table. 5 new/fixed routes (list WO, list invoices, recalc, auto-fees, techs). recalcInvoiceTotals + list functions. Line item add/remove auto-recalc.
+
+**File count:** 5 new files (4 JSX, 2 CSS), 3 modified (App.jsx, globals.css, tire_pos_crud.php, routes/api.php). 2,012 insertions.
+**Build:** 339 KB (96 KB gzipped), 72 modules, zero warnings. 121 API routes total.
 
 ---
 
