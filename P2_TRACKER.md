@@ -18,7 +18,7 @@ boot, authenticate, authorize, dispatch, respond, backup.
 | P2d | Customer/vehicle CRUD + VehicleLookupService integration | DONE | 2b01121 | 2026-03-03 |
 | P2e | Work order + invoice + waiver + checkout (core transaction flow) | DONE | b65e8b4 | 2026-03-04 |
 | P2f | Cash drawer, appointments, PO, refunds, quotes | DONE | 877b768 | 2026-03-04 |
-| P2g | Print/PDF templates + report charts (Chart.js) | DONE | (pending) | 2026-03-04 |
+| P2g | Print/PDF templates + report charts (Chart.js) | DONE | 40a09ff | 2026-03-04 |
 
 ---
 
