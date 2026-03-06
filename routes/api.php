@@ -1595,6 +1595,127 @@ $router->with($auth)->post('/api/notifications/{id}/failed', function (array $pa
 
 
 // ============================================================================
+// Phase 5: Customer Engagement Routes
+// ============================================================================
+
+// --- Discount Groups ---
+$router->with(permit('USER_MANAGE'))->get('/api/discount-groups', function () {
+    $active = Router::query('active_only', '1') === '1';
+    return ['groups' => listDiscountGroups($active)];
+});
+
+$router->with(permit('USER_MANAGE'))->post('/api/discount-groups', function (array $params, array $body) {
+    $id = createDiscountGroup($body);
+    return ['message' => 'Discount group created.', 'group_id' => $id];
+});
+
+$router->with(permit('USER_MANAGE'))->patch('/api/discount-groups/{id}', function (array $params, array $body) {
+    return updateDiscountGroup((int) $params['id'], $body);
+});
+
+$router->with($auth)->get('/api/customers/{id}/discount-groups', function (array $params) {
+    return ['groups' => getCustomerDiscountGroups((int) $params['id'])];
+});
+
+$router->with(permit('CUSTOMER_MANAGE'))->post('/api/customers/{customerId}/discount-groups/{groupId}', function (array $params, array $body) {
+    addCustomerToGroup((int) $params['customerId'], (int) $params['groupId'], Middleware::userId(), $body['expires_at'] ?? null);
+    return ['message' => 'Customer added to discount group.'];
+});
+
+$router->with(permit('CUSTOMER_MANAGE'))->delete('/api/customers/{customerId}/discount-groups/{groupId}', function (array $params) {
+    removeCustomerFromGroup((int) $params['customerId'], (int) $params['groupId']);
+    return ['message' => 'Customer removed from discount group.'];
+});
+
+$router->with($auth)->get('/api/customers/{id}/discount-calc', function (array $params) {
+    $subtotal = Router::query('subtotal', '0');
+    $lineType = Router::query('line_type', 'all');
+    return calculateCustomerDiscount((int) $params['id'], $subtotal, $lineType);
+});
+
+// --- Coupons ---
+$router->with(permit('USER_MANAGE'))->get('/api/coupons', function () {
+    $active = Router::query('active_only', '1') === '1';
+    return ['coupons' => listCoupons($active)];
+});
+
+$router->with(permit('USER_MANAGE'))->post('/api/coupons', function (array $params, array $body) {
+    $id = createCoupon($body, Middleware::userId());
+    return ['message' => 'Coupon created.', 'coupon_id' => $id];
+});
+
+$router->with($auth)->post('/api/coupons/validate', function (array $params, array $body) {
+    $code = $body['code'] ?? '';
+    $subtotal = $body['subtotal'] ?? '0';
+    $customerId = isset($body['customer_id']) ? (int) $body['customer_id'] : null;
+    return validateCoupon($code, $subtotal, $customerId);
+});
+
+$router->with($auth)->post('/api/coupons/apply', function (array $params, array $body) {
+    applyCoupon((int) $body['coupon_id'], (int) $body['invoice_id'],
+        isset($body['customer_id']) ? (int) $body['customer_id'] : null,
+        $body['discount_applied']);
+    return ['message' => 'Coupon applied.'];
+});
+
+// --- Billing Statements ---
+$router->with(permit('REPORT_VIEW'))->get('/api/statements', function () {
+    $customerId = (int) Router::query('customer_id', '0');
+    $status = Router::query('status', '');
+    $limit = (int) Router::query('limit', '50');
+    $offset = (int) Router::query('offset', '0');
+    return listStatements($customerId, $status, $limit, $offset);
+});
+
+$router->with(permit('REPORT_VIEW'))->get('/api/statements/{id}', function (array $params) {
+    $s = getStatement((int) $params['id']);
+    if (!$s) Router::sendError('NOT_FOUND', 'Statement not found.', 404);
+    return $s;
+});
+
+$router->with(permit('INVOICE_CREATE'))->post('/api/statements/generate', function (array $params, array $body) {
+    $id = generateStatement((int) $body['customer_id'], $body['period_start'], $body['period_end'], Middleware::userId());
+    return ['message' => 'Statement generated.', 'statement_id' => $id];
+});
+
+$router->with(permit('REPORT_VIEW'))->get('/api/reports/ar-summary', function () {
+    return getArSummary();
+});
+
+// --- Tire Storage ---
+$router->with($auth)->get('/api/tire-storage', function () {
+    $status = Router::query('status', 'stored');
+    $limit = (int) Router::query('limit', '50');
+    $offset = (int) Router::query('offset', '0');
+    return listTireStorage($status, $limit, $offset);
+});
+
+$router->with(permit('INVENTORY_ADD'))->post('/api/tire-storage', function (array $params, array $body) {
+    $id = createTireStorage($body, Middleware::userId());
+    return ['message' => 'Tire stored.', 'storage_id' => $id];
+});
+
+$router->with(permit('INVENTORY_EDIT'))->post('/api/tire-storage/{id}/pickup', function (array $params) {
+    pickupTireStorage((int) $params['id']);
+    return ['message' => 'Pickup recorded.'];
+});
+
+$router->with(permit('INVOICE_CREATE'))->post('/api/tire-storage/generate-billing', function (array $params, array $body) {
+    $month = $body['billing_month'] ?? date('Y-m-01');
+    return generateStorageBilling($month);
+});
+
+$router->with(permit('INVOICE_CREATE'))->get('/api/tire-storage/pending-billing', function () {
+    return ['items' => listPendingStorageBilling()];
+});
+
+// --- Pricing Advisor ---
+$router->with($auth)->get('/api/pricing-advisor/{id}', function (array $params) {
+    return getPricingAdvice((int) $params['id']);
+});
+
+
+// ============================================================================
 // Public Routes (no auth, for storefront + embed widget)
 // ============================================================================
 
