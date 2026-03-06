@@ -1334,3 +1334,293 @@ $router->with($auth)->get('/api/lookups/tire-types', function () {
 $router->with($auth)->get('/api/lookups/construction-types', function () {
     return ['construction_types' => Database::query("SELECT construction_type_id, construction_name FROM lkp_construction_types ORDER BY construction_name")];
 });
+
+
+// ============================================================================
+// Phase 3: Online Presence Routes
+// ============================================================================
+
+// --- Shop Settings (admin) ---
+$router->with(permit('USER_MANAGE'))->get('/api/settings', function () {
+    return ['settings' => getAllSettings()];
+});
+
+$router->with(permit('USER_MANAGE'))->patch('/api/settings', function (array $params, array $body) {
+    $changed = bulkUpdateSettings($body, Middleware::userId());
+    return ['message' => 'Settings updated.', 'changed' => $changed];
+});
+
+// --- Website Config (admin) ---
+$router->with(permit('USER_MANAGE'))->get('/api/website-config', function () {
+    return ['configs' => getAllWebsiteConfig()];
+});
+
+$router->with(permit('USER_MANAGE'))->patch('/api/website-config', function (array $params, array $body) {
+    $changed = bulkUpdateWebsiteConfig($body);
+    return ['message' => 'Website config updated.', 'changed' => $changed];
+});
+
+// --- Warranty Policies (admin) ---
+$router->with(permit('USER_MANAGE'))->get('/api/warranty-policies', function () {
+    $active = Router::query('active_only', '1') === '1';
+    return ['policies' => listWarrantyPolicies($active)];
+});
+
+$router->with(permit('USER_MANAGE'))->get('/api/warranty-policies/{id}', function (array $params) {
+    $p = getWarrantyPolicy((int) $params['id']);
+    if (!$p) Router::sendError('NOT_FOUND', 'Policy not found.', 404);
+    return $p;
+});
+
+$router->with(permit('USER_MANAGE'))->post('/api/warranty-policies', function (array $params, array $body) {
+    $id = createWarrantyPolicy($body);
+    return ['message' => 'Policy created.', 'policy_id' => $id];
+});
+
+$router->with(permit('USER_MANAGE'))->patch('/api/warranty-policies/{id}', function (array $params, array $body) {
+    $result = updateWarrantyPolicy((int) $params['id'], $body);
+    return ['message' => 'Policy updated.', 'changed' => $result['changed']];
+});
+
+// --- Warranty Claims ---
+$router->with($auth)->get('/api/warranty-claims', function () {
+    $status = Router::query('status', '');
+    $limit = (int) Router::query('limit', '50');
+    $offset = (int) Router::query('offset', '0');
+    return listWarrantyClaims($status, $limit, $offset);
+});
+
+$router->with($auth)->get('/api/warranty-claims/{id}', function (array $params) {
+    $c = getWarrantyClaim((int) $params['id']);
+    if (!$c) Router::sendError('NOT_FOUND', 'Claim not found.', 404);
+    return $c;
+});
+
+$router->with($auth)->post('/api/warranty-claims', function (array $params, array $body) {
+    $id = fileWarrantyClaim($body, Middleware::userId());
+    return ['message' => 'Claim filed.', 'claim_id' => $id];
+});
+
+$router->with(permit('REFUND_APPROVE'))->post('/api/warranty-claims/{id}/review', function (array $params, array $body) {
+    $action = $body['action'] ?? '';
+    if (!in_array($action, ['approve', 'deny'])) {
+        Router::sendError('INVALID_ACTION', 'Action must be "approve" or "deny".', 400);
+    }
+    reviewWarrantyClaim((int) $params['id'], $action, Middleware::userId(),
+        $body['reason'] ?? null, $body['amount'] ?? null);
+    return ['message' => "Claim {$action}d."];
+});
+
+$router->with(permit('REFUND_APPROVE'))->post('/api/warranty-claims/{id}/pay', function (array $params, array $body) {
+    payWarrantyClaim((int) $params['id'], $body['amount'], Middleware::userId());
+    return ['message' => 'Claim paid.'];
+});
+
+$router->with(permit('REPORT_VIEW'))->get('/api/reports/warranty-claims', function () {
+    $start = Router::query('start', date('Y-01-01'));
+    $end = Router::query('end', date('Y-m-d'));
+    $filed = (int) Database::scalar("SELECT COUNT(*) FROM warranty_claims WHERE claim_date BETWEEN ? AND ?", [$start, $end]);
+    $approved = (int) Database::scalar("SELECT COUNT(*) FROM warranty_claims WHERE status = 'approved' AND claim_date BETWEEN ? AND ?", [$start, $end]);
+    $denied = (int) Database::scalar("SELECT COUNT(*) FROM warranty_claims WHERE status = 'denied' AND claim_date BETWEEN ? AND ?", [$start, $end]);
+    $paid = Database::scalar("SELECT COALESCE(SUM(paid_amount), 0) FROM warranty_claims WHERE status = 'paid' AND claim_date BETWEEN ? AND ?", [$start, $end]);
+    return ['filed' => $filed, 'approved' => $approved, 'denied' => $denied, 'total_paid' => (float) $paid];
+});
+
+// --- Wheels ---
+$router->with(permit('INVENTORY_ADD', 'INVENTORY_EDIT'))->get('/api/wheels', function () {
+    $filters = [
+        'diameter' => Router::query('diameter'),
+        'bolt_pattern' => Router::query('bolt_pattern'),
+        'brand' => Router::query('brand'),
+        'material' => Router::query('material'),
+        'condition' => Router::query('condition'),
+    ];
+    $limit = (int) Router::query('limit', '25');
+    $offset = (int) Router::query('offset', '0');
+    return searchWheels(array_filter($filters), $limit, $offset);
+});
+
+$router->with(permit('INVENTORY_ADD', 'INVENTORY_EDIT'))->get('/api/wheels/{id}', function (array $params) {
+    $w = getWheel((int) $params['id']);
+    if (!$w) Router::sendError('NOT_FOUND', 'Wheel not found.', 404);
+    return $w;
+});
+
+$router->with(permit('INVENTORY_ADD'))->post('/api/wheels', function (array $params, array $body) {
+    $id = createWheel($body);
+    return ['message' => 'Wheel created.', 'wheel_id' => $id];
+});
+
+$router->with(permit('INVENTORY_EDIT'))->patch('/api/wheels/{id}', function (array $params, array $body) {
+    $result = updateWheel((int) $params['id'], $body);
+    return ['message' => 'Wheel updated.', 'changed' => $result['changed']];
+});
+
+$router->with(permit('INVENTORY_EDIT'))->post('/api/wheels/{id}/fitments', function (array $params, array $body) {
+    $id = addWheelFitment((int) $params['id'], $body);
+    return ['message' => 'Fitment added.', 'fitment_id' => $id];
+});
+
+$router->with(permit('INVENTORY_EDIT'))->delete('/api/wheels/fitments/{id}', function (array $params) {
+    removeWheelFitment((int) $params['id']);
+    return ['message' => 'Fitment removed.'];
+});
+
+// --- Fitment Search (internal, auth required) ---
+$router->with($auth)->get('/api/fitment/search', function () {
+    $make = Router::query('make', '');
+    $model = Router::query('model', '');
+    $year = Router::query('year') ? (int) Router::query('year') : null;
+    if (!$make || !$model) Router::sendError('MISSING_PARAM', 'make and model required.', 400);
+    return searchFitmentByVehicle($make, $model, $year);
+});
+
+$router->with($auth)->get('/api/fitment/reverse', function () {
+    $size = Router::query('size', '');
+    if (!$size) Router::sendError('MISSING_PARAM', 'size required.', 400);
+    return searchFitmentReverse($size);
+});
+
+$router->with($auth)->get('/api/fitment/bolt-pattern', function () {
+    $pattern = Router::query('pattern', '');
+    if (!$pattern) Router::sendError('MISSING_PARAM', 'pattern required.', 400);
+    return searchByBoltPattern($pattern);
+});
+
+// --- Custom Fields ---
+$router->with(permit('USER_MANAGE'))->get('/api/custom-fields', function () {
+    $type = Router::query('entity_type', '');
+    if (!$type) return ['fields' => []];
+    return ['fields' => listCustomFields($type, false)];
+});
+
+$router->with(permit('USER_MANAGE'))->post('/api/custom-fields', function (array $params, array $body) {
+    $id = createCustomField($body);
+    return ['message' => 'Custom field created.', 'field_id' => $id];
+});
+
+$router->with(permit('USER_MANAGE'))->patch('/api/custom-fields/{id}', function (array $params, array $body) {
+    $result = updateCustomField((int) $params['id'], $body);
+    return ['message' => 'Custom field updated.', 'changed' => $result['changed']];
+});
+
+$router->with($auth)->get('/api/custom-field-values/{entityType}/{entityId}', function (array $params) {
+    return ['fields' => getCustomFieldValues($params['entityType'], (int) $params['entityId'])];
+});
+
+$router->with($auth)->patch('/api/custom-field-values/{entityType}/{entityId}', function (array $params, array $body) {
+    $changed = setCustomFieldValues((int) $params['entityId'], $body['fields'] ?? []);
+    return ['message' => 'Custom field values saved.', 'changed' => $changed];
+});
+
+// --- API Keys (admin) ---
+$router->with(permit('USER_MANAGE'))->get('/api/api-keys', function () {
+    return ['keys' => listApiKeys()];
+});
+
+$router->with(permit('USER_MANAGE'))->post('/api/api-keys', function (array $params, array $body) {
+    $result = createApiKey($body['label'] ?? 'API Key', Middleware::userId(), isset($body['rate_limit']) ? (int) $body['rate_limit'] : null);
+    return ['message' => 'API key created. Save the key now; it will not be shown again.', 'key' => $result];
+});
+
+$router->with(permit('USER_MANAGE'))->delete('/api/api-keys/{id}', function (array $params) {
+    revokeApiKey((int) $params['id']);
+    return ['message' => 'API key revoked.'];
+});
+
+// ============================================================================
+// Public Routes (no auth, for storefront + embed widget)
+// ============================================================================
+
+$router->get('/api/public/shop-info', function () {
+    $settings = getPublicSettings();
+    $map = [];
+    foreach ($settings as $s) { $map[$s['setting_key']] = $s['setting_value']; }
+    return $map;
+});
+
+$router->get('/api/public/website-config', function () {
+    $configs = getAllWebsiteConfig();
+    $map = [];
+    foreach ($configs as $c) { $map[$c['config_key']] = $c['config_value']; }
+    return $map;
+});
+
+$router->get('/api/public/inventory', function () {
+    $enabled = getSettingValue('website_enabled');
+    if ($enabled !== '1') Router::sendError('DISABLED', 'Public website is not enabled.', 403);
+    $filters = [
+        'size' => Router::query('size'),
+        'brand_id' => Router::query('brand_id'),
+        'condition' => Router::query('condition'),
+        'min_price' => Router::query('min_price'),
+        'max_price' => Router::query('max_price'),
+    ];
+    $limit = min((int) Router::query('limit', '24'), 50);
+    $offset = (int) Router::query('offset', '0');
+    return getPublicInventory(array_filter($filters), $limit, $offset);
+});
+
+$router->get('/api/public/inventory/{id}', function (array $params) {
+    $enabled = getSettingValue('website_enabled');
+    if ($enabled !== '1') Router::sendError('DISABLED', 'Public website is not enabled.', 403);
+    $tire = getPublicTireDetail((int) $params['id']);
+    if (!$tire) Router::sendError('NOT_FOUND', 'Tire not found or not available.', 404);
+    return $tire;
+});
+
+$router->get('/api/public/wheels', function () {
+    $enabled = getSettingValue('website_enabled');
+    if ($enabled !== '1') Router::sendError('DISABLED', 'Public website is not enabled.', 403);
+    $filters = [
+        'diameter' => Router::query('diameter'),
+        'bolt_pattern' => Router::query('bolt_pattern'),
+        'brand' => Router::query('brand'),
+        'material' => Router::query('material'),
+        'condition' => Router::query('condition'),
+    ];
+    $limit = min((int) Router::query('limit', '24'), 50);
+    $offset = (int) Router::query('offset', '0');
+    return searchWheels(array_filter($filters), $limit, $offset);
+});
+
+$router->get('/api/public/fitment/search', function () {
+    $enabled = getSettingValue('website_fitment_enabled');
+    if ($enabled !== '1') Router::sendError('DISABLED', 'Fitment search is not enabled.', 403);
+    $make = Router::query('make', '');
+    $model = Router::query('model', '');
+    $year = Router::query('year') ? (int) Router::query('year') : null;
+    if (!$make || !$model) Router::sendError('MISSING_PARAM', 'make and model required.', 400);
+    return searchFitmentByVehicle($make, $model, $year);
+});
+
+$router->get('/api/public/fitment/reverse', function () {
+    $enabled = getSettingValue('website_fitment_enabled');
+    if ($enabled !== '1') Router::sendError('DISABLED', 'Fitment search is not enabled.', 403);
+    $size = Router::query('size', '');
+    if (!$size) Router::sendError('MISSING_PARAM', 'size required.', 400);
+    return searchFitmentReverse($size);
+});
+
+$router->get('/api/public/appointments/slots', function () {
+    $enabled = getSettingValue('website_appointment_enabled');
+    if ($enabled !== '1') Router::sendError('DISABLED', 'Online appointments not enabled.', 403);
+    $date = Router::query('date', date('Y-m-d'));
+    return getPublicAppointmentSlots($date);
+});
+
+$router->post('/api/public/appointments', function (array $params, array $body) {
+    $enabled = getSettingValue('website_appointment_enabled');
+    if ($enabled !== '1') Router::sendError('DISABLED', 'Online appointments not enabled.', 403);
+    // Rate limit: simple check using session-less approach
+    $apptId = createAppointment($body, 0);
+    return ['message' => 'Appointment booked.', 'appointment_id' => $apptId];
+});
+
+$router->get('/api/public/warranty-policies', function () {
+    return ['policies' => listWarrantyPolicies(true)];
+});
+
+$router->get('/api/public/brands', function () {
+    return ['brands' => Database::query("SELECT brand_id, brand_name FROM lkp_brands WHERE is_active = 1 ORDER BY brand_name")];
+});

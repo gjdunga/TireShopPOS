@@ -1,0 +1,8 @@
+/* Settings (P3) */
+.settings-tabs {
+  display: flex;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--lgray);
+}

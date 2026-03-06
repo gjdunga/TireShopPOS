@@ -1,0 +1,660 @@
+<?php
+// ============================================================================
+// tire_pos_p3.php
+// Phase 3: Online Presence CRUD functions
+// DunganSoft Technologies, March 2026
+// ============================================================================
+
+// ============================================================================
+// Shop Settings
+// ============================================================================
+
+function getAllSettings(): array {
+    return Database::query("SELECT * FROM shop_settings ORDER BY category, setting_key");
+}
+
+function getPublicSettings(): array {
+    return Database::query("SELECT setting_key, setting_value, setting_type FROM shop_settings WHERE is_public = 1");
+}
+
+function getSettingValue(string $key): ?string {
+    $row = Database::queryOne("SELECT setting_value FROM shop_settings WHERE setting_key = ?", [$key]);
+    return $row ? $row['setting_value'] : null;
+}
+
+function updateSetting(string $key, string $value, int $userId): bool {
+    $stmt = getDB()->prepare(
+        "UPDATE shop_settings SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE setting_key = ?"
+    );
+    $stmt->execute([$value, $userId, $key]);
+    return $stmt->rowCount() > 0;
+}
+
+function bulkUpdateSettings(array $settings, int $userId): int {
+    $changed = 0;
+    foreach ($settings as $key => $value) {
+        if (updateSetting($key, (string) $value, $userId)) {
+            $changed++;
+        }
+    }
+    return $changed;
+}
+
+
+// ============================================================================
+// Website Config
+// ============================================================================
+
+function getAllWebsiteConfig(): array {
+    return Database::query("SELECT * FROM website_config ORDER BY config_key");
+}
+
+function getWebsiteConfigValue(string $key): ?string {
+    $row = Database::queryOne("SELECT config_value FROM website_config WHERE config_key = ?", [$key]);
+    return $row ? $row['config_value'] : null;
+}
+
+function updateWebsiteConfig(string $key, string $value): bool {
+    $stmt = getDB()->prepare(
+        "UPDATE website_config SET config_value = ?, updated_at = CURRENT_TIMESTAMP WHERE config_key = ?"
+    );
+    $stmt->execute([$value, $key]);
+    return $stmt->rowCount() > 0;
+}
+
+function bulkUpdateWebsiteConfig(array $configs): int {
+    $changed = 0;
+    foreach ($configs as $key => $value) {
+        if (updateWebsiteConfig($key, (string) $value)) {
+            $changed++;
+        }
+    }
+    return $changed;
+}
+
+
+// ============================================================================
+// Warranty Policies
+// ============================================================================
+
+function listWarrantyPolicies(bool $activeOnly = true): array {
+    $where = $activeOnly ? 'WHERE is_active = 1' : '';
+    return Database::query("SELECT * FROM warranty_policies {$where} ORDER BY policy_name");
+}
+
+function getWarrantyPolicy(int $policyId): ?array {
+    return Database::queryOne("SELECT * FROM warranty_policies WHERE policy_id = ?", [$policyId]);
+}
+
+function createWarrantyPolicy(array $data): int {
+    $sql = "INSERT INTO warranty_policies
+            (policy_name, policy_code, coverage_months, coverage_miles, price,
+             is_per_tire, terms_text, exclusions_text, max_claim_amount, deductible)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    $stmt = getDB()->prepare($sql);
+    $stmt->execute([
+        $data['policy_name'], $data['policy_code'],
+        (int) ($data['coverage_months'] ?? 12),
+        isset($data['coverage_miles']) ? (int) $data['coverage_miles'] : null,
+        $data['price'] ?? '0.00',
+        (int) ($data['is_per_tire'] ?? 1),
+        $data['terms_text'] ?? '',
+        $data['exclusions_text'] ?? null,
+        isset($data['max_claim_amount']) ? $data['max_claim_amount'] : null,
+        $data['deductible'] ?? '0.00',
+    ]);
+    return (int) getDB()->lastInsertId();
+}
+
+function updateWarrantyPolicy(int $policyId, array $data): array {
+    $editable = ['policy_name', 'coverage_months', 'coverage_miles', 'price',
+                 'is_per_tire', 'terms_text', 'exclusions_text', 'max_claim_amount',
+                 'deductible', 'is_active'];
+    $sets = [];
+    $params = [];
+    foreach ($editable as $col) {
+        if (array_key_exists($col, $data)) {
+            $sets[] = "{$col} = ?";
+            $params[] = $data[$col];
+        }
+    }
+    if (empty($sets)) return ['changed' => 0];
+    $params[] = $policyId;
+    getDB()->prepare("UPDATE warranty_policies SET " . implode(', ', $sets) . " WHERE policy_id = ?")->execute($params);
+    return ['changed' => count($sets)];
+}
+
+
+// ============================================================================
+// Warranty Claims
+// ============================================================================
+
+function fileWarrantyClaim(array $data, int $createdBy): int {
+    // Validate: claim within coverage
+    $line = Database::queryOne(
+        "SELECT li.warranty_expires_at, li.invoice_id, i.customer_id
+         FROM invoice_line_items li
+         JOIN invoices i ON li.invoice_id = i.invoice_id
+         WHERE li.line_id = ? AND li.line_type = 'warranty'",
+        [$data['line_id']]
+    );
+    if (!$line) throw new RuntimeException('Warranty line item not found');
+
+    if ($line['warranty_expires_at'] && $line['warranty_expires_at'] < date('Y-m-d')) {
+        throw new RuntimeException('Warranty has expired (' . $line['warranty_expires_at'] . ')');
+    }
+
+    $sql = "INSERT INTO warranty_claims
+            (invoice_id, line_id, customer_id, policy_id, tire_id, claim_date,
+             failure_description, mileage_at_failure, claim_amount, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    $stmt = getDB()->prepare($sql);
+    $stmt->execute([
+        $line['invoice_id'], (int) $data['line_id'], $line['customer_id'],
+        (int) $data['policy_id'], isset($data['tire_id']) ? (int) $data['tire_id'] : null,
+        $data['claim_date'] ?? date('Y-m-d'),
+        $data['failure_description'],
+        isset($data['mileage_at_failure']) ? (int) $data['mileage_at_failure'] : null,
+        $data['claim_amount'],
+        $data['notes'] ?? null,
+    ]);
+    return (int) getDB()->lastInsertId();
+}
+
+function listWarrantyClaims(string $status = '', int $limit = 50, int $offset = 0): array {
+    $where = '';
+    $params = [];
+    if ($status !== '') {
+        $where = 'WHERE wc.status = ?';
+        $params[] = $status;
+    }
+
+    $total = (int) Database::scalar(
+        "SELECT COUNT(*) FROM warranty_claims wc {$where}", $params
+    );
+
+    $params[] = $limit;
+    $params[] = $offset;
+    $rows = Database::query(
+        "SELECT wc.*, c.first_name, c.last_name, wp.policy_name, wp.policy_code
+         FROM warranty_claims wc
+         LEFT JOIN customers c ON wc.customer_id = c.customer_id
+         LEFT JOIN warranty_policies wp ON wc.policy_id = wp.policy_id
+         {$where}
+         ORDER BY wc.created_at DESC
+         LIMIT ? OFFSET ?",
+        $params
+    );
+    return ['rows' => $rows, 'total' => $total];
+}
+
+function getWarrantyClaim(int $claimId): ?array {
+    return Database::queryOne(
+        "SELECT wc.*, c.first_name, c.last_name, c.phone_primary,
+                wp.policy_name, wp.policy_code, wp.max_claim_amount, wp.deductible,
+                i.invoice_number
+         FROM warranty_claims wc
+         LEFT JOIN customers c ON wc.customer_id = c.customer_id
+         LEFT JOIN warranty_policies wp ON wc.policy_id = wp.policy_id
+         LEFT JOIN invoices i ON wc.invoice_id = i.invoice_id
+         WHERE wc.claim_id = ?",
+        [$claimId]
+    );
+}
+
+function reviewWarrantyClaim(int $claimId, string $action, int $reviewedBy, ?string $reason = null, ?string $amount = null): void {
+    if ($action === 'approve') {
+        getDB()->prepare(
+            "UPDATE warranty_claims SET status = 'approved', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP,
+             claim_amount = COALESCE(?, claim_amount) WHERE claim_id = ? AND status IN ('filed','reviewing')"
+        )->execute([$reviewedBy, $amount, $claimId]);
+    } elseif ($action === 'deny') {
+        getDB()->prepare(
+            "UPDATE warranty_claims SET status = 'denied', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP,
+             denial_reason = ? WHERE claim_id = ? AND status IN ('filed','reviewing')"
+        )->execute([$reviewedBy, $reason, $claimId]);
+    }
+}
+
+function payWarrantyClaim(int $claimId, string $amount, int $paidBy): void {
+    getDB()->prepare(
+        "UPDATE warranty_claims SET status = 'paid', paid_amount = ?, paid_at = CURRENT_TIMESTAMP,
+         paid_by = ? WHERE claim_id = ? AND status = 'approved'"
+    )->execute([$amount, $paidBy, $claimId]);
+}
+
+
+// ============================================================================
+// Wheels
+// ============================================================================
+
+function createWheel(array $data): int {
+    $sql = "INSERT INTO wheels
+            (brand, model, diameter, width, bolt_pattern, offset_mm, center_bore,
+             material, finish, `condition`, retail_price, cost, quantity_on_hand,
+             bin_location, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    $stmt = getDB()->prepare($sql);
+    $stmt->execute([
+        $data['brand'] ?? null, $data['model'] ?? null,
+        $data['diameter'], $data['width'] ?? null,
+        $data['bolt_pattern'] ?? null, isset($data['offset_mm']) ? (int) $data['offset_mm'] : null,
+        $data['center_bore'] ?? null,
+        $data['material'] ?? 'unknown', $data['finish'] ?? null,
+        $data['condition'] ?? 'used',
+        $data['retail_price'] ?? null, $data['cost'] ?? null,
+        (int) ($data['quantity_on_hand'] ?? 0),
+        $data['bin_location'] ?? null, $data['notes'] ?? null,
+    ]);
+    return (int) getDB()->lastInsertId();
+}
+
+function getWheel(int $wheelId): ?array {
+    $wheel = Database::queryOne("SELECT * FROM wheels WHERE wheel_id = ?", [$wheelId]);
+    if (!$wheel) return null;
+    $wheel['fitments'] = Database::query(
+        "SELECT * FROM wheel_fitments WHERE wheel_id = ? ORDER BY make, model, year_start", [$wheelId]
+    );
+    return $wheel;
+}
+
+function updateWheel(int $wheelId, array $data): array {
+    $editable = ['brand', 'model', 'diameter', 'width', 'bolt_pattern', 'offset_mm',
+                 'center_bore', 'material', 'finish', 'condition', 'retail_price',
+                 'cost', 'quantity_on_hand', 'bin_location', 'notes', 'is_active'];
+    $sets = [];
+    $params = [];
+    foreach ($editable as $col) {
+        if (array_key_exists($col, $data)) {
+            $sets[] = ($col === 'condition' ? "`condition`" : $col) . " = ?";
+            $params[] = $data[$col];
+        }
+    }
+    if (empty($sets)) return ['changed' => 0];
+    $params[] = $wheelId;
+    getDB()->prepare("UPDATE wheels SET " . implode(', ', $sets) . " WHERE wheel_id = ?")->execute($params);
+    return ['changed' => count($sets)];
+}
+
+function searchWheels(array $filters, int $limit = 25, int $offset = 0): array {
+    $where = ['w.is_active = 1'];
+    $params = [];
+
+    if (!empty($filters['diameter'])) {
+        $where[] = 'w.diameter = ?';
+        $params[] = $filters['diameter'];
+    }
+    if (!empty($filters['bolt_pattern'])) {
+        $where[] = 'w.bolt_pattern = ?';
+        $params[] = $filters['bolt_pattern'];
+    }
+    if (!empty($filters['brand'])) {
+        $where[] = 'w.brand LIKE ?';
+        $params[] = '%' . $filters['brand'] . '%';
+    }
+    if (!empty($filters['material'])) {
+        $where[] = 'w.material = ?';
+        $params[] = $filters['material'];
+    }
+    if (!empty($filters['condition'])) {
+        $where[] = 'w.`condition` = ?';
+        $params[] = $filters['condition'];
+    }
+
+    $whereStr = implode(' AND ', $where);
+    $total = (int) Database::scalar("SELECT COUNT(*) FROM wheels w WHERE {$whereStr}", $params);
+
+    $params[] = $limit;
+    $params[] = $offset;
+    $rows = Database::query(
+        "SELECT * FROM wheels w WHERE {$whereStr} ORDER BY w.brand, w.diameter LIMIT ? OFFSET ?",
+        $params
+    );
+    return ['rows' => $rows, 'total' => $total];
+}
+
+function addWheelFitment(int $wheelId, array $data): int {
+    $sql = "INSERT INTO wheel_fitments (wheel_id, make, model, year_start, year_end, trim_level, is_oem, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+    $stmt = getDB()->prepare($sql);
+    $stmt->execute([
+        $wheelId, $data['make'], $data['model'],
+        (int) $data['year_start'], (int) $data['year_end'],
+        $data['trim_level'] ?? null, (int) ($data['is_oem'] ?? 0),
+        $data['notes'] ?? null,
+    ]);
+    return (int) getDB()->lastInsertId();
+}
+
+function removeWheelFitment(int $fitmentId): void {
+    getDB()->prepare("DELETE FROM wheel_fitments WHERE fitment_id = ?")->execute([$fitmentId]);
+}
+
+
+// ============================================================================
+// Fitment Search
+// ============================================================================
+
+function searchFitmentByVehicle(string $make, string $model, ?int $year = null): array {
+    // Find tires by OEM size via torque specs table (has make/model/year ranges)
+    $specWhere = 'lts.make = ? AND lts.model LIKE ?';
+    $specParams = [$make, '%' . $model . '%'];
+    if ($year) {
+        $specWhere .= ' AND lts.year_start <= ? AND lts.year_end >= ?';
+        $specParams[] = $year;
+        $specParams[] = $year;
+    }
+
+    $specs = Database::query(
+        "SELECT DISTINCT lts.* FROM lkp_torque_specs lts WHERE {$specWhere} LIMIT 10",
+        $specParams
+    );
+
+    // Find available tires matching OEM sizes from vehicles table
+    $tires = [];
+    if ($year) {
+        $vehicle = Database::queryOne(
+            "SELECT oem_tire_size FROM vehicles WHERE LOWER(make) = LOWER(?) AND LOWER(model) LIKE LOWER(?) AND year = ? LIMIT 1",
+            [$make, '%' . $model . '%', $year]
+        );
+        if ($vehicle && $vehicle['oem_tire_size']) {
+            $tires = Database::query(
+                "SELECT * FROM v_tire_inventory WHERE full_size_string = ? AND status = 'available' LIMIT 20",
+                [$vehicle['oem_tire_size']]
+            );
+        }
+    }
+
+    // Find wheels matching bolt pattern
+    $wheels = [];
+    $wheelWhere = 'wf.make = ? AND wf.model LIKE ?';
+    $wheelParams = [$make, '%' . $model . '%'];
+    if ($year) {
+        $wheelWhere .= ' AND wf.year_start <= ? AND wf.year_end >= ?';
+        $wheelParams[] = $year;
+        $wheelParams[] = $year;
+    }
+
+    $wheels = Database::query(
+        "SELECT DISTINCT w.* FROM wheels w
+         JOIN wheel_fitments wf ON w.wheel_id = wf.wheel_id
+         WHERE {$wheelWhere} AND w.is_active = 1 AND w.quantity_on_hand > 0
+         ORDER BY w.diameter, w.brand
+         LIMIT 20",
+        $wheelParams
+    );
+
+    return ['specs' => $specs, 'tires' => $tires, 'wheels' => $wheels];
+}
+
+function searchFitmentReverse(string $size): array {
+    // Find vehicles that use this tire size
+    $vehicles = Database::query(
+        "SELECT DISTINCT make, model, year_start, year_end
+         FROM lkp_torque_specs
+         WHERE REPLACE(CONCAT_WS('/', make, model), ' ', '') LIKE '%'
+         LIMIT 50"
+    );
+
+    // Better approach: search vehicles table for OEM size match
+    $byOem = Database::query(
+        "SELECT DISTINCT make, model, year FROM vehicles WHERE oem_tire_size = ? ORDER BY make, model, year",
+        [$size]
+    );
+
+    // Also find tires in stock with this size
+    $inStock = Database::query(
+        "SELECT * FROM v_tire_inventory WHERE full_size_string = ? AND status = 'available' LIMIT 20",
+        [$size]
+    );
+
+    return ['vehicles' => $byOem, 'in_stock' => $inStock];
+}
+
+function searchByBoltPattern(string $pattern): array {
+    $wheels = Database::query(
+        "SELECT * FROM wheels WHERE bolt_pattern = ? AND is_active = 1 AND quantity_on_hand > 0
+         ORDER BY diameter, brand",
+        [$pattern]
+    );
+
+    $fitments = Database::query(
+        "SELECT DISTINCT wf.make, wf.model, wf.year_start, wf.year_end
+         FROM wheel_fitments wf
+         JOIN wheels w ON wf.wheel_id = w.wheel_id
+         WHERE w.bolt_pattern = ?
+         ORDER BY wf.make, wf.model",
+        [$pattern]
+    );
+
+    return ['wheels' => $wheels, 'vehicles' => $fitments];
+}
+
+
+// ============================================================================
+// Custom Fields
+// ============================================================================
+
+function listCustomFields(string $entityType, bool $activeOnly = true): array {
+    $where = 'entity_type = ?';
+    $params = [$entityType];
+    if ($activeOnly) { $where .= ' AND is_active = 1'; }
+    return Database::query("SELECT * FROM custom_fields WHERE {$where} ORDER BY sort_order, field_id", $params);
+}
+
+function createCustomField(array $data): int {
+    $sql = "INSERT INTO custom_fields (entity_type, field_name, field_label, field_type, select_options, is_required, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?)";
+    $stmt = getDB()->prepare($sql);
+    $stmt->execute([
+        $data['entity_type'], $data['field_name'], $data['field_label'],
+        $data['field_type'] ?? 'text',
+        isset($data['select_options']) ? json_encode($data['select_options']) : null,
+        (int) ($data['is_required'] ?? 0),
+        (int) ($data['sort_order'] ?? 0),
+    ]);
+    return (int) getDB()->lastInsertId();
+}
+
+function updateCustomField(int $fieldId, array $data): array {
+    $editable = ['field_label', 'field_type', 'select_options', 'is_required', 'sort_order', 'is_active'];
+    $sets = [];
+    $params = [];
+    foreach ($editable as $col) {
+        if (array_key_exists($col, $data)) {
+            $sets[] = "{$col} = ?";
+            $params[] = $col === 'select_options' ? json_encode($data[$col]) : $data[$col];
+        }
+    }
+    if (empty($sets)) return ['changed' => 0];
+    $params[] = $fieldId;
+    getDB()->prepare("UPDATE custom_fields SET " . implode(', ', $sets) . " WHERE field_id = ?")->execute($params);
+    return ['changed' => count($sets)];
+}
+
+function getCustomFieldValues(string $entityType, int $entityId): array {
+    return Database::query(
+        "SELECT cf.field_id, cf.field_name, cf.field_label, cf.field_type, cf.select_options,
+                cfv.field_value
+         FROM custom_fields cf
+         LEFT JOIN custom_field_values cfv ON cf.field_id = cfv.field_id AND cfv.entity_id = ?
+         WHERE cf.entity_type = ? AND cf.is_active = 1
+         ORDER BY cf.sort_order, cf.field_id",
+        [$entityId, $entityType]
+    );
+}
+
+function setCustomFieldValues(int $entityId, array $fieldValues): int {
+    $changed = 0;
+    foreach ($fieldValues as $fieldId => $value) {
+        $stmt = getDB()->prepare(
+            "INSERT INTO custom_field_values (field_id, entity_id, field_value)
+             VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE field_value = VALUES(field_value)"
+        );
+        $stmt->execute([(int) $fieldId, $entityId, $value]);
+        $changed++;
+    }
+    return $changed;
+}
+
+
+// ============================================================================
+// API Keys
+// ============================================================================
+
+function createApiKey(string $label, int $createdBy, ?int $rateLimit = null): array {
+    $raw = bin2hex(random_bytes(32));
+    $hash = hash('sha256', $raw);
+    $prefix = substr($raw, 0, 8);
+
+    $sql = "INSERT INTO api_keys (key_hash, key_prefix, label, rate_limit, created_by)
+            VALUES (?, ?, ?, ?, ?)";
+    $stmt = getDB()->prepare($sql);
+    $stmt->execute([$hash, $prefix, $label, $rateLimit ?? 1000, $createdBy]);
+
+    return [
+        'key_id' => (int) getDB()->lastInsertId(),
+        'api_key' => $raw,  // Only returned once at creation
+        'prefix' => $prefix,
+        'label' => $label,
+    ];
+}
+
+function listApiKeys(): array {
+    return Database::query(
+        "SELECT key_id, key_prefix, label, rate_limit, is_active, last_used_at,
+                request_count, created_at
+         FROM api_keys ORDER BY created_at DESC"
+    );
+}
+
+function revokeApiKey(int $keyId): void {
+    getDB()->prepare("UPDATE api_keys SET is_active = 0 WHERE key_id = ?")->execute([$keyId]);
+}
+
+function validateApiKey(string $rawKey): ?array {
+    $hash = hash('sha256', $rawKey);
+    $key = Database::queryOne(
+        "SELECT * FROM api_keys WHERE key_hash = ? AND is_active = 1", [$hash]
+    );
+    if ($key) {
+        getDB()->prepare(
+            "UPDATE api_keys SET last_used_at = CURRENT_TIMESTAMP, request_count = request_count + 1 WHERE key_id = ?"
+        )->execute([$key['key_id']]);
+    }
+    return $key;
+}
+
+
+// ============================================================================
+// Public Inventory Queries (no auth, used by storefront)
+// ============================================================================
+
+function getPublicInventory(array $filters, int $limit = 24, int $offset = 0): array {
+    $where = ["t.status = 'available'"];
+    $params = [];
+
+    if (!empty($filters['size'])) {
+        $where[] = 't.full_size_string LIKE ?';
+        $params[] = '%' . $filters['size'] . '%';
+    }
+    if (!empty($filters['brand_id'])) {
+        $where[] = 't.brand_id = ?';
+        $params[] = (int) $filters['brand_id'];
+    }
+    if (!empty($filters['condition'])) {
+        $where[] = 't.`condition` = ?';
+        $params[] = $filters['condition'];
+    }
+    if (!empty($filters['min_price'])) {
+        $where[] = 't.retail_price >= ?';
+        $params[] = $filters['min_price'];
+    }
+    if (!empty($filters['max_price'])) {
+        $where[] = 't.retail_price <= ?';
+        $params[] = $filters['max_price'];
+    }
+
+    $whereStr = implode(' AND ', $where);
+    $total = (int) Database::scalar("SELECT COUNT(*) FROM v_tire_inventory t WHERE {$whereStr}", $params);
+
+    $params[] = $limit;
+    $params[] = $offset;
+    // Exclude cost and internal fields from public query
+    $rows = Database::query(
+        "SELECT t.tire_id, t.full_size_string, t.brand_name, t.model,
+                t.`condition`, t.tread_depth_32nds, t.retail_price, t.dot_tin,
+                t.width_mm, t.aspect_ratio, t.wheel_diameter, t.construction
+         FROM v_tire_inventory t
+         WHERE {$whereStr}
+         ORDER BY t.retail_price ASC
+         LIMIT ? OFFSET ?",
+        $params
+    );
+    return ['rows' => $rows, 'total' => $total, 'limit' => $limit, 'offset' => $offset];
+}
+
+function getPublicTireDetail(int $tireId): ?array {
+    return Database::queryOne(
+        "SELECT t.tire_id, t.full_size_string, t.brand_name, t.model,
+                t.`condition`, t.tread_depth_32nds, t.retail_price, t.dot_tin,
+                t.width_mm, t.aspect_ratio, t.wheel_diameter, t.construction,
+                t.notes
+         FROM v_tire_inventory t
+         WHERE t.tire_id = ? AND t.status = 'available'",
+        [$tireId]
+    );
+}
+
+function getPublicAppointmentSlots(string $date): array {
+    $slotMin = (int) (getSettingValue('appointment_slot_min') ?? 60);
+    $maxPerSlot = (int) (getSettingValue('appointment_max_slot') ?? 3);
+    $hoursJson = getSettingValue('shop_hours_json');
+    $hours = $hoursJson ? json_decode($hoursJson, true) : [];
+
+    $dayOfWeek = strtolower(date('D', strtotime($date)));
+    $dayMap = ['mon' => 'mon', 'tue' => 'tue', 'wed' => 'wed', 'thu' => 'thu', 'fri' => 'fri', 'sat' => 'sat', 'sun' => 'sun'];
+    $dayKey = $dayMap[$dayOfWeek] ?? '';
+    $dayHours = $hours[$dayKey] ?? null;
+
+    if (!$dayHours || strtolower($dayHours) === 'closed') {
+        return ['date' => $date, 'slots' => [], 'closed' => true];
+    }
+
+    $parts = explode('-', $dayHours);
+    if (count($parts) !== 2) return ['date' => $date, 'slots' => [], 'closed' => true];
+
+    $openTime = strtotime($date . ' ' . trim($parts[0]));
+    $closeTime = strtotime($date . ' ' . trim($parts[1]));
+
+    // Get existing appointment counts per slot
+    $existing = Database::query(
+        "SELECT appointment_time, COUNT(*) AS cnt
+         FROM appointments
+         WHERE appointment_date = ? AND status NOT IN ('cancelled','no_show')
+         GROUP BY appointment_time",
+        [$date]
+    );
+    $booked = [];
+    foreach ($existing as $row) {
+        $booked[$row['appointment_time']] = (int) $row['cnt'];
+    }
+
+    $slots = [];
+    $current = $openTime;
+    $lastSlot = $closeTime - ($slotMin * 60);
+    while ($current <= $lastSlot) {
+        $time = date('H:i:00', $current);
+        $count = $booked[$time] ?? 0;
+        $slots[] = [
+            'time' => date('H:i', $current),
+            'available' => $count < $maxPerSlot,
+            'booked' => $count,
+            'max' => $maxPerSlot,
+        ];
+        $current += $slotMin * 60;
+    }
+
+    return ['date' => $date, 'slots' => $slots, 'closed' => false];
+}
