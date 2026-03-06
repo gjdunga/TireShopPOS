@@ -47,23 +47,6 @@ export function AuthProvider({ children }) {
     });
   }, [clearAuth]);
 
-  // ---- Load permissions for current user ----
-  const loadPermissions = useCallback(async (roleName) => {
-    try {
-      // GET /api/roles returns all roles; find ours and fetch its permissions
-      const roles = await api.get('/roles');
-      const myRole = roles.find((r) => r.role_name === roleName);
-      if (myRole) {
-        const perms = await api.get(`/roles/${myRole.role_id}/permissions`);
-        setPermissions(new Set(perms.map((p) => p.permission_key)));
-      }
-    } catch (err) {
-      // Non-fatal: user still authenticated, just no client-side perm cache.
-      // Server enforces RBAC regardless.
-      console.warn('Failed to load permissions:', err.message);
-    }
-  }, []);
-
   // ---- Login ----
   const login = useCallback(async (username, password) => {
     setError(null);
@@ -77,20 +60,19 @@ export function AuthProvider({ children }) {
         user_id: u.user_id,
         username: u.username,
         display_name: u.display_name,
-        role_name: u.role,  // API returns "role", context uses "role_name"
+        role_name: u.role,
       };
       setUser(sessionUser);
+
+      // Always load permissions (needed for sidebar even during password change)
+      if (Array.isArray(u.permissions) && u.permissions.length > 0) {
+        setPermissions(new Set(u.permissions));
+      }
 
       if (u.force_password_change) {
         setForcePasswordChange(true);
       } else {
         setForcePasswordChange(false);
-        // Use permissions from login response if available, else load from roles API
-        if (Array.isArray(u.permissions) && u.permissions.length > 0) {
-          setPermissions(new Set(u.permissions));
-        } else {
-          await loadPermissions(sessionUser.role_name);
-        }
       }
 
       return sessionUser;
@@ -98,7 +80,7 @@ export function AuthProvider({ children }) {
       setError(err.message);
       throw err;
     }
-  }, [loadPermissions]);
+  }, []);
 
   // ---- Logout ----
   const logout = useCallback(async () => {
@@ -113,10 +95,16 @@ export function AuthProvider({ children }) {
   // ---- Password changed: clear force flag, load permissions ----
   const onPasswordChanged = useCallback(async () => {
     setForcePasswordChange(false);
-    if (user) {
-      await loadPermissions(user.role_name);
+    // Reload permissions from session endpoint (which returns them directly)
+    try {
+      const data = await api.get('/auth/session');
+      if (data && Array.isArray(data.permissions)) {
+        setPermissions(new Set(data.permissions));
+      }
+    } catch (err) {
+      // Non-fatal; permissions should already be set from login
     }
-  }, [user, loadPermissions]);
+  }, []);
 
   // ---- Initial session check ----
   // On mount, try to validate any existing session.
@@ -134,15 +122,14 @@ export function AuthProvider({ children }) {
             display_name: data.display_name,
             role_name: roleName,
           });
+
+          // Always load permissions from session response
+          if (Array.isArray(data.permissions) && data.permissions.length > 0) {
+            setPermissions(new Set(data.permissions));
+          }
+
           if (data.force_password_change) {
             setForcePasswordChange(true);
-          } else {
-            // Use permissions from session response if available
-            if (Array.isArray(data.permissions) && data.permissions.length > 0) {
-              setPermissions(new Set(data.permissions));
-            } else {
-              await loadPermissions(roleName);
-            }
           }
         }
       } catch (err) {
@@ -152,7 +139,7 @@ export function AuthProvider({ children }) {
       }
     };
     checkSession();
-  }, [loadPermissions]);
+  }, []);
 
   // ---- Permission helpers ----
   const can = useCallback((key) => permissions.has(key), [permissions]);
