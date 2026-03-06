@@ -1,0 +1,22 @@
+# =====================================================================
+# uploads/.htaccess
+# Block PHP execution in the upload directory.
+# Only image files are served.
+# =====================================================================
+
+# Disable PHP execution entirely
+<FilesMatch "\.(?:php|phtml|php3|php4|php5|phar)$">
+    Require all denied
+</FilesMatch>
+
+# Only serve image files
+<FilesMatch "\.(?:jpg|jpeg|png|gif|webp)$">
+    Require all granted
+</FilesMatch>
+
+Options -Indexes -ExecCGI
+RemoveHandler .php .phtml
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>

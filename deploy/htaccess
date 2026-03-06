@@ -1,0 +1,75 @@
+# =====================================================================
+# pos.BearlyUsed.net
+# Apache .htaccess for React SPA + PHP API hybrid
+#
+# Traffic routing:
+#   /api/*           -> api/index.php (PHP front controller)
+#   /uploads/*       -> static file serving (tire photos)
+#   /assets/*        -> Vite-built JS/CSS (static)
+#   /.well-known/*   -> Let's Encrypt ACME (passthrough)
+#   everything else  -> index.html (React SPA, client-side routing)
+#
+# IMPORTANT: Virtualmin blocks FollowSymLinks in .htaccess.
+# Use SymLinksIfOwnerMatch instead, or you get a silent 500 error.
+#
+# DunganSoft Technologies, March 2026
+# =====================================================================
+
+Options -Indexes +SymLinksIfOwnerMatch
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # --- Let's Encrypt ACME challenge passthrough ---
+    RewriteRule ^\.well-known/ - [L]
+
+    # --- PHP API routing ---
+    # All /api requests go to the PHP front controller
+    RewriteCond %{REQUEST_URI} ^/api(/.*)?$
+    RewriteRule ^api(/.*)?$ api/index.php [L,QSA]
+
+    # --- Static files: serve directly if they exist ---
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # --- SPA fallback ---
+    # Everything else serves index.html (React Router handles it)
+    RewriteRule ^ index.html [L]
+</IfModule>
+
+# --- Security: block sensitive file types ---
+<FilesMatch "\.(env|log|sql|sh|bak|conf|ini|md|lock|json)$">
+    Require all denied
+</FilesMatch>
+
+# --- Security: block dotfiles except .htaccess and .well-known ---
+<FilesMatch "^\.(?!htaccess|well-known)">
+    Require all denied
+</FilesMatch>
+
+# --- Performance: cache static assets aggressively ---
+# Vite builds include content hashes in filenames, so aggressive
+# caching is safe (new deploy = new filename = cache bust).
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/webp "access plus 1 month"
+    ExpiresByType image/gif "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType application/font-woff2 "access plus 1 year"
+</IfModule>
+
+# --- Security headers ---
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

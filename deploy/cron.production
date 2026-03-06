@@ -1,0 +1,23 @@
+# ============================================================================
+# Tire Shop POS: Production Crontab
+# pos.BearlyUsed.net
+#
+# Install as the bearlyused user:
+#   crontab -e
+#   (paste the lines below)
+#
+# Or in Virtualmin: Webmin > System > Scheduled Cron Jobs
+#
+# DunganSoft Technologies, March 2026
+# ============================================================================
+
+APP_DIR=/home/bearlyused/domains/pos.bearlyused.net/app
+
+# Daily database backup (2:00 AM Mountain Time)
+0 2 * * * /bin/bash ${APP_DIR}/scripts/backup-db.sh >> /home/bearlyused/backups/backup.log 2>&1
+
+# Daily photo backup (2:30 AM Mountain Time)
+30 2 * * * /bin/bash ${APP_DIR}/scripts/backup-photos.sh >> /home/bearlyused/backups/backup.log 2>&1
+
+# Session cleanup (every 30 minutes)
+*/30 * * * * /bin/bash ${APP_DIR}/scripts/cleanup-sessions.sh >> /home/bearlyused/backups/ops.log 2>&1
