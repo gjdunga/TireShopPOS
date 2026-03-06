@@ -95,11 +95,17 @@ if [[ "$DB_ONLY" == "false" ]]; then
     log "Deploying to ${PUBLIC_HTML}..."
 
     # Sync React SPA (dist/) to public_html, excluding api/ and uploads/
-    rsync -av --delete \
-        --exclude='api/' \
-        --exclude='.htaccess' \
-        --exclude='uploads/' \
-        "${APP_DIR}/frontend/dist/" "${PUBLIC_HTML}/"
+    if [[ -d "${APP_DIR}/frontend/dist" ]]; then
+        rsync -av --delete \
+            --exclude='api/' \
+            --exclude='.htaccess' \
+            --exclude='uploads/' \
+            "${APP_DIR}/frontend/dist/" "${PUBLIC_HTML}/"
+        log "Frontend files synced."
+    else
+        warn "frontend/dist/ not found. Skipping SPA deployment."
+        warn "Install Node.js 18+ and re-run, or build locally and push dist/."
+    fi
 
     # Deploy API front controller
     mkdir -p "${PUBLIC_HTML}/api"
