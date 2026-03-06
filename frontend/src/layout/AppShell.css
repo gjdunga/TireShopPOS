@@ -13,3 +13,10 @@
   padding: 1.5rem;
   min-height: calc(100vh - var(--topbar-h));
 }
+
+@media (max-width: 768px) {
+  .app-content {
+    margin-left: 0;
+    padding: 1rem 0.75rem;
+  }
+}

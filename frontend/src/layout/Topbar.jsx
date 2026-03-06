@@ -15,7 +15,7 @@ const ROLE_BADGES = {
   tire_tech: 'badge-tech',
 };
 
-export default function Topbar() {
+export default function Topbar({ onToggleSidebar }) {
   const { user, logout } = useAuth();
 
   if (!user) return null;
@@ -27,7 +27,9 @@ export default function Topbar() {
   return (
     <header className="topbar">
       <div className="topbar-left">
-        {/* Breadcrumb or page title will be injected here by pages */}
+        <button className="topbar-hamburger" onClick={onToggleSidebar} aria-label="Toggle menu">
+          <span /><span /><span />
+        </button>
       </div>
 
       <div className="topbar-right">

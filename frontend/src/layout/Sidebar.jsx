@@ -31,6 +31,8 @@ const NAV = [
       { label: 'Invoices',       path: '/invoices',    icon: '\u25A1', need: 'INVOICE_CREATE' },
       { label: 'Wheels',         path: '/wheels',      icon: '\u25CB', need: ['INVENTORY_ADD', 'INVENTORY_EDIT'] },
       { label: 'Fitment',        path: '/fitment',     icon: '\u2316', need: 'INVENTORY_VIEW' },
+      { label: 'Recalls',        path: '/recalls',     icon: '\u26A0', need: 'INVENTORY_VIEW' },
+      { label: 'Scanner',        path: '/scanner',     icon: '\u2750', need: 'INVENTORY_VIEW' },
     ],
   },
   {
@@ -42,6 +44,7 @@ const NAV = [
       { label: 'Refunds',        path: '/refunds',       icon: '\u21A9', need: ['REFUND_REQUEST', 'REFUND_APPROVE'] },
       { label: 'Quotes',         path: '/quotes',        icon: '\u2696', need: 'INVOICE_CREATE' },
       { label: 'Warranties',     path: '/warranties',    icon: '\u2611', need: 'USER_MANAGE' },
+      { label: 'Communications', path: '/communications', icon: '\u2709', need: 'CUSTOMER_MANAGE' },
     ],
   },
   {
@@ -55,7 +58,7 @@ const NAV = [
   },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }) {
   const { can, canAny } = useAuth();
 
   // Filter items by permission
@@ -69,39 +72,46 @@ export default function Sidebar() {
   }).filter((group) => group.items.length > 0);
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar-brand">
-        <span className="sidebar-brand-mark">T</span>
-        <div className="sidebar-brand-text">
-          <span className="sidebar-brand-name">Tire Shop</span>
-          <span className="sidebar-brand-sub">POS</span>
-        </div>
-      </div>
+    <>
+      {/* Mobile overlay */}
+      {isOpen && <div className="sidebar-overlay" onClick={onClose} />}
 
-      <nav className="sidebar-nav">
-        {visibleGroups.map((group) => (
-          <div key={group.label} className="sidebar-group">
-            <div className="sidebar-group-label">{group.label}</div>
-            {group.items.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                end={item.path === '/'}
-                className={({ isActive }) =>
-                  `sidebar-link ${isActive ? 'sidebar-link-active' : ''}`
-                }
-              >
-                <span className="sidebar-link-icon">{item.icon}</span>
-                <span className="sidebar-link-label">{item.label}</span>
-              </NavLink>
-            ))}
+      <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}>
+        <div className="sidebar-brand">
+          <span className="sidebar-brand-mark">T</span>
+          <div className="sidebar-brand-text">
+            <span className="sidebar-brand-name">Tire Shop</span>
+            <span className="sidebar-brand-sub">POS</span>
           </div>
-        ))}
-      </nav>
+          <button className="sidebar-close-btn" onClick={onClose} aria-label="Close menu">&times;</button>
+        </div>
 
-      <div className="sidebar-footer">
-        <span className="sidebar-footer-text">DunganSoft Technologies</span>
-      </div>
-    </aside>
+        <nav className="sidebar-nav">
+          {visibleGroups.map((group) => (
+            <div key={group.label} className="sidebar-group">
+              <div className="sidebar-group-label">{group.label}</div>
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  end={item.path === '/'}
+                  className={({ isActive }) =>
+                    `sidebar-link ${isActive ? 'sidebar-link-active' : ''}`
+                  }
+                  onClick={onClose}
+                >
+                  <span className="sidebar-link-icon">{item.icon}</span>
+                  <span className="sidebar-link-label">{item.label}</span>
+                </NavLink>
+              ))}
+            </div>
+          ))}
+        </nav>
+
+        <div className="sidebar-footer">
+          <span className="sidebar-footer-text">DunganSoft Technologies</span>
+        </div>
+      </aside>
+    </>
   );
 }
