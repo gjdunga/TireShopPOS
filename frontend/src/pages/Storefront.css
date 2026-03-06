@@ -1,0 +1,269 @@
+/* ================================================================
+   Storefront (P3d)
+   Public-facing styling. Clean, modern, mobile-first.
+   ================================================================ */
+
+.sf-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Bitter', Georgia, serif;
+  color: #222;
+  background: #FAFAFA;
+}
+
+.sf-header {
+  background: #1A2744;
+  color: white;
+  padding: 0 1rem;
+}
+
+.sf-header-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+}
+
+.sf-logo {
+  font-family: 'Oswald', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: white;
+  text-decoration: none;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.sf-nav {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.sf-nav a {
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: color 0.15s;
+}
+
+.sf-nav a:hover { color: white; }
+
+.sf-main {
+  flex: 1;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+  width: 100%;
+}
+
+.sf-footer {
+  background: #1A2744;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 1rem;
+  font-size: 0.8125rem;
+  margin-top: auto;
+}
+
+.sf-footer-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Hero */
+.sf-hero {
+  text-align: center;
+  padding: 3rem 1rem;
+  background: linear-gradient(135deg, #1A2744 0%, #2a3d5e 100%);
+  color: white;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+}
+
+.sf-hero h1 {
+  font-family: 'Oswald', sans-serif;
+  font-size: 2.25rem;
+  margin: 0 0 0.5rem;
+  letter-spacing: 0.02em;
+}
+
+.sf-hero p {
+  font-size: 1.0625rem;
+  opacity: 0.9;
+  margin: 0 0 1.5rem;
+}
+
+.sf-hero-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+/* Buttons */
+.sf-btn {
+  display: inline-block;
+  padding: 0.5rem 1.25rem;
+  border-radius: 4px;
+  font-family: 'Oswald', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  text-decoration: none;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sf-btn-primary {
+  background: #C9202F;
+  color: white;
+  border-color: #C9202F;
+}
+
+.sf-btn-primary:hover { background: #a81b28; border-color: #a81b28; }
+
+.sf-btn-outline {
+  background: transparent;
+  color: white;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.sf-btn-outline:hover { border-color: white; color: white; }
+
+/* Section */
+.sf-section {
+  margin-bottom: 2rem;
+}
+
+.sf-section h2 {
+  font-family: 'Oswald', sans-serif;
+  font-size: 1.375rem;
+  color: #1A2744;
+  margin: 0 0 0.75rem;
+}
+
+.sf-page-title {
+  font-family: 'Oswald', sans-serif;
+  font-size: 1.75rem;
+  color: #1A2744;
+  margin: 0 0 1rem;
+}
+
+/* Filters */
+.sf-filters {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.sf-input {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  display: block;
+  width: 100%;
+}
+
+.sf-filters .sf-input {
+  width: auto;
+  min-width: 140px;
+}
+
+.sf-count {
+  margin-left: auto;
+  color: #999;
+  font-size: 0.875rem;
+}
+
+/* Tire Grid */
+.sf-tire-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.sf-tire-card {
+  background: white;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 1rem;
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.sf-tire-card:hover {
+  border-color: #C9202F;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.sf-tire-size {
+  font-family: 'Courier New', monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1A2744;
+  margin-bottom: 0.25rem;
+}
+
+.sf-tire-brand {
+  font-size: 0.875rem;
+  color: #444;
+  margin-bottom: 0.5rem;
+}
+
+.sf-tire-meta {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.8125rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+}
+
+.sf-tire-price {
+  font-family: 'Oswald', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #C9202F;
+}
+
+.sf-tire-detail-grid {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 1rem;
+  font-size: 0.9375rem;
+}
+
+/* Badges */
+.sf-badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sf-badge-green { background: #E8F5E9; color: #2B7A3A; }
+.sf-badge-orange { background: #FFF3E0; color: #E67E22; }
+
+@media (max-width: 700px) {
+  .sf-header-inner { flex-direction: column; gap: 0.5rem; }
+  .sf-nav { gap: 0.75rem; flex-wrap: wrap; justify-content: center; }
+  .sf-hero h1 { font-size: 1.5rem; }
+  .sf-tire-grid { grid-template-columns: 1fr 1fr; }
+  .sf-footer-inner { flex-direction: column; gap: 0.25rem; text-align: center; }
+}
