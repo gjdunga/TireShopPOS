@@ -71,6 +71,7 @@ import DiscountManager from './pages/DiscountManager.jsx';
 import BillingStatements from './pages/BillingStatements.jsx';
 import TireStorageManager from './pages/TireStorageManager.jsx';
 import PricingAdvisor from './pages/PricingAdvisor.jsx';
+const MarketplaceHub = lazy(() => import('./pages/MarketplaceHub.jsx'));
 import { StorefrontShell, StorefrontHome, StorefrontInventory, StorefrontTireDetail,
          StorefrontFitment, StorefrontAppointments, StorefrontWarranty } from './pages/Storefront.jsx';
 import { lazy, Suspense } from 'react';
@@ -167,6 +168,7 @@ export default function App() {
               <Route path="statements"         element={<BillingStatements />} />
               <Route path="tire-storage"       element={<TireStorageManager />} />
               <Route path="pricing-advisor"    element={<PricingAdvisor />} />
+              <Route path="marketplace"        element={<Suspense fallback={SuspenseFallback}><MarketplaceHub /></Suspense>} />
               <Route path="users"              element={<Placeholder title="User Management" chunk="P3+" />} />
 
               {/* 404 within the shell */}
