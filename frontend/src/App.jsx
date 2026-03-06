@@ -67,6 +67,10 @@ import FitmentSearch from './pages/FitmentSearch.jsx';
 import RecallChecker from './pages/RecallChecker.jsx';
 import BarcodeScanner from './pages/BarcodeScanner.jsx';
 import CustomerComm from './pages/CustomerComm.jsx';
+import DiscountManager from './pages/DiscountManager.jsx';
+import BillingStatements from './pages/BillingStatements.jsx';
+import TireStorageManager from './pages/TireStorageManager.jsx';
+import PricingAdvisor from './pages/PricingAdvisor.jsx';
 import { StorefrontShell, StorefrontHome, StorefrontInventory, StorefrontTireDetail,
          StorefrontFitment, StorefrontAppointments, StorefrontWarranty } from './pages/Storefront.jsx';
 import { lazy, Suspense } from 'react';
@@ -159,6 +163,10 @@ export default function App() {
               <Route path="recalls"            element={<RecallChecker />} />
               <Route path="scanner"            element={<BarcodeScanner />} />
               <Route path="communications"     element={<CustomerComm />} />
+              <Route path="discounts"          element={<DiscountManager />} />
+              <Route path="statements"         element={<BillingStatements />} />
+              <Route path="tire-storage"       element={<TireStorageManager />} />
+              <Route path="pricing-advisor"    element={<PricingAdvisor />} />
               <Route path="users"              element={<Placeholder title="User Management" chunk="P3+" />} />
 
               {/* 404 within the shell */}
