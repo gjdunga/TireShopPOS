@@ -206,6 +206,12 @@ textarea:focus {
 .badge-manager { background: var(--blue);  color: var(--white); }
 .badge-tech    { background: var(--gray);  color: var(--white); }
 
+.badge-green  { background: #E8F5E9; color: #2B7A3A; }
+.badge-orange { background: #FFF3E0; color: #E67E22; }
+.badge-blue   { background: #E3F2FD; color: #1565C0; }
+.badge-gray   { background: #F5F5F5; color: #616161; }
+.badge-red    { background: #FDE8E8; color: #C9202F; }
+
 /* ---- Alerts ---- */
 .alert {
   padding: 0.75rem 1rem;
