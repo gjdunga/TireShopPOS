@@ -35,6 +35,7 @@ require_once BASE_PATH . '/php/tire_pos_helpers.php';
 require_once BASE_PATH . '/php/tire_pos_crud.php';
 require_once BASE_PATH . '/php/tire_pos_p3.php';
 require_once BASE_PATH . '/php/tire_pos_p5.php';
+require_once BASE_PATH . '/php/tire_pos_p6.php';
 require_once BASE_PATH . '/php/VehicleLookupService.php';
 
 // ---- Create router and load routes ----

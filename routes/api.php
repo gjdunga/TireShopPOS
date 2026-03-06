@@ -1716,6 +1716,138 @@ $router->with($auth)->get('/api/pricing-advisor/{id}', function (array $params) 
 
 
 // ============================================================================
+// Phase 6: Marketplace Integration Routes
+// ============================================================================
+
+// --- Integration Credentials ---
+$router->with(permit('USER_MANAGE'))->get('/api/integrations', function () {
+    return ['integrations' => listIntegrations()];
+});
+
+$router->with(permit('USER_MANAGE'))->get('/api/integrations/{name}/credentials', function (array $params) {
+    $env = Router::query('environment', 'production');
+    $creds = getIntegrationCredentials($params['name'], $env);
+    // Mask values for display
+    $masked = array_map(function ($c) {
+        $val = $c['credential_value'];
+        $c['credential_value'] = strlen($val) > 8 ? substr($val, 0, 4) . '...' . substr($val, -4) : '****';
+        return $c;
+    }, $creds);
+    return ['credentials' => $masked];
+});
+
+$router->with(permit('USER_MANAGE'))->post('/api/integrations/{name}/credentials', function (array $params, array $body) {
+    setIntegrationCredential($params['name'], $body['key'], $body['value'],
+        Middleware::userId(), $body['environment'] ?? 'production', $body['expires_at'] ?? null);
+    return ['message' => 'Credential saved.'];
+});
+
+$router->with(permit('USER_MANAGE'))->delete('/api/integrations/{name}/credentials/{key}', function (array $params) {
+    $env = Router::query('environment', 'production');
+    removeIntegrationCredential($params['name'], $params['key'], $env);
+    return ['message' => 'Credential removed.'];
+});
+
+// --- Sync Log ---
+$router->with(permit('USER_MANAGE'))->get('/api/integrations/sync-log', function () {
+    $integration = Router::query('integration', '');
+    $limit = (int) Router::query('limit', '50');
+    $offset = (int) Router::query('offset', '0');
+    return getSyncLog($integration, $limit, $offset);
+});
+
+// --- Marketplace Listings ---
+$router->with($auth)->get('/api/marketplace/listings', function () {
+    $platform = Router::query('platform', '');
+    $status = Router::query('status', '');
+    $limit = (int) Router::query('limit', '50');
+    $offset = (int) Router::query('offset', '0');
+    return listListings($platform, $status, $limit, $offset);
+});
+
+$router->with($auth)->post('/api/marketplace/listings', function (array $params, array $body) {
+    $id = createListing($body, Middleware::userId());
+    return ['message' => 'Listing created.', 'listing_id' => $id];
+});
+
+$router->with($auth)->patch('/api/marketplace/listings/{id}', function (array $params, array $body) {
+    return updateListing((int) $params['id'], $body);
+});
+
+$router->with($auth)->get('/api/marketplace/generate-content/{tireId}', function (array $params) {
+    $platform = Router::query('platform', 'craigslist');
+    return generateListingContent((int) $params['tireId'], $platform);
+});
+
+// --- Marketplace Orders ---
+$router->with($auth)->get('/api/marketplace/orders', function () {
+    $platform = Router::query('platform', '');
+    $status = Router::query('status', '');
+    $limit = (int) Router::query('limit', '50');
+    $offset = (int) Router::query('offset', '0');
+    return listMarketplaceOrders($platform, $status, $limit, $offset);
+});
+
+$router->with($auth)->get('/api/marketplace/orders/{id}', function (array $params) {
+    $o = getMarketplaceOrder((int) $params['id']);
+    if (!$o) Router::sendError('NOT_FOUND', 'Order not found.', 404);
+    return $o;
+});
+
+$router->with($auth)->post('/api/marketplace/orders', function (array $params, array $body) {
+    $id = importMarketplaceOrder($body);
+    return ['message' => 'Order imported.', 'order_id' => $id];
+});
+
+$router->with($auth)->patch('/api/marketplace/orders/{id}/status', function (array $params, array $body) {
+    updateMarketplaceOrderStatus((int) $params['id'], $body['status'], $body['invoice_id'] ?? null);
+    return ['message' => 'Order status updated.'];
+});
+
+// --- Distributor Search/Order ---
+$router->with($auth)->get('/api/distributors/{name}/search', function (array $params) {
+    $size = Router::query('size', '');
+    if (!$size) Router::sendError('MISSING_PARAM', 'size required.', 400);
+    return searchDistributorCatalog($params['name'], $size);
+});
+
+$router->with(permit('PO_CREATE'))->post('/api/distributors/{name}/order', function (array $params, array $body) {
+    return placeDistributorOrder($params['name'], $body['items'] ?? []);
+});
+
+// --- B2B Network ---
+$router->with($auth)->get('/api/b2b/inventory', function () {
+    $type = Router::query('listing_type', '');
+    return ['inventory' => listB2bInventory($type)];
+});
+
+$router->with(permit('INVENTORY_EDIT'))->post('/api/b2b/inventory', function (array $params, array $body) {
+    $id = addToB2bNetwork($body);
+    return ['message' => 'Added to B2B network.', 'b2b_id' => $id];
+});
+
+$router->with(permit('INVENTORY_EDIT'))->delete('/api/b2b/inventory/{id}', function (array $params) {
+    removeFromB2bNetwork((int) $params['id']);
+    return ['message' => 'Removed from B2B network.'];
+});
+
+// --- Directory Listings ---
+$router->with(permit('USER_MANAGE'))->get('/api/directory-listings', function () {
+    return ['listings' => listDirectoryListings()];
+});
+
+$router->with(permit('USER_MANAGE'))->post('/api/directory-listings', function (array $params, array $body) {
+    $id = createDirectoryListing($body);
+    return ['message' => 'Directory listing created.', 'directory_id' => $id];
+});
+
+$router->with(permit('USER_MANAGE'))->patch('/api/directory-listings/{id}', function (array $params, array $body) {
+    updateDirectoryListing((int) $params['id'], $body);
+    return ['message' => 'Directory listing updated.'];
+});
+
+
+// ============================================================================
 // Public Routes (no auth, for storefront + embed widget)
 // ============================================================================
 
