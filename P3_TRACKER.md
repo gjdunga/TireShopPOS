@@ -16,12 +16,12 @@ entirely through the browser. 44 tables, 14 views in schema v2.4.
 
 | Chunk | Description | Status | Commit | Date |
 |-------|-------------|--------|--------|------|
-| P3a | Schema migration + settings foundation | TODO | | |
-| P3b | Warranty module (policies, claims, invoice integration) | TODO | | |
-| P3c | Wheel inventory + fitment search | TODO | | |
-| P3d | Public storefront (inventory, fitment, appointments, shop info) | TODO | | |
-| P3e | Customizable fields + advanced config UI | TODO | | |
-| P3f | Embed widget + public API | TODO | | |
+| P3a | Schema migration + settings foundation | DONE | 3c42f32 | 2026-03-05 |
+| P3b | Warranty module (policies, claims, invoice integration) | DONE | bdaab41 | 2026-03-05 |
+| P3c | Wheel inventory + fitment search | DONE | d6d6090 | 2026-03-05 |
+| P3d | Public storefront (inventory, fitment, appointments, shop info) | DONE | 48485b6 | 2026-03-05 |
+| P3e | Customizable fields + advanced config UI | DONE | e108f13 | 2026-03-05 |
+| P3f | Embed widget + public API | DONE | e108f13 | 2026-03-05 |
 
 ---
 
@@ -48,7 +48,7 @@ P3e for full widget feature set).
 
 ---
 
-## P3a: Schema Migration + Settings Foundation (TODO)
+## P3a: Schema Migration + Settings Foundation (DONE)
 
 **Scope:** New tables, migration tooling, admin settings UI.
 
@@ -139,7 +139,7 @@ P3e for full widget feature set).
 
 ---
 
-## P3b: Warranty Module (TODO)
+## P3b: Warranty Module (DONE)
 
 **Scope:** Warranty policy management, claim lifecycle, invoice integration.
 
@@ -175,7 +175,7 @@ P3e for full widget feature set).
 
 ---
 
-## P3c: Wheel Inventory + Fitment Search (TODO)
+## P3c: Wheel Inventory + Fitment Search (DONE)
 
 **Scope:** Wheel catalog, bolt pattern cross-reference, vehicle fitment
 search (tires + wheels), reverse tire size lookup.
@@ -214,7 +214,7 @@ search (tires + wheels), reverse tire size lookup.
 
 ---
 
-## P3d: Public Storefront (TODO)
+## P3d: Public Storefront (DONE)
 
 **Scope:** Public-facing website served from the same application. No
 authentication required. Reads shop_settings for branding, website_config
@@ -271,7 +271,7 @@ website_config. Semantic HTML. Open Graph tags for social sharing.
 
 ---
 
-## P3e: Customizable Fields + Advanced Config UI (TODO)
+## P3e: Customizable Fields + Advanced Config UI (DONE)
 
 **Scope:** User-defined custom fields on entities, fee schedule management,
 advanced configuration screens.
@@ -305,7 +305,7 @@ advanced configuration screens.
 
 ---
 
-## P3f: Embed Widget + Public API (TODO)
+## P3f: Embed Widget + Public API (DONE)
 
 **Scope:** JavaScript widget that shop owner can embed on their existing
 website via a single script tag. Public REST API with API key authentication
