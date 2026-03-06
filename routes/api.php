@@ -1528,6 +1528,72 @@ $router->with(permit('USER_MANAGE'))->delete('/api/api-keys/{id}', function (arr
     return ['message' => 'API key revoked.'];
 });
 
+// --- NHTSA Recall Checker (P4b) ---
+$router->with($auth)->get('/api/recalls/vehicle', function () {
+    $make = Router::query('make', '');
+    $model = Router::query('model');
+    $year = Router::query('year') ? (int) Router::query('year') : null;
+    if (!$make) Router::sendError('MISSING_PARAM', 'make required.', 400);
+    return checkNhtsaRecalls($make, $model, $year);
+});
+
+$router->with($auth)->get('/api/recalls/tire', function () {
+    $dot = Router::query('dot', '');
+    if (!$dot) Router::sendError('MISSING_PARAM', 'dot (DOT/TIN) required.', 400);
+    return checkTireRecallByDot($dot);
+});
+
+// --- Barcode Labels (P4c) ---
+$router->with($auth)->get('/api/labels/tire/{id}', function (array $params) {
+    $zpl = generateTireLabelZpl((int) $params['id']);
+    return ['zpl' => $zpl, 'tire_id' => (int) $params['id']];
+});
+
+$router->with($auth)->get('/api/labels/wheel/{id}', function (array $params) {
+    $zpl = generateWheelLabelZpl((int) $params['id']);
+    return ['zpl' => $zpl, 'wheel_id' => (int) $params['id']];
+});
+
+// --- Barcode Scanning / Lookup (P4d) ---
+$router->with($auth)->get('/api/barcode/lookup', function () {
+    $code = Router::query('code', '');
+    if (!$code) Router::sendError('MISSING_PARAM', 'code required.', 400);
+    $result = lookupByBarcode($code);
+    if (!$result) Router::sendError('NOT_FOUND', 'No item found for barcode.', 404);
+    return $result;
+});
+
+// --- Customer Notifications (P4e) ---
+$router->with($auth)->get('/api/notifications/customer/{id}', function (array $params) {
+    return ['notifications' => getNotificationLog((int) $params['id'])];
+});
+
+$router->with($auth)->get('/api/notifications/pending', function () {
+    $type = Router::query('type', '');
+    return ['notifications' => listPendingNotifications($type)];
+});
+
+$router->with($auth)->post('/api/notifications', function (array $params, array $body) {
+    $id = logNotification(
+        (int) $body['customer_id'], $body['channel'] ?? 'internal',
+        $body['notification_type'] ?? 'custom',
+        $body['subject'] ?? '', $body['body'] ?? '',
+        Middleware::userId()
+    );
+    return ['message' => 'Notification logged.', 'notification_id' => $id];
+});
+
+$router->with($auth)->post('/api/notifications/{id}/sent', function (array $params) {
+    markNotificationSent((int) $params['id']);
+    return ['message' => 'Marked sent.'];
+});
+
+$router->with($auth)->post('/api/notifications/{id}/failed', function (array $params, array $body) {
+    markNotificationFailed((int) $params['id'], $body['error'] ?? 'Unknown error');
+    return ['message' => 'Marked failed.'];
+});
+
+
 // ============================================================================
 // Public Routes (no auth, for storefront + embed widget)
 // ============================================================================

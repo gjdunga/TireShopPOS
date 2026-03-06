@@ -658,3 +658,242 @@ function getPublicAppointmentSlots(string $date): array {
 
     return ['date' => $date, 'slots' => $slots, 'closed' => false];
 }
+
+
+// ============================================================================
+// NHTSA Tire Recall Checker (P4b)
+// Queries NHTSA Recalls API for tire-related recalls.
+// ============================================================================
+
+function checkNhtsaRecalls(string $make, ?string $model = null, ?int $year = null): array {
+    $url = 'https://api.nhtsa.gov/recalls/recallsByVehicle';
+    $params = ['make' => $make];
+    if ($model) $params['model'] = $model;
+    if ($year) $params['modelYear'] = $year;
+    $url .= '?' . http_build_query($params);
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => ['Accept: application/json'],
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode !== 200 || !$response) {
+        return ['error' => 'NHTSA API unavailable', 'recalls' => []];
+    }
+
+    $data = json_decode($response, true);
+    $results = $data['results'] ?? [];
+
+    // Filter to tire-related recalls
+    $tireRecalls = array_filter($results, function ($r) {
+        $component = strtolower($r['Component'] ?? '');
+        return str_contains($component, 'tire') || str_contains($component, 'wheel');
+    });
+
+    return [
+        'total_results' => count($results),
+        'tire_related' => count($tireRecalls),
+        'recalls' => array_values(array_map(function ($r) {
+            return [
+                'nhtsa_campaign' => $r['NHTSACampaignNumber'] ?? '',
+                'component' => $r['Component'] ?? '',
+                'summary' => $r['Summary'] ?? '',
+                'consequence' => $r['Consequence'] ?? '',
+                'remedy' => $r['Remedy'] ?? '',
+                'manufacturer' => $r['Manufacturer'] ?? '',
+                'model_year' => $r['ModelYear'] ?? '',
+                'make' => $r['Make'] ?? '',
+                'model' => $r['Model'] ?? '',
+            ];
+        }, $tireRecalls)),
+    ];
+}
+
+function checkTireRecallByDot(string $dotTin): array {
+    // DOT/TIN format: DOT XXXX XXXX WWYY
+    // Extract manufacturer code (first 2 chars after DOT) and plant code
+    $cleaned = preg_replace('/[^A-Za-z0-9]/', '', $dotTin);
+    if (strlen($cleaned) < 4) {
+        return ['error' => 'Invalid DOT/TIN format', 'recalls' => []];
+    }
+
+    // NHTSA doesn't have a direct DOT lookup API for tire recalls.
+    // We search by tire manufacturer instead using the equipment recalls endpoint.
+    $url = 'https://api.nhtsa.gov/recalls/recallsByEquipment?equipmentType=Tire';
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => ['Accept: application/json'],
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode !== 200 || !$response) {
+        return ['error' => 'NHTSA API unavailable', 'recalls' => []];
+    }
+
+    $data = json_decode($response, true);
+    $results = $data['results'] ?? [];
+
+    // Return recent tire recalls (limit to 50 most recent)
+    $recalls = array_slice($results, 0, 50);
+
+    return [
+        'total_results' => count($results),
+        'dot_tin' => $dotTin,
+        'recalls' => array_values(array_map(function ($r) {
+            return [
+                'nhtsa_campaign' => $r['NHTSACampaignNumber'] ?? '',
+                'component' => $r['Component'] ?? '',
+                'summary' => $r['Summary'] ?? '',
+                'consequence' => $r['Consequence'] ?? '',
+                'remedy' => $r['Remedy'] ?? '',
+                'manufacturer' => $r['Manufacturer'] ?? '',
+            ];
+        }, $recalls)),
+    ];
+}
+
+
+// ============================================================================
+// Barcode Label Generation (P4c)
+// Generates ZPL (Zebra Programming Language) for thermal label printers.
+// Target: Zebra ZD220 with 2.25" x 1.25" labels.
+// ============================================================================
+
+function generateTireLabelZpl(int $tireId): string {
+    $tire = Database::queryOne(
+        "SELECT t.tire_id, t.full_size_string, t.dot_tin, t.retail_price,
+                t.tread_depth_32nds, t.`condition`, t.bin_facility, t.bin_shelf,
+                t.bin_level, b.brand_name
+         FROM v_tire_inventory t
+         LEFT JOIN lkp_brands b ON t.brand_id = b.brand_id
+         WHERE t.tire_id = ?",
+        [$tireId]
+    );
+
+    if (!$tire) throw new RuntimeException('Tire not found');
+
+    $size = $tire['full_size_string'] ?? '';
+    $brand = $tire['brand_name'] ?? '';
+    $price = '$' . number_format((float) ($tire['retail_price'] ?? 0), 2);
+    $cond = strtoupper($tire['condition'] ?? '');
+    $tread = ($tire['tread_depth_32nds'] ?? '') . '/32';
+    $bin = trim(($tire['bin_facility'] ?? '') . '-' . ($tire['bin_shelf'] ?? '') . '-' . ($tire['bin_level'] ?? ''), '-');
+    $barcode = 'T' . str_pad($tireId, 7, '0', STR_PAD_LEFT);
+
+    // ZPL for 2.25" x 1.25" label (203 DPI = ~456 dots x ~254 dots)
+    $zpl = "^XA\n";
+    $zpl .= "^CF0,28\n";
+    $zpl .= "^FO20,15^FD{$size}^FS\n";
+    $zpl .= "^CF0,20\n";
+    $zpl .= "^FO20,50^FD{$brand}^FS\n";
+    $zpl .= "^FO20,75^FD{$cond} {$tread} {$price}^FS\n";
+    $zpl .= "^FO20,100^FDBIN: {$bin}^FS\n";
+    // Code 128 barcode
+    $zpl .= "^FO20,130^BY2,2,60\n";
+    $zpl .= "^BCN,60,Y,N,N\n";
+    $zpl .= "^FD{$barcode}^FS\n";
+    $zpl .= "^XZ\n";
+
+    return $zpl;
+}
+
+function generateWheelLabelZpl(int $wheelId): string {
+    $wheel = Database::queryOne("SELECT * FROM wheels WHERE wheel_id = ?", [$wheelId]);
+    if (!$wheel) throw new RuntimeException('Wheel not found');
+
+    $desc = trim(($wheel['brand'] ?? '') . ' ' . ($wheel['model'] ?? ''));
+    $size = $wheel['diameter'] . '"' . ($wheel['width'] ? ' x ' . $wheel['width'] . '"' : '');
+    $bolt = $wheel['bolt_pattern'] ?? '';
+    $price = '$' . number_format((float) ($wheel['retail_price'] ?? 0), 2);
+    $barcode = 'W' . str_pad($wheelId, 7, '0', STR_PAD_LEFT);
+
+    $zpl = "^XA\n";
+    $zpl .= "^CF0,24\n";
+    $zpl .= "^FO20,15^FD{$desc}^FS\n";
+    $zpl .= "^CF0,20\n";
+    $zpl .= "^FO20,45^FD{$size} {$bolt}^FS\n";
+    $zpl .= "^FO20,70^FD{$price}^FS\n";
+    $zpl .= "^FO20,100^BY2,2,60\n";
+    $zpl .= "^BCN,60,Y,N,N\n";
+    $zpl .= "^FD{$barcode}^FS\n";
+    $zpl .= "^XZ\n";
+
+    return $zpl;
+}
+
+function lookupByBarcode(string $barcode): ?array {
+    $barcode = trim($barcode);
+    if (strlen($barcode) < 2) return null;
+
+    $prefix = $barcode[0];
+    $id = (int) ltrim(substr($barcode, 1), '0');
+
+    if ($prefix === 'T') {
+        $tire = Database::queryOne("SELECT * FROM v_tire_inventory WHERE tire_id = ?", [$id]);
+        return $tire ? ['type' => 'tire', 'entity' => $tire] : null;
+    }
+
+    if ($prefix === 'W') {
+        $wheel = Database::queryOne("SELECT * FROM wheels WHERE wheel_id = ?", [$id]);
+        return $wheel ? ['type' => 'wheel', 'entity' => $wheel] : null;
+    }
+
+    return null;
+}
+
+
+// ============================================================================
+// Customer Communicator (P4e)
+// Notification log + message templates
+// ============================================================================
+
+function logNotification(int $customerId, string $channel, string $type, string $subject, string $body, int $sentBy): int {
+    $sql = "INSERT INTO notification_log (customer_id, channel, notification_type, subject, body, sent_by)
+            VALUES (?, ?, ?, ?, ?, ?)";
+    getDB()->prepare($sql)->execute([$customerId, $channel, $type, $subject, $body, $sentBy]);
+    return (int) getDB()->lastInsertId();
+}
+
+function getNotificationLog(int $customerId, int $limit = 20): array {
+    return Database::query(
+        "SELECT nl.*, u.display_name AS sent_by_name
+         FROM notification_log nl
+         LEFT JOIN users u ON nl.sent_by = u.user_id
+         WHERE nl.customer_id = ?
+         ORDER BY nl.created_at DESC
+         LIMIT ?",
+        [$customerId, $limit]
+    );
+}
+
+function listPendingNotifications(string $type = ''): array {
+    $where = "status = 'pending'";
+    $params = [];
+    if ($type) { $where .= ' AND notification_type = ?'; $params[] = $type; }
+    return Database::query(
+        "SELECT nl.*, c.first_name, c.last_name, c.phone_primary, c.email
+         FROM notification_log nl
+         LEFT JOIN customers c ON nl.customer_id = c.customer_id
+         WHERE {$where}
+         ORDER BY nl.created_at ASC LIMIT 100",
+        $params
+    );
+}
+
+function markNotificationSent(int $notifId): void {
+    getDB()->prepare("UPDATE notification_log SET status = 'sent', sent_at = CURRENT_TIMESTAMP WHERE notification_id = ?")->execute([$notifId]);
+}
+
+function markNotificationFailed(int $notifId, string $error): void {
+    getDB()->prepare("UPDATE notification_log SET status = 'failed', error_message = ? WHERE notification_id = ?")->execute([$error, $notifId]);
+}
