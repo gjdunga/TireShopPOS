@@ -218,16 +218,20 @@ class Ops
             $result['missing_extensions'] = $missing;
         }
 
-        // System uptime (Linux)
-        if (PHP_OS_FAMILY === 'Linux' && file_exists('/proc/uptime')) {
-            $raw = file_get_contents('/proc/uptime');
-            if ($raw !== false) {
-                $seconds = (int) floatval(explode(' ', trim($raw))[0]);
-                $days = intdiv($seconds, 86400);
-                $hours = intdiv($seconds % 86400, 3600);
-                $result['uptime'] = "{$days}d {$hours}h";
-                $result['uptime_seconds'] = $seconds;
+        // System uptime (Linux, may be blocked by open_basedir)
+        try {
+            if (PHP_OS_FAMILY === 'Linux' && @file_exists('/proc/uptime')) {
+                $raw = @file_get_contents('/proc/uptime');
+                if ($raw !== false) {
+                    $seconds = (int) floatval(explode(' ', trim($raw))[0]);
+                    $days = intdiv($seconds, 86400);
+                    $hours = intdiv($seconds % 86400, 3600);
+                    $result['uptime'] = "{$days}d {$hours}h";
+                    $result['uptime_seconds'] = $seconds;
+                }
             }
+        } catch (\Throwable $e) {
+            $result['uptime'] = 'unavailable (open_basedir)';
         }
 
         return $result;
