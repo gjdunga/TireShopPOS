@@ -71,19 +71,26 @@ export function AuthProvider({ children }) {
       const data = await api.post('/auth/login', { username, password });
       setToken(data.token);
 
+      // Login response shape: { token, expires_at, user: { user_id, username, display_name, role, force_password_change, permissions } }
+      const u = data.user || {};
       const sessionUser = {
-        user_id: data.user_id,
-        username: data.username,
-        display_name: data.display_name,
-        role_name: data.role_name,
+        user_id: u.user_id,
+        username: u.username,
+        display_name: u.display_name,
+        role_name: u.role,  // API returns "role", context uses "role_name"
       };
       setUser(sessionUser);
 
-      if (data.force_password_change) {
+      if (u.force_password_change) {
         setForcePasswordChange(true);
       } else {
         setForcePasswordChange(false);
-        await loadPermissions(data.role_name);
+        // Use permissions from login response if available, else load from roles API
+        if (Array.isArray(u.permissions) && u.permissions.length > 0) {
+          setPermissions(new Set(u.permissions));
+        } else {
+          await loadPermissions(sessionUser.role_name);
+        }
       }
 
       return sessionUser;
@@ -120,16 +127,22 @@ export function AuthProvider({ children }) {
       try {
         const data = await api.get('/auth/session');
         if (data && data.user_id) {
+          const roleName = data.role || data.role_name;
           setUser({
             user_id: data.user_id,
             username: data.username,
             display_name: data.display_name,
-            role_name: data.role_name,
+            role_name: roleName,
           });
           if (data.force_password_change) {
             setForcePasswordChange(true);
           } else {
-            await loadPermissions(data.role_name);
+            // Use permissions from session response if available
+            if (Array.isArray(data.permissions) && data.permissions.length > 0) {
+              setPermissions(new Set(data.permissions));
+            } else {
+              await loadPermissions(roleName);
+            }
           }
         }
       } catch (err) {
