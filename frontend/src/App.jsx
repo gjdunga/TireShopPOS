@@ -60,6 +60,12 @@ import PurchaseOrderList from './pages/PurchaseOrderList.jsx';
 import PurchaseOrderDetail from './pages/PurchaseOrderDetail.jsx';
 import RefundList from './pages/RefundList.jsx';
 import QuoteTool from './pages/QuoteTool.jsx';
+import SettingsAdmin from './pages/SettingsAdmin.jsx';
+import WarrantyManager from './pages/WarrantyManager.jsx';
+import { WheelSearch, WheelDetail } from './pages/WheelPages.jsx';
+import FitmentSearch from './pages/FitmentSearch.jsx';
+import { StorefrontShell, StorefrontHome, StorefrontInventory, StorefrontTireDetail,
+         StorefrontFitment, StorefrontAppointments, StorefrontWarranty } from './pages/Storefront.jsx';
 import { lazy, Suspense } from 'react';
 const ReportsDashboard = lazy(() => import('./pages/ReportsDashboard.jsx'));
 const LazyPrintInvoice = lazy(() => import('./pages/PrintTemplates.jsx').then(m => ({ default: m.PrintInvoice })));
@@ -90,6 +96,14 @@ export default function App() {
           {/* Public routes (no layout shell) */}
           <Route path="/login" element={<Login />} />
           <Route path="/change-password" element={<PasswordChange />} />
+
+          {/* Public storefront (no auth, P3d) */}
+          <Route path="/shop" element={<StorefrontShell><StorefrontHome /></StorefrontShell>} />
+          <Route path="/shop/inventory" element={<StorefrontShell><StorefrontInventory /></StorefrontShell>} />
+          <Route path="/shop/inventory/:id" element={<StorefrontShell><StorefrontTireDetail /></StorefrontShell>} />
+          <Route path="/shop/fitment" element={<StorefrontShell><StorefrontFitment /></StorefrontShell>} />
+          <Route path="/shop/appointments" element={<StorefrontShell><StorefrontAppointments /></StorefrontShell>} />
+          <Route path="/shop/warranty" element={<StorefrontShell><StorefrontWarranty /></StorefrontShell>} />
 
           {/* Protected routes (require auth, wrapped in AppShell) */}
           <Route element={<ProtectedRoute />}>
@@ -131,8 +145,15 @@ export default function App() {
               {/* Admin (P2g) */}
               {/* Admin / Reports (P2g) */}
               <Route path="reports" element={<Suspense fallback={SuspenseFallback}><ReportsDashboard /></Suspense>} />
-              <Route path="audit"   element={<Placeholder title="Audit Log" chunk="P2g" />} />
-              <Route path="users"   element={<Placeholder title="User Management" chunk="P2g" />} />
+              <Route path="audit"   element={<Placeholder title="Audit Log" chunk="P3+" />} />
+
+              {/* Admin (P3) */}
+              <Route path="settings"           element={<SettingsAdmin />} />
+              <Route path="warranties"         element={<WarrantyManager />} />
+              <Route path="wheels"             element={<WheelSearch />} />
+              <Route path="wheels/:id"         element={<WheelDetail />} />
+              <Route path="fitment"            element={<FitmentSearch />} />
+              <Route path="users"              element={<Placeholder title="User Management" chunk="P3+" />} />
 
               {/* 404 within the shell */}
               <Route path="*" element={<NotFound />} />

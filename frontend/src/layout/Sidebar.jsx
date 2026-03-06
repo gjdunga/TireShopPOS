@@ -29,6 +29,8 @@ const NAV = [
       { label: 'Vehicles',       path: '/vehicles',    icon: '\u25B7', need: 'VEHICLE_MANAGE' },
       { label: 'Work Orders',    path: '/work-orders', icon: '\u2692', need: ['WORK_ORDER_CREATE', 'WORK_ORDER_ASSIGN'] },
       { label: 'Invoices',       path: '/invoices',    icon: '\u25A1', need: 'INVOICE_CREATE' },
+      { label: 'Wheels',         path: '/wheels',      icon: '\u25CB', need: ['INVENTORY_ADD', 'INVENTORY_EDIT'] },
+      { label: 'Fitment',        path: '/fitment',     icon: '\u2316', need: 'INVENTORY_VIEW' },
     ],
   },
   {
@@ -39,12 +41,14 @@ const NAV = [
       { label: 'Purchase Orders', path: '/purchase-orders', icon: '\u2263', need: ['PO_CREATE', 'PO_RECEIVE'] },
       { label: 'Refunds',        path: '/refunds',       icon: '\u21A9', need: ['REFUND_REQUEST', 'REFUND_APPROVE'] },
       { label: 'Quotes',         path: '/quotes',        icon: '\u2696', need: 'INVOICE_CREATE' },
+      { label: 'Warranties',     path: '/warranties',    icon: '\u2611', need: 'USER_MANAGE' },
     ],
   },
   {
     label: 'Admin',
     items: [
       { label: 'Reports',   path: '/reports',  icon: '\u25E4', need: 'REPORT_VIEW' },
+      { label: 'Settings', path: '/settings', icon: '\u2699', need: 'USER_MANAGE' },
       { label: 'Audit Log', path: '/audit',    icon: '\u2630', need: 'AUDIT_VIEW' },
       { label: 'Users',     path: '/users',    icon: '\u2302', need: 'USER_MANAGE' },
     ],
