@@ -64,6 +64,9 @@ import SettingsAdmin from './pages/SettingsAdmin.jsx';
 import WarrantyManager from './pages/WarrantyManager.jsx';
 import { WheelSearch, WheelDetail } from './pages/WheelPages.jsx';
 import FitmentSearch from './pages/FitmentSearch.jsx';
+import RecallChecker from './pages/RecallChecker.jsx';
+import BarcodeScanner from './pages/BarcodeScanner.jsx';
+import CustomerComm from './pages/CustomerComm.jsx';
 import { StorefrontShell, StorefrontHome, StorefrontInventory, StorefrontTireDetail,
          StorefrontFitment, StorefrontAppointments, StorefrontWarranty } from './pages/Storefront.jsx';
 import { lazy, Suspense } from 'react';
@@ -153,6 +156,9 @@ export default function App() {
               <Route path="wheels"             element={<WheelSearch />} />
               <Route path="wheels/:id"         element={<WheelDetail />} />
               <Route path="fitment"            element={<FitmentSearch />} />
+              <Route path="recalls"            element={<RecallChecker />} />
+              <Route path="scanner"            element={<BarcodeScanner />} />
+              <Route path="communications"     element={<CustomerComm />} />
               <Route path="users"              element={<Placeholder title="User Management" chunk="P3+" />} />
 
               {/* 404 within the shell */}
