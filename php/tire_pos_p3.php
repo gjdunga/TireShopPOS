@@ -585,8 +585,8 @@ function getPublicInventory(array $filters, int $limit = 24, int $offset = 0): a
     $params[] = $offset;
     // Exclude cost and internal fields from public query
     $rows = Database::query(
-        "SELECT t.tire_id, t.size_display, t.brand_name, t.model,
-                t.`condition`, t.tread_depth_32nds, t.retail_price, t.dot_tin,
+        "SELECT t.tire_id, t.size_display, t.brand_name, t.model_name,
+                t.`condition`, t.tread_depth_32nds, t.retail_price, t.dot_tin_raw,
                 t.width_mm, t.aspect_ratio, t.wheel_diameter, t.construction
          FROM v_tire_inventory t
          WHERE {$whereStr}
@@ -599,8 +599,8 @@ function getPublicInventory(array $filters, int $limit = 24, int $offset = 0): a
 
 function getPublicTireDetail(int $tireId): ?array {
     return Database::queryOne(
-        "SELECT t.tire_id, t.size_display, t.brand_name, t.model,
-                t.`condition`, t.tread_depth_32nds, t.retail_price, t.dot_tin,
+        "SELECT t.tire_id, t.size_display, t.brand_name, t.model_name,
+                t.`condition`, t.tread_depth_32nds, t.retail_price, t.dot_tin_raw,
                 t.width_mm, t.aspect_ratio, t.wheel_diameter, t.construction,
                 t.notes
          FROM v_tire_inventory t

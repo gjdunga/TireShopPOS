@@ -19,11 +19,11 @@ use App\Http\Middleware;
 
 function getTire(int $tireId): ?array {
     $tire = Database::queryOne(
-        "SELECT t.*, b.brand_name, tt.type_name, ct.construction_name
+        "SELECT t.*, b.brand_name, tt.type_label, ct.label AS construction_label
          FROM tires t
          LEFT JOIN lkp_brands b ON t.brand_id = b.brand_id
-         LEFT JOIN lkp_tire_types tt ON t.tire_type_id = tt.tire_type_id
-         LEFT JOIN lkp_construction_types ct ON t.construction_type_id = ct.construction_type_id
+         LEFT JOIN lkp_tire_types tt ON t.tire_type_id = tt.type_id
+         LEFT JOIN lkp_construction_types ct ON t.construction_id = ct.construction_id
          WHERE t.tire_id = ?",
         [$tireId]
     );
@@ -32,7 +32,7 @@ function getTire(int $tireId): ?array {
 
 function createTire(array $data, int $createdBy): int {
     $fields = [
-        'brand_id', 'tire_type_id', 'construction_type_id',
+        'brand_id', 'tire_type_id', 'construction_id',
         'width_mm', 'aspect_ratio', 'wheel_diameter', 'size_format',
         'speed_rating_id', 'load_index_id', 'load_construction_id',
         'model_name', 'full_size_string', 'dot_tin_raw', 'dot_mfg_week', 'dot_mfg_year',
@@ -60,6 +60,26 @@ function createTire(array $data, int $createdBy): int {
         $binds[] = 'available';
     }
 
+    // Default tire_type_id (NOT NULL, default to Passenger = 3)
+    if (!in_array('tire_type_id', $setCols, true)) {
+        $setCols[] = 'tire_type_id';
+        $binds[] = 3;
+    }
+
+    // Default construction_id (NOT NULL, default to Radial = 1)
+    if (!in_array('construction_id', $setCols, true)) {
+        $setCols[] = 'construction_id';
+        $binds[] = 1;
+    }
+
+    // Default bin location fields (NOT NULL in schema)
+    foreach (['bin_facility' => 'S', 'bin_shelf' => 'A', 'bin_level' => 1] as $binCol => $binDefault) {
+        if (!in_array($binCol, $setCols, true)) {
+            $setCols[] = $binCol;
+            $binds[] = $binDefault;
+        }
+    }
+
     $placeholders = implode(', ', array_fill(0, count($setCols), '?'));
     $colList = implode(', ', array_map(fn($c) => "`{$c}`", $setCols));
 
@@ -81,7 +101,7 @@ function updateTire(int $tireId, array $data, int $updatedBy): array {
     }
 
     $editable = [
-        'brand_id', 'tire_type_id', 'construction_type_id',
+        'brand_id', 'tire_type_id', 'construction_id',
         'model_name', 'full_size_string', 'dot_tin_raw', 'dot_mfg_week', 'dot_mfg_year',
         'tread_depth_32nds', 'condition', 'status',
         'cost', 'retail_price', 'bin_facility', 'bin_shelf', 'bin_level', 'notes'
@@ -911,9 +931,9 @@ function createPurchaseOrder(array $data, int $createdBy): int {
     $poNumber = nextPONumber();
 
     Database::execute(
-        "INSERT INTO purchase_orders (po_number, vendor_id, status, notes, created_by)
-         VALUES (?, ?, 'open', ?, ?)",
-        [$poNumber, $vendorId, $data['notes'] ?? null, $createdBy]
+        "INSERT INTO purchase_orders (po_number, vendor_id, order_date, status, notes, created_by)
+         VALUES (?, ?, ?, 'draft', ?, ?)",
+        [$poNumber, $vendorId, $data['order_date'] ?? date('Y-m-d'), $data['notes'] ?? null, $createdBy]
     );
 
     $newId = (int) Database::lastInsertId();
@@ -1066,15 +1086,15 @@ function createAppointment(array $data, int $createdBy): int {
 
     Database::execute(
         "INSERT INTO appointments (customer_id, vehicle_id, appointment_date, appointment_time,
-                                    duration_minutes, service_type, notes, status, created_by)
+                                    est_duration_min, service_requested, notes, status, created_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'scheduled', ?)",
         [
             isset($data['customer_id']) ? (int) $data['customer_id'] : null,
             isset($data['vehicle_id']) ? (int) $data['vehicle_id'] : null,
             $date,
             $data['appointment_time'] ?? null,
-            (int) ($data['duration_minutes'] ?? 60),
-            $data['service_type'] ?? null,
+            (int) ($data['est_duration_min'] ?? $data['duration_minutes'] ?? 60),
+            $data['service_requested'] ?? $data['service_type'] ?? null,
             $data['notes'] ?? null,
             $createdBy,
         ]

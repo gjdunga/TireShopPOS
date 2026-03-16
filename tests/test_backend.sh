@@ -116,13 +116,20 @@ TABLE_COUNT=$($MC -N -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TA
 echo "  Tables loaded: $TABLE_COUNT"
 
 # Seed minimum data for public endpoints
-$MC "$TEST_DB" -e "INSERT IGNORE INTO shop_settings (setting_key, setting_value) VALUES
-  ('shop_name', 'Test Tire Shop'), ('shop_phone', '719-555-0000'),
-  ('shop_address', '123 Test St'), ('shop_city', 'Florence'),
-  ('shop_state', 'CO'), ('shop_zip', '81226'),
-  ('tax_rate', '0.029'), ('tire_fee_new', '1.50'),
-  ('tire_fee_used', '1.00'), ('disposal_fee', '3.50'),
-  ('website_enabled', '1');" 2>/dev/null
+$MC "$TEST_DB" -e "INSERT IGNORE INTO shop_settings (setting_key, setting_value, label, category, is_public) VALUES
+  ('shop_name', 'Test Tire Shop', 'Shop Name', 'general', 1),
+  ('shop_phone', '719-555-0000', 'Phone', 'general', 1),
+  ('shop_address', '123 Test St', 'Address', 'general', 1),
+  ('shop_city', 'Florence', 'City', 'general', 1),
+  ('shop_state', 'CO', 'State', 'general', 1),
+  ('shop_zip', '81226', 'ZIP', 'general', 1),
+  ('tax_rate', '0.029', 'Tax Rate', 'financial', 0),
+  ('tire_fee_new', '1.50', 'New Tire Fee', 'financial', 0),
+  ('tire_fee_used', '1.00', 'Used Tire Fee', 'financial', 0),
+  ('disposal_fee', '3.50', 'Disposal Fee', 'financial', 0),
+  ('website_enabled', '1', 'Website Enabled', 'website', 0);" 2>/dev/null
+# Migration 003 seeds website_enabled=0, so force update it
+$MC "$TEST_DB" -e "UPDATE shop_settings SET setting_value='1' WHERE setting_key='website_enabled';" 2>/dev/null
 $MC "$TEST_DB" -e "INSERT IGNORE INTO website_config (config_key, config_value) VALUES
   ('hero_title', 'Test Shop'), ('hero_subtitle', 'Testing'),
   ('show_inventory', '1'), ('show_appointments', '1'),
@@ -309,6 +316,7 @@ RESP=$(api_auth -X POST -d '{"brand_id":1,"full_size_string":"265/70R17","condit
 CODE=$(extract_code "$RESP")
 BODY=$(extract_body "$RESP")
 assert_status "POST /api/tires returns 200" "200" "$CODE" "$BODY"
+if [ "$CODE" != "200" ]; then echo "    DEBUG tire create:"; echo "$BODY" | head -8; fi
 assert "Tire create: returns tire_id" '"tire_id"' "$BODY"
 TIRE_ID=$(echo "$BODY" | tr -d ' \n\r\t' | grep -o '"tire_id":[0-9]*' | head -1 | sed 's/"tire_id"://')
 
@@ -361,6 +369,7 @@ RESP=$(api_auth -X POST -d "{\"customer_id\":$CUST_ID,\"vehicle_id\":$VEH_ID,\"s
 CODE=$(extract_code "$RESP")
 BODY=$(extract_body "$RESP")
 assert_status "POST /api/appointments returns 200" "200" "$CODE" "$BODY"
+if [ "$CODE" != "200" ]; then echo "    DEBUG appt create:"; echo "$BODY" | head -8; fi
 assert "Appointment create: returns appointment_id" '"appointment_id"' "$BODY"
 
 RESP=$(api_auth "$API_BASE/appointments")
@@ -371,13 +380,17 @@ assert_status "GET /api/appointments (list) returns 200" "200" "$CODE" "$(extrac
 echo -e "\n  --- Purchase Orders ---"
 # Seed a vendor first
 RESP=$(api_auth -X POST -d '{"vendor_name":"ATD","contact_name":"Sales","phone":"800-555-0001"}' "$API_BASE/vendors")
-VENDOR_ID=$(echo "$RESP" | tr -d ' \n\r\t' | grep -o '"vendor_id":[0-9]*' | head -1 | sed 's/"vendor_id"://')
+VBODY=$(extract_body "$RESP")
+VCODE=$(extract_code "$RESP")
+if [ "$VCODE" != "200" ]; then echo "    DEBUG vendor create: HTTP $VCODE $(echo "$VBODY" | tr -d '\n' | grep -o '"message":"[^"]*"' | head -1)"; fi
+VENDOR_ID=$(echo "$VBODY" | tr -d ' \n\r\t' | grep -o '"vendor_id":[0-9]*' | head -1 | sed 's/"vendor_id"://')
 [ -z "$VENDOR_ID" ] && VENDOR_ID=1
 
 RESP=$(api_auth -X POST -d "{\"vendor_id\":$VENDOR_ID,\"notes\":\"Test PO\"}" "$API_BASE/purchase-orders")
 CODE=$(extract_code "$RESP")
 BODY=$(extract_body "$RESP")
 assert_status "POST /api/purchase-orders returns 200" "200" "$CODE" "$BODY"
+if [ "$CODE" != "200" ]; then echo "    DEBUG PO create:"; echo "$BODY" | head -8; fi
 assert "PO create: returns po_id" '"po_id"' "$BODY"
 
 RESP=$(api_auth "$API_BASE/purchase-orders")
@@ -450,7 +463,9 @@ assert_status "GET /api/public/shop-info (no auth) returns 200" "200" "$CODE" "$
 
 RESP=$(api "$API_BASE/public/inventory")
 CODE=$(extract_code "$RESP")
-assert_status "GET /api/public/inventory (no auth) returns 200" "200" "$CODE" "$(extract_body "$RESP")"
+BODY=$(extract_body "$RESP")
+assert_status "GET /api/public/inventory (no auth) returns 200" "200" "$CODE" "$BODY"
+if [ "$CODE" != "200" ]; then echo "    DEBUG public inventory:"; echo "$BODY" | head -8; fi
 
 RESP=$(api "$API_BASE/public/brands")
 CODE=$(extract_code "$RESP")

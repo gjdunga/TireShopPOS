@@ -6,22 +6,30 @@
 --
 -- full_size_string: human-readable tire size (e.g., "265/70R17") used by
 -- CRUD functions, marketplace listings, work order detail, public inventory.
--- The schema stores individual components (width_mm, aspect_ratio, wheel_diameter)
--- and computes size_display in v_tire_inventory, but 30+ CRUD references
--- expect a stored full_size_string column.
 --
 -- DunganSoft Technologies, March 2026
 -- ============================================================================
 
-ALTER TABLE work_orders
-    ADD COLUMN IF NOT EXISTS estimated_price DECIMAL(10,2) DEFAULT NULL
-    COMMENT 'Preliminary price estimate shown to customer'
-    AFTER special_notes;
+-- Use procedures to safely add columns (MySQL 8.0 lacks ADD COLUMN IF NOT EXISTS)
+DROP PROCEDURE IF EXISTS _mig007;
+DELIMITER //
+CREATE PROCEDURE _mig007()
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_orders' AND COLUMN_NAME = 'estimated_price') THEN
+        ALTER TABLE work_orders ADD COLUMN estimated_price DECIMAL(10,2) DEFAULT NULL
+            COMMENT 'Preliminary price estimate shown to customer' AFTER special_notes;
+    END IF;
 
-ALTER TABLE tires
-    ADD COLUMN IF NOT EXISTS full_size_string VARCHAR(40) DEFAULT NULL
-    COMMENT 'Human-readable size, e.g., 265/70R17'
-    AFTER model_name;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tires' AND COLUMN_NAME = 'full_size_string') THEN
+        ALTER TABLE tires ADD COLUMN full_size_string VARCHAR(40) DEFAULT NULL
+            COMMENT 'Human-readable size, e.g., 265/70R17' AFTER model_name;
+    END IF;
+END //
+DELIMITER ;
+CALL _mig007();
+DROP PROCEDURE IF EXISTS _mig007;
 
 -- Backfill full_size_string from existing component columns
 UPDATE tires SET full_size_string = CONCAT(width_mm, '/', aspect_ratio, 'R', CAST(wheel_diameter AS UNSIGNED))
