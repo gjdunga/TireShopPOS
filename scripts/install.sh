@@ -62,56 +62,103 @@ version_ge() {
     return 0
 }
 
+# Compare semver: returns 0 if $1 <= $2
+version_le() {
+    local IFS=.
+    local i a=($1) b=($2)
+    for ((i=0; i<${#b[@]}; i++)); do
+        local av=${a[i]:-0} bv=${b[i]:-0}
+        if ((av < bv)); then return 0; fi
+        if ((av > bv)); then return 1; fi
+    done
+    return 0
+}
+
 check_dependencies() {
+    # Load pinned versions
+    local vconf="$PROJECT_ROOT/config/versions.conf"
+    if [[ ! -f "$vconf" ]]; then
+        err "config/versions.conf not found. Cannot check dependencies."
+        return 1
+    fi
+    source "$vconf"
+
     local ok=0 total=0 warnings=0
 
-    echo -e "\n${BOLD}Dependency Check${NC}"
+    echo -e "\n${BOLD}Dependency Check${NC} (pinned to config/versions.conf)"
     echo "--------------------------------------"
 
-    # PHP
+    # -- PHP --
     ((total++))
     if command -v php >/dev/null 2>&1; then
         local php_ver
         php_ver=$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION . "." . PHP_RELEASE_VERSION;' 2>/dev/null)
-        if version_ge "$php_ver" "8.1.0"; then
-            echo -e "  ${GREEN}OK${NC}  PHP $php_ver (>= 8.1 required)"
+        if version_ge "$php_ver" "$PHP_MIN" && version_le "$php_ver" "$PHP_MAX"; then
+            echo -e "  ${GREEN}OK${NC}  PHP $php_ver (range: $PHP_MIN .. $PHP_MAX)"
             ((ok++))
+        elif version_ge "$php_ver" "$PHP_MIN"; then
+            echo -e "  ${YELLOW}WARN${NC}  PHP $php_ver (above tested max $PHP_MAX, may work)"
+            ((ok++)); ((warnings++))
         else
-            echo -e "  ${RED}FAIL${NC}  PHP $php_ver (>= 8.1 required)"
+            echo -e "  ${RED}FAIL${NC}  PHP $php_ver (need >= $PHP_MIN, recommend $PHP_RECOMMENDED)"
         fi
     else
-        echo -e "  ${RED}FAIL${NC}  PHP not found"
+        echo -e "  ${RED}FAIL${NC}  PHP not found (need $PHP_RECOMMENDED, apt install php$PHP_RECOMMENDED)"
     fi
 
-    # PHP extensions
-    for ext in mysqli pdo_mysql bcmath curl mbstring json; do
+    # -- PHP extensions --
+    local php_major_minor="${php_ver%.*}"  # e.g., "8.3" from "8.3.6"
+    for ext in $PHP_EXTENSIONS; do
         ((total++))
         if php -m 2>/dev/null | grep -qi "^${ext}$" || php -r "exit(extension_loaded('$ext') ? 0 : 1);" 2>/dev/null; then
             echo -e "  ${GREEN}OK${NC}  PHP ext: $ext"
             ((ok++))
         else
-            # json is bundled in 8.0+ and may not show in php -m
             if [[ "$ext" == "json" ]]; then
-                echo -e "  ${GREEN}OK${NC}  PHP ext: $ext (bundled)"
+                echo -e "  ${GREEN}OK${NC}  PHP ext: $ext (bundled in 8.x)"
                 ((ok++))
             else
-                echo -e "  ${RED}FAIL${NC}  PHP ext: $ext (install: apt install php${php_ver%%.*}-$ext)"
+                echo -e "  ${RED}FAIL${NC}  PHP ext: $ext (apt install php${php_major_minor}-${ext})"
             fi
         fi
     done
 
-    # MySQL client
+    # -- Database engine --
     ((total++))
     if command -v mysql >/dev/null 2>&1; then
-        local mysql_client_ver
-        mysql_client_ver=$(mysql --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-        echo -e "  ${GREEN}OK${NC}  mysql client: $mysql_client_ver"
-        ((ok++))
+        # Detect engine from server, not client
+        local server_ver=""
+        if [[ -n "${DB_DATABASE:-}" ]]; then
+            server_ver=$(mysql $MYSQL_AUTH -N -e "SELECT VERSION();" 2>/dev/null | head -1)
+        fi
+        if [[ -z "$server_ver" ]]; then
+            server_ver=$(mysql --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        fi
+
+        if echo "$server_ver" | grep -qi "mariadb"; then
+            local clean_ver
+            clean_ver=$(echo "$server_ver" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+            if version_ge "$clean_ver" "$MARIADB_MIN" && version_le "$clean_ver" "$MARIADB_MAX"; then
+                echo -e "  ${GREEN}OK${NC}  MariaDB $clean_ver (range: $MARIADB_MIN .. $MARIADB_MAX)"
+                ((ok++))
+            else
+                echo -e "  ${RED}FAIL${NC}  MariaDB $clean_ver (need $MARIADB_MIN .. $MARIADB_MAX)"
+            fi
+        else
+            local clean_ver
+            clean_ver=$(echo "$server_ver" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+            if version_ge "$clean_ver" "$MYSQL_MIN" && version_le "$clean_ver" "$MYSQL_MAX"; then
+                echo -e "  ${GREEN}OK${NC}  MySQL $clean_ver (range: $MYSQL_MIN .. $MYSQL_MAX)"
+                ((ok++))
+            else
+                echo -e "  ${RED}FAIL${NC}  MySQL $clean_ver (need $MYSQL_MIN .. $MYSQL_MAX)"
+            fi
+        fi
     else
-        echo -e "  ${RED}FAIL${NC}  mysql client not found (apt install mysql-client or mariadb-client)"
+        echo -e "  ${RED}FAIL${NC}  mysql client not found (apt install mariadb-client or mysql-client)"
     fi
 
-    # mysqldump
+    # -- mysqldump --
     ((total++))
     if command -v mysqldump >/dev/null 2>&1; then
         echo -e "  ${GREEN}OK${NC}  mysqldump"
@@ -120,34 +167,44 @@ check_dependencies() {
         echo -e "  ${RED}FAIL${NC}  mysqldump not found (needed for backups)"
     fi
 
-    # Node.js
+    # -- Node.js --
     ((total++))
     if command -v node >/dev/null 2>&1; then
         local node_ver
         node_ver=$(node --version 2>/dev/null | tr -d 'v')
-        if version_ge "$node_ver" "20.0.0"; then
-            echo -e "  ${GREEN}OK${NC}  Node.js $node_ver (>= 20 required for builds)"
+        if version_ge "$node_ver" "$NODE_MIN" && version_le "$node_ver" "$NODE_MAX"; then
+            echo -e "  ${GREEN}OK${NC}  Node.js $node_ver (range: $NODE_MIN .. $NODE_MAX)"
             ((ok++))
+        elif version_ge "$node_ver" "$NODE_MIN"; then
+            echo -e "  ${YELLOW}WARN${NC}  Node.js $node_ver (above tested max $NODE_MAX)"
+            ((ok++)); ((warnings++))
         else
-            echo -e "  ${YELLOW}WARN${NC}  Node.js $node_ver (>= 20 recommended, builds may fail)"
+            echo -e "  ${YELLOW}WARN${NC}  Node.js $node_ver (need >= $NODE_MIN LTS for builds)"
             ((ok++)); ((warnings++))
         fi
     else
-        echo -e "  ${YELLOW}WARN${NC}  Node.js not found (needed only for frontend builds)"
+        echo -e "  ${YELLOW}WARN${NC}  Node.js not found (need $NODE_RECOMMENDED LTS for frontend builds)"
         ((ok++)); ((warnings++))
     fi
 
-    # npm
+    # -- npm --
     ((total++))
     if command -v npm >/dev/null 2>&1; then
-        echo -e "  ${GREEN}OK${NC}  npm $(npm --version 2>/dev/null)"
-        ((ok++))
+        local npm_ver
+        npm_ver=$(npm --version 2>/dev/null)
+        if version_ge "$npm_ver" "$NPM_MIN"; then
+            echo -e "  ${GREEN}OK${NC}  npm $npm_ver (>= $NPM_MIN)"
+            ((ok++))
+        else
+            echo -e "  ${YELLOW}WARN${NC}  npm $npm_ver (recommend >= $NPM_MIN)"
+            ((ok++)); ((warnings++))
+        fi
     else
-        echo -e "  ${YELLOW}WARN${NC}  npm not found (needed only for frontend builds)"
+        echo -e "  ${YELLOW}WARN${NC}  npm not found (needed for frontend builds)"
         ((ok++)); ((warnings++))
     fi
 
-    # git
+    # -- git --
     ((total++))
     if command -v git >/dev/null 2>&1; then
         echo -e "  ${GREEN}OK${NC}  git $(git --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
@@ -157,7 +214,7 @@ check_dependencies() {
         ((ok++)); ((warnings++))
     fi
 
-    # curl
+    # -- curl --
     ((total++))
     if command -v curl >/dev/null 2>&1; then
         echo -e "  ${GREEN}OK${NC}  curl"
@@ -166,7 +223,7 @@ check_dependencies() {
         echo -e "  ${RED}FAIL${NC}  curl not found (apt install curl)"
     fi
 
-    # sha256sum
+    # -- sha256sum --
     ((total++))
     if command -v sha256sum >/dev/null 2>&1; then
         echo -e "  ${GREEN}OK${NC}  sha256sum"
@@ -176,23 +233,33 @@ check_dependencies() {
         ((ok++)); ((warnings++))
     fi
 
-    # Disk space (need at least 200MB free in project root)
+    # -- Disk space --
     ((total++))
     local free_mb
     free_mb=$(df -m "$PROJECT_ROOT" 2>/dev/null | awk 'NR==2{print $4}')
     free_mb=${free_mb:-0}
     if [[ "$free_mb" -ge 200 ]]; then
-        echo -e "  ${GREEN}OK${NC}  Disk: ${free_mb}MB free"
+        echo -e "  ${GREEN}OK${NC}  Disk: ${free_mb}MB free (>= 200MB required)"
         ((ok++))
     else
         echo -e "  ${RED}FAIL${NC}  Disk: ${free_mb}MB free (need >= 200MB)"
     fi
 
+    # -- .env file --
+    ((total++))
+    if [[ -f "$PROJECT_ROOT/.env" ]]; then
+        echo -e "  ${GREEN}OK${NC}  .env file exists"
+        ((ok++))
+    else
+        echo -e "  ${RED}FAIL${NC}  .env file missing (cp deploy/.env.production.example .env)"
+    fi
+
     echo "--------------------------------------"
     echo -e "  Result: ${ok}/${total} passed"
     if [[ $warnings -gt 0 ]]; then
-        echo -e "  ${YELLOW}$warnings warning(s)${NC} (non-critical)"
+        echo -e "  ${YELLOW}$warnings warning(s)${NC} (non-critical, builds may be affected)"
     fi
+    echo -e "  Pinned to: PHP $PHP_RECOMMENDED, MariaDB $MARIADB_RECOMMENDED / MySQL $MYSQL_RECOMMENDED, Node $NODE_RECOMMENDED LTS"
 
     if [[ $ok -lt $total ]]; then
         echo ""
@@ -933,6 +1000,7 @@ main() {
             show_status
             ;;
         deps)
+            load_env 2>/dev/null || true
             check_dependencies
             ;;
     esac
