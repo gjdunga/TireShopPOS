@@ -5,18 +5,23 @@
 #
 # Usage:
 #   ./scripts/install.sh                Interactive install/upgrade
-#   ./scripts/install.sh --upgrade      Non-interactive upgrade only
-#   ./scripts/install.sh --check        Check for available upgrades
+#   ./scripts/install.sh --upgrade      Non-interactive: apply pending migrations
+#   ./scripts/install.sh --full-upgrade Pull code, rebuild frontend, migrate
+#   ./scripts/install.sh --check        Check for available upgrades on GitHub
 #   ./scripts/install.sh --status       Show current schema version
+#   ./scripts/install.sh --deps         Check system dependencies
 #
 # Capabilities:
+#   - Checks all dependencies before install (PHP, extensions, MySQL, Node, etc.)
 #   - Detects MySQL vs MariaDB and stores engine info
 #   - Fresh install: loads base schema + all migrations
 #   - Upgrade: applies only missing migrations in order
+#   - Full upgrade: git pull + dependency check + frontend rebuild + migrate
 #   - Wipe and reinstall: backs up, drops all tables, reinstalls
 #   - Checks GitHub repo for new migrations not yet applied
 #   - Tracks every migration in schema_migrations (checksum, duration, errors)
 #   - Records install/upgrade history in schema_version
+#   - Auto-detects Virtualmin layout and rsyncs frontend to public_html
 #
 # Compatible with MySQL 8.0+ and MariaDB 10.6+.
 #
@@ -40,6 +45,281 @@ log()  { echo -e "${GREEN}[*]${NC} $1"; }
 warn() { echo -e "${YELLOW}[!]${NC} $1"; }
 err()  { echo -e "${RED}[X]${NC} $1"; }
 info() { echo -e "${CYAN}[i]${NC} $1"; }
+
+# ============================================================================
+# Dependency checks
+# ============================================================================
+
+# Compare semver: returns 0 if $1 >= $2
+version_ge() {
+    local IFS=.
+    local i a=($1) b=($2)
+    for ((i=0; i<${#b[@]}; i++)); do
+        local av=${a[i]:-0} bv=${b[i]:-0}
+        if ((av > bv)); then return 0; fi
+        if ((av < bv)); then return 1; fi
+    done
+    return 0
+}
+
+check_dependencies() {
+    local ok=0 total=0 warnings=0
+
+    echo -e "\n${BOLD}Dependency Check${NC}"
+    echo "--------------------------------------"
+
+    # PHP
+    ((total++))
+    if command -v php >/dev/null 2>&1; then
+        local php_ver
+        php_ver=$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION . "." . PHP_RELEASE_VERSION;' 2>/dev/null)
+        if version_ge "$php_ver" "8.1.0"; then
+            echo -e "  ${GREEN}OK${NC}  PHP $php_ver (>= 8.1 required)"
+            ((ok++))
+        else
+            echo -e "  ${RED}FAIL${NC}  PHP $php_ver (>= 8.1 required)"
+        fi
+    else
+        echo -e "  ${RED}FAIL${NC}  PHP not found"
+    fi
+
+    # PHP extensions
+    for ext in mysqli pdo_mysql bcmath curl mbstring json; do
+        ((total++))
+        if php -m 2>/dev/null | grep -qi "^${ext}$" || php -r "exit(extension_loaded('$ext') ? 0 : 1);" 2>/dev/null; then
+            echo -e "  ${GREEN}OK${NC}  PHP ext: $ext"
+            ((ok++))
+        else
+            # json is bundled in 8.0+ and may not show in php -m
+            if [[ "$ext" == "json" ]]; then
+                echo -e "  ${GREEN}OK${NC}  PHP ext: $ext (bundled)"
+                ((ok++))
+            else
+                echo -e "  ${RED}FAIL${NC}  PHP ext: $ext (install: apt install php${php_ver%%.*}-$ext)"
+            fi
+        fi
+    done
+
+    # MySQL client
+    ((total++))
+    if command -v mysql >/dev/null 2>&1; then
+        local mysql_client_ver
+        mysql_client_ver=$(mysql --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        echo -e "  ${GREEN}OK${NC}  mysql client: $mysql_client_ver"
+        ((ok++))
+    else
+        echo -e "  ${RED}FAIL${NC}  mysql client not found (apt install mysql-client or mariadb-client)"
+    fi
+
+    # mysqldump
+    ((total++))
+    if command -v mysqldump >/dev/null 2>&1; then
+        echo -e "  ${GREEN}OK${NC}  mysqldump"
+        ((ok++))
+    else
+        echo -e "  ${RED}FAIL${NC}  mysqldump not found (needed for backups)"
+    fi
+
+    # Node.js
+    ((total++))
+    if command -v node >/dev/null 2>&1; then
+        local node_ver
+        node_ver=$(node --version 2>/dev/null | tr -d 'v')
+        if version_ge "$node_ver" "20.0.0"; then
+            echo -e "  ${GREEN}OK${NC}  Node.js $node_ver (>= 20 required for builds)"
+            ((ok++))
+        else
+            echo -e "  ${YELLOW}WARN${NC}  Node.js $node_ver (>= 20 recommended, builds may fail)"
+            ((ok++)); ((warnings++))
+        fi
+    else
+        echo -e "  ${YELLOW}WARN${NC}  Node.js not found (needed only for frontend builds)"
+        ((ok++)); ((warnings++))
+    fi
+
+    # npm
+    ((total++))
+    if command -v npm >/dev/null 2>&1; then
+        echo -e "  ${GREEN}OK${NC}  npm $(npm --version 2>/dev/null)"
+        ((ok++))
+    else
+        echo -e "  ${YELLOW}WARN${NC}  npm not found (needed only for frontend builds)"
+        ((ok++)); ((warnings++))
+    fi
+
+    # git
+    ((total++))
+    if command -v git >/dev/null 2>&1; then
+        echo -e "  ${GREEN}OK${NC}  git $(git --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
+        ((ok++))
+    else
+        echo -e "  ${YELLOW}WARN${NC}  git not found (needed for upgrade checks)"
+        ((ok++)); ((warnings++))
+    fi
+
+    # curl
+    ((total++))
+    if command -v curl >/dev/null 2>&1; then
+        echo -e "  ${GREEN}OK${NC}  curl"
+        ((ok++))
+    else
+        echo -e "  ${RED}FAIL${NC}  curl not found (apt install curl)"
+    fi
+
+    # sha256sum
+    ((total++))
+    if command -v sha256sum >/dev/null 2>&1; then
+        echo -e "  ${GREEN}OK${NC}  sha256sum"
+        ((ok++))
+    else
+        echo -e "  ${YELLOW}WARN${NC}  sha256sum not found (checksums will be empty)"
+        ((ok++)); ((warnings++))
+    fi
+
+    # Disk space (need at least 200MB free in project root)
+    ((total++))
+    local free_mb
+    free_mb=$(df -m "$PROJECT_ROOT" 2>/dev/null | awk 'NR==2{print $4}')
+    free_mb=${free_mb:-0}
+    if [[ "$free_mb" -ge 200 ]]; then
+        echo -e "  ${GREEN}OK${NC}  Disk: ${free_mb}MB free"
+        ((ok++))
+    else
+        echo -e "  ${RED}FAIL${NC}  Disk: ${free_mb}MB free (need >= 200MB)"
+    fi
+
+    echo "--------------------------------------"
+    echo -e "  Result: ${ok}/${total} passed"
+    if [[ $warnings -gt 0 ]]; then
+        echo -e "  ${YELLOW}$warnings warning(s)${NC} (non-critical)"
+    fi
+
+    if [[ $ok -lt $total ]]; then
+        echo ""
+        err "Required dependencies missing. Fix the FAIL items above before proceeding."
+        return 1
+    fi
+
+    return 0
+}
+
+# ============================================================================
+# Frontend build and deploy
+# ============================================================================
+
+do_rebuild_frontend() {
+    local frontend_dir="$PROJECT_ROOT/frontend"
+
+    if [[ ! -d "$frontend_dir" ]]; then
+        warn "No frontend/ directory found. Skipping frontend build."
+        return 0
+    fi
+
+    if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+        warn "Node.js/npm not available. Skipping frontend build."
+        warn "If this is a production server, build on a dev machine and deploy dist/."
+        return 0
+    fi
+
+    log "Installing frontend dependencies..."
+    (cd "$frontend_dir" && npm install --no-audit --no-fund 2>&1 | tail -3)
+    if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+        err "npm install failed."
+        return 1
+    fi
+
+    log "Building frontend (Vite)..."
+    (cd "$frontend_dir" && npx vite build 2>&1 | tail -8)
+    if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+        err "Vite build failed."
+        return 1
+    fi
+
+    # If Virtualmin layout detected, rsync to public_html
+    local public_html
+    public_html=$(find "$(dirname "$PROJECT_ROOT")" -maxdepth 1 -name "public_html" -type d 2>/dev/null | head -1)
+
+    if [[ -n "$public_html" && -d "$public_html" ]]; then
+        log "Deploying frontend to $public_html ..."
+        rsync -a --delete "$frontend_dir/dist/" "$public_html/" \
+            --exclude='api/' --exclude='uploads/' --exclude='.htaccess' 2>/dev/null
+        log "Frontend deployed to public_html."
+    else
+        log "Frontend built to frontend/dist/. No public_html detected for auto-deploy."
+    fi
+
+    return 0
+}
+
+# ============================================================================
+# Git pull
+# ============================================================================
+
+do_git_pull() {
+    if ! command -v git >/dev/null 2>&1; then
+        warn "git not found. Skipping code pull."
+        return 1
+    fi
+
+    if [[ ! -d "$PROJECT_ROOT/.git" ]]; then
+        warn "Not a git repository. Skipping code pull."
+        return 1
+    fi
+
+    log "Pulling latest code from $GITHUB_BRANCH ..."
+    local output
+    output=$(cd "$PROJECT_ROOT" && git pull origin "$GITHUB_BRANCH" 2>&1)
+    local exit_code=$?
+
+    if [[ $exit_code -ne 0 ]]; then
+        err "git pull failed:"
+        echo "$output" | head -5
+        return 1
+    fi
+
+    if echo "$output" | grep -q "Already up to date"; then
+        info "Code is already up to date."
+        return 0
+    fi
+
+    log "Code updated."
+    # Show what changed
+    echo "$output" | head -10
+    return 0
+}
+
+# ============================================================================
+# Full upgrade: pull + deps + rebuild + migrate
+# ============================================================================
+
+do_full_upgrade() {
+    log "Starting full upgrade..."
+
+    # Step 1: Pull code
+    local code_changed=0
+    if do_git_pull; then
+        code_changed=1
+    fi
+
+    # Step 2: Check deps
+    if ! check_dependencies; then
+        err "Dependency check failed. Fix issues before continuing."
+        return 1
+    fi
+
+    # Step 3: Rebuild frontend (only if code changed or dist/ missing)
+    if [[ $code_changed -eq 1 ]] || [[ ! -d "$PROJECT_ROOT/frontend/dist" ]]; then
+        do_rebuild_frontend
+    else
+        info "Frontend dist/ exists and no code changes detected. Skipping rebuild."
+    fi
+
+    # Step 4: Apply pending migrations
+    do_upgrade
+
+    echo ""
+    log "Full upgrade complete."
+}
 
 # ============================================================================
 # Load DB credentials from .env
@@ -380,6 +660,12 @@ show_status() {
 # ============================================================================
 
 do_fresh_install() {
+    log "Running dependency check..."
+    if ! check_dependencies; then
+        err "Cannot proceed with install. Fix dependency issues first."
+        return 1
+    fi
+
     log "Starting fresh install..."
 
     # Base schema
@@ -507,18 +793,20 @@ interactive_menu() {
     echo "  What would you like to do?"
     echo ""
     echo "    1) Fresh install (empty database required)"
-    echo "    2) Upgrade (apply pending migrations)"
-    echo "    3) Wipe and reinstall (backs up first)"
-    echo "    4) Check for updates on GitHub"
-    echo "    5) Show full status"
-    echo "    6) Exit"
+    echo "    2) Upgrade database (apply pending migrations only)"
+    echo "    3) Full upgrade (git pull, rebuild frontend, migrate)"
+    echo "    4) Wipe and reinstall (backs up first)"
+    echo "    5) Check for updates on GitHub"
+    echo "    6) Check dependencies"
+    echo "    7) Show full status"
+    echo "    8) Exit"
     echo ""
-    read -p "  Choice [1-6]: " choice
+    read -p "  Choice [1-8]: " choice
 
     case "$choice" in
         1)
             if [[ "$TABLE_COUNT" -gt 0 ]]; then
-                err "Database has $TABLE_COUNT tables. Use option 3 to wipe first."
+                err "Database has $TABLE_COUNT tables. Use option 4 to wipe first."
                 return 1
             fi
             do_fresh_install
@@ -531,6 +819,13 @@ interactive_menu() {
             do_upgrade
             ;;
         3)
+            if [[ "$TABLE_COUNT" -eq 0 ]]; then
+                err "Database is empty. Use option 1 for fresh install."
+                return 1
+            fi
+            do_full_upgrade
+            ;;
+        4)
             if [[ "$TABLE_COUNT" -eq 0 ]]; then
                 warn "Database is already empty. Proceeding with fresh install."
                 do_fresh_install
@@ -561,13 +856,16 @@ interactive_menu() {
             TABLE_COUNT=0
             do_fresh_install
             ;;
-        4)
+        5)
             check_github_updates
             ;;
-        5)
+        6)
+            check_dependencies
+            ;;
+        7)
             show_status
             ;;
-        6)
+        8)
             info "Bye."
             exit 0
             ;;
@@ -587,15 +885,19 @@ main() {
 
     for arg in "$@"; do
         case "$arg" in
-            --upgrade)  mode="upgrade" ;;
-            --check)    mode="check" ;;
-            --status)   mode="status" ;;
+            --upgrade)       mode="upgrade" ;;
+            --full-upgrade)  mode="full-upgrade" ;;
+            --check)         mode="check" ;;
+            --status)        mode="status" ;;
+            --deps)          mode="deps" ;;
             --help|-h)
-                echo "Usage: $0 [--upgrade|--check|--status|--help]"
-                echo "  (no args)   Interactive installer menu"
-                echo "  --upgrade   Non-interactive: apply pending migrations"
-                echo "  --check     Check GitHub for new migrations"
-                echo "  --status    Show current schema version and migration history"
+                echo "Usage: $0 [--upgrade|--full-upgrade|--check|--status|--deps|--help]"
+                echo "  (no args)       Interactive installer menu"
+                echo "  --upgrade       Apply pending database migrations only"
+                echo "  --full-upgrade  Git pull + rebuild frontend + migrate"
+                echo "  --check         Check GitHub for new migrations"
+                echo "  --status        Show schema version and migration history"
+                echo "  --deps          Check system dependencies"
                 exit 0
                 ;;
             *)
@@ -615,6 +917,12 @@ main() {
             check_db_state
             do_upgrade
             ;;
+        full-upgrade)
+            load_env
+            detect_engine
+            check_db_state
+            do_full_upgrade
+            ;;
         check)
             load_env
             detect_engine
@@ -623,6 +931,9 @@ main() {
             ;;
         status)
             show_status
+            ;;
+        deps)
+            check_dependencies
             ;;
     esac
 }
