@@ -149,22 +149,6 @@ function parseTireSize(string $raw): ?array {
     return null; // Invalid format
 }
 
-/**
- * Formats stored tire size components back into display string.
- * Reads from tires table columns: size_format, width_mm, aspect_ratio,
- * construction code (from lkp_construction_types), wheel_diameter.
- */
-function formatTireSize(string $fmt, int $width, int $aspect, string $constr, float $rim): string {
-    if ($fmt === 'flotation') {
-        $diam = $width / 10;
-        $wid  = $aspect / 10;
-        return "{$diam}x{$wid}{$constr}{$rim}";
-    }
-    // Metric
-    $rimStr = (fmod($rim, 1.0) == 0) ? (int) $rim : $rim;
-    return "{$width}/{$aspect}{$constr}{$rimStr}";
-}
-
 
 // ============================================================================
 // 3. COMMON SEARCH QUERIES
@@ -375,171 +359,12 @@ function nextSequence(string $prefix, string $table, string $column): string {
     return $prefix . '-' . str_pad((string) $next, 6, '0', STR_PAD_LEFT);
 }
 
-function nextInvoiceNumber(): string {
-    return nextSequence('INV', 'invoices', 'invoice_number');
-}
-
 function nextWorkOrderNumber(): string {
     return nextSequence('WO', 'work_orders', 'wo_number');
 }
 
 function nextPONumber(): string {
     return nextSequence('PO', 'purchase_orders', 'po_number');
-}
-
-
-// ============================================================================
-// 5. COLORADO TAX AND FEE LOGIC
-// ============================================================================
-
-/**
- * Gets the current combined tax rate.
- * In production, store this in a system_config table.
- * Default: 7.90% (CO state 2.9% + Fremont County 1.5% + Canon City 3.5%)
- *
- * IMPORTANT: Rate is stored as a DECIMAL(5,4) on each invoice at time of sale.
- * If the rate changes, old invoices keep their original rate.
- */
-function getCurrentTaxRate(): string {
-    // TODO: Move to system_config table
-    return '0.0790';
-}
-
-/**
- * Calculate invoice totals from line items.
- * Separates taxable (parts, tires) from non-taxable (labor) from fees.
- * Returns array of all computed fields for the invoices table.
- *
- * CRITICAL: Colorado law requires labor and parts as separate line items.
- * If combined into a single line, entire amount becomes taxable.
- * The system prevents bundled line items at the data entry layer.
- *
- * NOTE ON DISCOUNTS: Tax is currently computed on the pre-discount taxable
- * subtotal, then discounts are subtracted from the final total. This is
- * correct for store-level discounts under Colorado DOR rules, but NOT for
- * manufacturer coupons (which reduce the taxable base before tax). Phase 5
- * adds a coupon module with a coupon_type field. When that arrives, this
- * function must branch: manufacturer coupons reduce subtotal_taxable before
- * bcmul, store coupons subtract after. Until then, this logic is compliant.
- */
-function calculateInvoiceTotals(int $invoiceId): array {
-    $db = getDB();
-
-    // Sum line items by taxability and type
-    $sql = "SELECT
-                COALESCE(SUM(CASE WHEN is_taxable = 1 AND line_type != 'fee' THEN line_total ELSE 0 END), 0) AS subtotal_taxable,
-                COALESCE(SUM(CASE WHEN is_taxable = 0 AND line_type != 'fee' AND line_type != 'discount' THEN line_total ELSE 0 END), 0) AS subtotal_nontaxable,
-                COALESCE(SUM(CASE WHEN line_type = 'fee' THEN line_total ELSE 0 END), 0) AS subtotal_fees,
-                COALESCE(SUM(CASE WHEN line_type = 'discount' THEN ABS(line_total) ELSE 0 END), 0) AS discount_amount
-            FROM invoice_line_items
-            WHERE invoice_id = ?";
-    $stmt = $db->prepare($sql);
-    $stmt->execute([$invoiceId]);
-    $sums = $stmt->fetch();
-
-    $taxRate = getCurrentTaxRate();
-
-    // Tax applies ONLY to taxable subtotal (parts and tires), NOT to labor or fees
-    $taxAmount = bcmul($sums['subtotal_taxable'], $taxRate, 2);
-
-    $total = bcadd(
-        bcadd(
-            bcadd($sums['subtotal_taxable'], $sums['subtotal_nontaxable'], 2),
-            $sums['subtotal_fees'],
-            2
-        ),
-        bcsub($taxAmount, $sums['discount_amount'], 2),
-        2
-    );
-
-    // Sum payments already made
-    $paidStmt = $db->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = ?");
-    $paidStmt->execute([$invoiceId]);
-    $amountPaid = $paidStmt->fetchColumn();
-
-    $balanceDue = bcsub($total, $amountPaid, 2);
-
-    return [
-        'subtotal_taxable'    => $sums['subtotal_taxable'],
-        'subtotal_nontaxable' => $sums['subtotal_nontaxable'],
-        'subtotal_fees'       => $sums['subtotal_fees'],
-        'tax_rate'            => $taxRate,
-        'tax_amount'          => $taxAmount,
-        'discount_amount'     => $sums['discount_amount'],
-        'total'               => $total,
-        'amount_paid'         => $amountPaid,
-        'balance_due'         => $balanceDue,
-    ];
-}
-
-/**
- * Auto-insert Colorado tire fees when a NEW tire is added to an invoice.
- * Fees apply only to new tires (condition = 'N'), not used.
- *
- * Inserts two line items:
- *   - CO Waste Tire Enterprise Fee ($2.00)
- *   - CO Waste Tire Administration Fee ($0.50)
- *
- * IMPORTANT: Check tire condition before calling. Used tires get no fee lines.
- */
-function insertTireFees(int $invoiceId, string $tireCondition, int $quantity = 1): void {
-    if ($tireCondition !== 'N') return; // Used tires: no fees
-
-    $db = getDB();
-    $sql = "SELECT fee_id, fee_key, fee_label, fee_amount, is_taxable, statutory_text
-            FROM fee_configuration
-            WHERE is_active = 1
-              AND applies_to = 'new_only'
-              AND fee_amount > 0
-              AND effective_date <= CURDATE()
-            ORDER BY fee_id";
-    $fees = $db->query($sql)->fetchAll();
-
-    $insertSql = "INSERT INTO invoice_line_items
-                  (invoice_id, line_type, description, quantity, unit_price, line_total, is_taxable, fee_config_id)
-                  VALUES (?, 'fee', ?, ?, ?, ?, ?, ?)";
-    $stmt = $db->prepare($insertSql);
-
-    foreach ($fees as $fee) {
-        $lineTotal = bcmul((string) $fee['fee_amount'], (string) $quantity, 2);
-        $stmt->execute([
-            $invoiceId,
-            $fee['fee_label'],
-            $quantity,
-            $fee['fee_amount'],
-            $lineTotal,
-            $fee['is_taxable'],
-            $fee['fee_id'],
-        ]);
-    }
-}
-
-/**
- * Auto-insert disposal fee for any tire being replaced (new or used).
- */
-function insertDisposalFee(int $invoiceId, int $quantity = 1): void {
-    $db = getDB();
-    $sql = "SELECT fee_id, fee_label, fee_amount, is_taxable
-            FROM fee_configuration
-            WHERE fee_key = 'TIRE_DISPOSAL' AND is_active = 1 AND effective_date <= CURDATE()";
-    $fee = $db->query($sql)->fetch();
-    if (!$fee) return;
-
-    $lineTotal = bcmul((string) $fee['fee_amount'], (string) $quantity, 2);
-    $stmt = $db->prepare(
-        "INSERT INTO invoice_line_items
-         (invoice_id, line_type, description, quantity, unit_price, line_total, is_taxable, fee_config_id)
-         VALUES (?, 'fee', ?, ?, ?, ?, ?, ?)"
-    );
-    $stmt->execute([
-        $invoiceId,
-        $fee['fee_label'],
-        $quantity,
-        $fee['fee_amount'],
-        $lineTotal,
-        $fee['is_taxable'],
-        $fee['fee_id'],
-    ]);
 }
 
 
@@ -699,94 +524,6 @@ function getWaiverTemplate(string $waiverType): ?string {
 
 
 // ============================================================================
-// 9. DEPOSIT LIFECYCLE
-// ============================================================================
-
-/**
- * Minimum deposit percentage (configurable).
- * In production, store in system_config table.
- */
-function getMinimumDepositPercent(): float {
-    return 25.0; // 25%
-}
-
-/**
- * Default deposit expiration in days.
- */
-function getDepositExpirationDays(): int {
-    return 30;
-}
-
-/**
- * Check and return expired deposits for the daily manager report.
- * Uses v_deposits_active view filtered to EXPIRED urgency.
- */
-function getExpiredDeposits(): array {
-    $sql = "SELECT * FROM v_deposits_active WHERE urgency = 'EXPIRED'";
-    return getDB()->query($sql)->fetchAll();
-}
-
-/**
- * Get deposits expiring within N days for proactive outreach.
- */
-function getExpiringDeposits(int $withinDays = 7): array {
-    $sql = "SELECT * FROM v_deposits_active WHERE urgency IN ('EXPIRING_SOON', 'EXPIRED')";
-    return getDB()->query($sql)->fetchAll();
-}
-
-
-// ============================================================================
-// 10. REFUND SPLIT-PREVENTION
-// ============================================================================
-
-/**
- * Validates a refund request to prevent circumvention of the tiered threshold.
- * Business rule: Cannot split a larger refund into multiple smaller refunds
- * on the same invoice to avoid the $60 manager threshold.
- *
- * Checks: total of pending + processed refunds on same invoice + new request.
- * If cumulative total exceeds threshold, requires owner authorization.
- *
- * $threshold: configurable, default $60.00
- */
-function validateRefundRequest(int $invoiceId, string $amount, int $requestingUserId, string $threshold = '60.00'): array {
-    $db = getDB();
-
-    // Get cumulative refunds already on this invoice (pending or processed)
-    $sql = "SELECT COALESCE(SUM(amount), 0) AS total_refunded
-            FROM refunds
-            WHERE invoice_id = ? AND status IN ('pending', 'approved', 'processed')";
-    $stmt = $db->prepare($sql);
-    $stmt->execute([$invoiceId]);
-    $existingTotal = $stmt->fetchColumn();
-
-    $cumulativeTotal = bcadd($existingTotal, $amount, 2);
-
-    // Check requesting user's role
-    $roleSql = "SELECT r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id WHERE u.user_id = ?";
-    $roleStmt = $db->prepare($roleSql);
-    $roleStmt->execute([$requestingUserId]);
-    $role = $roleStmt->fetchColumn();
-
-    $requiresOwner = (bccomp($cumulativeTotal, $threshold, 2) > 0);
-
-    if ($requiresOwner && $role !== 'owner') {
-        return [
-            'allowed'  => false,
-            'reason'   => "Cumulative refunds on this invoice total \${$cumulativeTotal} (threshold: \${$threshold}). Owner authorization required.",
-            'requires' => 'owner',
-        ];
-    }
-
-    return [
-        'allowed'          => true,
-        'cumulative_total' => $cumulativeTotal,
-        'requires'         => $requiresOwner ? 'owner' : ($role === 'tire_tech' ? 'manager' : $role),
-    ];
-}
-
-
-// ============================================================================
 // 11. PASSWORD AND LOGIN SECURITY
 // ============================================================================
 
@@ -833,16 +570,6 @@ function recordFailedLogin(int $userId): void {
 
     // Log the failed attempt
     auditLog('users', $userId, 'FAILED_LOGIN', null, null, null, $userId);
-}
-
-/**
- * Check if user account is currently locked.
- */
-function isAccountLocked(int $userId): bool {
-    $sql = "SELECT locked_until FROM users WHERE user_id = ? AND locked_until > NOW()";
-    $stmt = getDB()->prepare($sql);
-    $stmt->execute([$userId]);
-    return (bool) $stmt->fetchColumn();
 }
 
 /**
@@ -918,28 +645,6 @@ function getUserPermissions(int $userId): array {
     $stmt = getDB()->prepare($sql);
     $stmt->execute([$userId]);
     return $stmt->fetchAll(PDO::FETCH_COLUMN);
-}
-
-/**
- * Check if price override exceeds threshold (>20% from catalog default).
- * Returns 'allowed', 'manager_required', or 'owner_required'.
- */
-function checkPriceOverride(int $serviceId, string $newPrice): string {
-    $sql = "SELECT default_labor FROM service_catalog WHERE service_id = ?";
-    $stmt = getDB()->prepare($sql);
-    $stmt->execute([$serviceId]);
-    $defaultPrice = $stmt->fetchColumn();
-
-    if (!$defaultPrice || bccomp($defaultPrice, '0', 2) === 0) return 'allowed';
-
-    $diff = bcsub($newPrice, $defaultPrice, 2);
-    $pctChange = bcdiv(bcmul($diff, '100', 4), $defaultPrice, 2);
-    $absPct = ltrim($pctChange, '-');
-
-    if (bccomp($absPct, '20.00', 2) > 0) {
-        return 'owner_required';
-    }
-    return 'allowed'; // Manager can override up to 20%
 }
 
 
@@ -1096,14 +801,6 @@ function getOpenPurchaseOrders(): array {
 }
 
 /**
- * Cash drawer summary for today (uses v_cash_drawer_today view).
- */
-function getCashDrawerToday(): ?array {
-    $result = getDB()->query("SELECT * FROM v_cash_drawer_today")->fetch();
-    return $result ?: null;
-}
-
-/**
  * Quarterly fee report for CDPHE submission (uses v_quarterly_fee_report view).
  * Pass year and quarter (1-4).
  */
@@ -1112,33 +809,6 @@ function getQuarterlyFeeReport(int $year, int $quarter): array {
     $stmt = getDB()->prepare($sql);
     $stmt->execute([$year, $quarter]);
     return $stmt->fetchAll();
-}
-
-/**
- * Monthly tax breakdown for DOR filing.
- */
-function getMonthlyTaxBreakdown(int $year, int $month): array {
-    $sql = "SELECT
-                COUNT(*) AS invoice_count,
-                SUM(subtotal_taxable) AS total_taxable,
-                SUM(subtotal_nontaxable) AS total_nontaxable,
-                SUM(subtotal_fees) AS total_fees,
-                SUM(tax_amount) AS total_tax_collected,
-                SUM(total) AS total_revenue
-            FROM invoices
-            WHERE status = 'completed'
-              AND YEAR(created_at) = ?
-              AND MONTH(created_at) = ?";
-    $stmt = getDB()->prepare($sql);
-    $stmt->execute([$year, $month]);
-    return $stmt->fetch();
-}
-
-/**
- * Pending refunds awaiting authorization (uses v_pending_refunds view).
- */
-function getPendingRefunds(): array {
-    return getDB()->query("SELECT * FROM v_pending_refunds")->fetchAll();
 }
 
 /**
@@ -1204,52 +874,6 @@ function getWheelPositions(?string $drivetrain, bool $isDually = false): array {
 
 
 // ============================================================================
-// 17. INVOICE SERVICE LINE GENERATOR
-// ============================================================================
-
-/**
- * When a tech selects a service from the catalog, auto-generate the
- * corresponding invoice line items: one labor line (non-taxable) and
- * one or more parts lines (taxable).
- *
- * This enforces the Colorado requirement that labor and parts are always
- * separate line items on the invoice.
- *
- * $quantity: number of tires the service applies to (for per-tire services)
- */
-function addServiceToInvoice(int $invoiceId, int $serviceId, int $quantity = 1): void {
-    $db = getDB();
-
-    // Get service details
-    $svc = $db->prepare("SELECT * FROM service_catalog WHERE service_id = ? AND is_active = 1");
-    $svc->execute([$serviceId]);
-    $service = $svc->fetch();
-    if (!$service) return;
-
-    $qty = $service['is_per_tire'] ? $quantity : 1;
-
-    // Insert labor line (NON-TAXABLE per Colorado law)
-    $laborTotal = bcmul((string) $service['default_labor'], (string) $qty, 2);
-    $db->prepare(
-        "INSERT INTO invoice_line_items (invoice_id, line_type, description, quantity, unit_price, line_total, is_taxable, service_id)
-         VALUES (?, 'labor', ?, ?, ?, ?, 0, ?)"
-    )->execute([$invoiceId, $service['service_name'], $qty, $service['default_labor'], $laborTotal, $serviceId]);
-
-    // Insert parts lines (TAXABLE per Colorado law)
-    $parts = $db->prepare("SELECT * FROM service_parts WHERE service_id = ? AND is_active = 1");
-    $parts->execute([$serviceId]);
-
-    foreach ($parts->fetchAll() as $part) {
-        $partTotal = bcmul((string) $part['default_cost'], (string) $qty, 2);
-        $db->prepare(
-            "INSERT INTO invoice_line_items (invoice_id, line_type, description, quantity, unit_price, line_total, is_taxable, service_id)
-             VALUES (?, 'part', ?, ?, ?, ?, ?, ?)"
-        )->execute([$invoiceId, $part['part_name'], $qty, $part['default_cost'], $partTotal, $part['is_taxable'], $serviceId]);
-    }
-}
-
-
-// ============================================================================
 // 18. VIN VALIDATION
 // ============================================================================
 
@@ -1297,66 +921,4 @@ function validateVin(string $vin): array {
     }
 
     return ['valid' => true, 'vin' => $vin];
-}
-
-
-// ============================================================================
-// 19. CASH DRAWER OPERATIONS
-// ============================================================================
-
-/**
- * Open cash drawer for the day. Only one drawer per day (drawer_date UNIQUE).
- */
-function openCashDrawer(int $openedBy, string $openingBalance): ?int {
-    $db = getDB();
-
-    // Check if already open today
-    $existing = $db->query("SELECT drawer_id FROM cash_drawers WHERE drawer_date = CURDATE()")->fetch();
-    if ($existing) return null; // Already open
-
-    $sql = "INSERT INTO cash_drawers (drawer_date, opened_by, opened_at, opening_balance, status)
-            VALUES (CURDATE(), ?, NOW(), ?, 'open')";
-    $stmt = $db->prepare($sql);
-    $stmt->execute([$openedBy, $openingBalance]);
-    return (int) $db->lastInsertId();
-}
-
-/**
- * Record a cash transaction against today's drawer.
- */
-function recordCashTransaction(string $txnType, string $amount, int $userId, ?int $paymentId = null, ?int $refundId = null, ?string $desc = null): void {
-    $db = getDB();
-    $drawer = $db->query("SELECT drawer_id FROM cash_drawers WHERE drawer_date = CURDATE() AND status = 'open'")->fetch();
-    if (!$drawer) throw new RuntimeException('No open cash drawer for today');
-
-    $sql = "INSERT INTO cash_drawer_transactions (drawer_id, txn_type, amount, payment_id, refund_id, description, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?)";
-    $stmt = $db->prepare($sql);
-    $stmt->execute([$drawer['drawer_id'], $txnType, $amount, $paymentId, $refundId, $desc, $userId]);
-}
-
-/**
- * Close cash drawer: set closing count, calculate expected and variance.
- */
-function closeCashDrawer(int $closedBy, string $closingCount): void {
-    $db = getDB();
-    $drawer = $db->query("SELECT drawer_id, opening_balance FROM cash_drawers WHERE drawer_date = CURDATE() AND status = 'open'")->fetch();
-    if (!$drawer) throw new RuntimeException('No open cash drawer to close');
-
-    $drawerId = $drawer['drawer_id'];
-
-    // Calculate expected balance from transactions
-    $txnSum = $db->prepare("SELECT COALESCE(SUM(amount), 0) FROM cash_drawer_transactions WHERE drawer_id = ?");
-    $txnSum->execute([$drawerId]);
-    $netTransactions = $txnSum->fetchColumn();
-
-    $expected = bcadd($drawer['opening_balance'], $netTransactions, 2);
-    $variance = bcsub($closingCount, $expected, 2);
-
-    $sql = "UPDATE cash_drawers SET
-                closed_by = ?, closed_at = NOW(), closing_count = ?,
-                expected_balance = ?, variance = ?, status = 'closed'
-            WHERE drawer_id = ?";
-    $stmt = $db->prepare($sql);
-    $stmt->execute([$closedBy, $closingCount, $expected, $variance, $drawerId]);
 }
