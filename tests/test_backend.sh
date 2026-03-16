@@ -118,7 +118,7 @@ $MC $TEST_DB -e "UPDATE shop_settings SET setting_value='1' WHERE setting_key='w
 TABLE_COUNT=$($MC -N -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$TEST_DB' AND TABLE_TYPE='BASE TABLE';")
 echo "  Tables: $TABLE_COUNT"
 
-assert "Schema: 66 tables" "66" "$TABLE_COUNT"
+assert "Schema: 67 tables" "67" "$TABLE_COUNT"
 assert "Schema: estimated_price exists" "1" "$($MC -N -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$TEST_DB' AND TABLE_NAME='work_orders' AND COLUMN_NAME='estimated_price';")"
 assert "Schema: full_size_string exists" "1" "$($MC -N -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$TEST_DB' AND TABLE_NAME='tires' AND COLUMN_NAME='full_size_string';")"
 assert "Schema: 9 views" "9" "$($MC -N -e "SELECT COUNT(*) FROM information_schema.VIEWS WHERE TABLE_SCHEMA='$TEST_DB';")"
@@ -161,7 +161,7 @@ echo -e "\n${CYAN}  [Health]${NC}"
 R=$(api "$API_BASE/health"); C=$(code "$R"); B=$(body "$R")
 assert_status "GET /health" "200" "$C" "$B"
 assert "Health: connected" '"connected":true' "$B"
-assert "Health: 66 tables" '"table_count":66' "$B"
+assert "Health: 67 tables" '"table_count":67' "$B"
 assert "Health: PHP version" '"php_version"' "$B"
 
 # ---- AUTH: LOGIN ----

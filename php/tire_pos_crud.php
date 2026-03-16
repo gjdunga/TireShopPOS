@@ -134,6 +134,7 @@ function updateTire(int $tireId, array $data, int $updatedBy): array {
     if ($tire === null) {
         throw new \RuntimeException('Tire not found.');
     }
+    \App\Http\Middleware::checkConflict($data, $tire, 'tire');
 
     $editable = [
         'brand_id', 'tire_type_id', 'construction_id',
@@ -202,19 +203,21 @@ function getTirePhotos(int $tireId): array {
 }
 
 function saveTirePhoto(int $tireId, string $filePath, ?string $caption, bool $isPrimary, int $uploadedBy): int {
-    // If marking as primary, clear other primaries
-    if ($isPrimary) {
-        Database::execute("UPDATE tire_photos SET is_primary = 0 WHERE tire_id = ?", [$tireId]);
-    }
+    return Database::transaction(function () use ($tireId, $filePath, $caption, $isPrimary, $uploadedBy) {
+        // If marking as primary, clear other primaries
+        if ($isPrimary) {
+            Database::execute("UPDATE tire_photos SET is_primary = 0 WHERE tire_id = ?", [$tireId]);
+        }
 
-    Database::execute(
-        "INSERT INTO tire_photos (tire_id, file_path, caption, is_primary, uploaded_by) VALUES (?, ?, ?, ?, ?)",
-        [$tireId, $filePath, $caption, $isPrimary ? 1 : 0, $uploadedBy]
-    );
+        Database::execute(
+            "INSERT INTO tire_photos (tire_id, file_path, caption, is_primary, uploaded_by) VALUES (?, ?, ?, ?, ?)",
+            [$tireId, $filePath, $caption, $isPrimary ? 1 : 0, $uploadedBy]
+        );
 
-    $photoId = (int) Database::lastInsertId();
-    auditLog('tire_photos', $photoId, 'INSERT', null, null, null, $uploadedBy);
-    return $photoId;
+        $photoId = (int) Database::lastInsertId();
+        auditLog('tire_photos', $photoId, 'INSERT', null, null, null, $uploadedBy);
+        return $photoId;
+    });
 }
 
 function deleteTirePhoto(int $photoId, int $deletedBy): string {
@@ -280,6 +283,7 @@ function updateCustomer(int $customerId, array $data, int $updatedBy): array {
     if ($customer === null) {
         throw new \RuntimeException('Customer not found.');
     }
+    \App\Http\Middleware::checkConflict($data, $customer, 'customer');
 
     $editable = ['first_name', 'last_name', 'phone_primary', 'phone_secondary', 'email',
                  'address_line1', 'address_line2', 'city', 'state', 'zip',
@@ -368,6 +372,7 @@ function updateVehicle(int $vehicleId, array $data, int $updatedBy): array {
     if ($vehicle === null) {
         throw new \RuntimeException('Vehicle not found.');
     }
+    \App\Http\Middleware::checkConflict($data, $vehicle, 'vehicle');
 
     $editable = ['year', 'make', 'model', 'trim_level', 'vin', 'license_plate',
                  'license_state', 'color', 'drivetrain', 'lug_count', 'lug_pattern',
@@ -505,6 +510,7 @@ function updateWorkOrder(int $woId, array $data, int $updatedBy): array {
     if ($wo === null) {
         throw new \RuntimeException('Work order not found.');
     }
+    \App\Http\Middleware::checkConflict($data, $wo, 'work order');
 
     $editable = ['customer_id', 'vehicle_id', 'mileage_in', 'mileage_out',
                  'customer_complaint', 'tech_diagnosis', 'special_notes', 'status',
@@ -716,35 +722,37 @@ function receivePurchaseOrder(int $poId, array $receivedItems, int $receivedBy):
         throw new \RuntimeException('Purchase order not found.');
     }
 
-    $results = [];
-    foreach ($receivedItems as $item) {
-        $lineId = (int) ($item['po_line_id'] ?? 0);
-        $qtyReceived = (int) ($item['quantity_received'] ?? 0);
+    return Database::transaction(function () use ($poId, $receivedItems, $receivedBy, $po) {
+        $results = [];
+        foreach ($receivedItems as $item) {
+            $lineId = (int) ($item['po_line_id'] ?? 0);
+            $qtyReceived = (int) ($item['quantity_received'] ?? 0);
 
-        if ($lineId === 0 || $qtyReceived === 0) continue;
+            if ($lineId === 0 || $qtyReceived === 0) continue;
 
-        Database::execute(
-            "UPDATE po_line_items SET quantity_received = quantity_received + ? WHERE po_line_id = ? AND po_id = ?",
-            [$qtyReceived, $lineId, $poId]
+            Database::execute(
+                "UPDATE po_line_items SET quantity_received = quantity_received + ? WHERE po_line_id = ? AND po_id = ?",
+                [$qtyReceived, $lineId, $poId]
+            );
+            auditLog('po_line_items', $lineId, 'UPDATE', 'quantity_received', null, (string) $qtyReceived, $receivedBy);
+            $results[] = ['po_line_id' => $lineId, 'quantity_received' => $qtyReceived];
+        }
+
+        // Check if all lines are fully received
+        $remaining = Database::scalar(
+            "SELECT COUNT(*) FROM po_line_items WHERE po_id = ? AND quantity_received < quantity_ordered",
+            [$poId]
         );
-        auditLog('po_line_items', $lineId, 'UPDATE', 'quantity_received', null, (string) $qtyReceived, $receivedBy);
-        $results[] = ['po_line_id' => $lineId, 'quantity_received' => $qtyReceived];
-    }
+        $newStatus = ((int) $remaining === 0) ? 'received' : 'partial';
+        Database::execute(
+            "UPDATE purchase_orders SET status = ?, received_at = CURRENT_TIMESTAMP, received_by = ?, updated_at = CURRENT_TIMESTAMP WHERE po_id = ?",
+            [$newStatus, $receivedBy, $poId]
+        );
+        auditLog('purchase_orders', $poId, 'UPDATE', 'status', $po['status'], $newStatus, $receivedBy);
+        logActivity($receivedBy, 'PO_RECEIVE', 'purchase_orders', $poId, 'Received ' . count($results) . ' line(s)');
 
-    // Check if all lines are fully received
-    $remaining = Database::scalar(
-        "SELECT COUNT(*) FROM po_line_items WHERE po_id = ? AND quantity_received < quantity_ordered",
-        [$poId]
-    );
-    $newStatus = ((int) $remaining === 0) ? 'received' : 'partial';
-    Database::execute(
-        "UPDATE purchase_orders SET status = ?, received_at = CURRENT_TIMESTAMP, received_by = ?, updated_at = CURRENT_TIMESTAMP WHERE po_id = ?",
-        [$newStatus, $receivedBy, $poId]
-    );
-    auditLog('purchase_orders', $poId, 'UPDATE', 'status', $po['status'], $newStatus, $receivedBy);
-    logActivity($receivedBy, 'PO_RECEIVE', 'purchase_orders', $poId, 'Received ' . count($results) . ' line(s)');
-
-    return ['status' => $newStatus, 'received' => $results];
+        return ['status' => $newStatus, 'received' => $results];
+    });
 }
 
 
@@ -844,6 +852,7 @@ function updateAppointment(int $apptId, array $data, int $updatedBy): array {
     if ($appt === null) {
         throw new \RuntimeException('Appointment not found.');
     }
+    \App\Http\Middleware::checkConflict($data, $appt, 'appointment');
 
     $editable = ['customer_id', 'vehicle_id', 'appointment_date', 'appointment_time',
                  'duration_minutes', 'service_type', 'notes', 'status'];

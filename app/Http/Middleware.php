@@ -224,6 +224,90 @@ class Middleware
     }
 
     // ================================================================
+    // Rate Limiting
+    // ================================================================
+
+    /**
+     * Rate limit middleware: sliding window counter.
+     *
+     * Tracks hits in the rate_limit_hits table per scope key.
+     * Scope: authenticated -> user:{id}, unauthenticated -> ip:{remote_addr}.
+     *
+     * @param int $maxHits   Maximum requests allowed in the window.
+     * @param int $windowSec Window size in seconds (default 60).
+     * @return callable
+     */
+    public static function rateLimit(int $maxHits = 60, int $windowSec = 60): callable
+    {
+        return function () use ($maxHits, $windowSec) {
+            $scopeKey = self::$session
+                ? 'user:' . self::$session['user_id']
+                : 'ip:' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+
+            $since = date('Y-m-d H:i:s', time() - $windowSec);
+
+            $count = (int) Database::scalar(
+                "SELECT COUNT(*) FROM rate_limit_hits WHERE scope_key = ? AND hit_at >= ?",
+                [$scopeKey, $since]
+            );
+
+            if ($count >= $maxHits) {
+                header('Retry-After: ' . $windowSec);
+                header('X-RateLimit-Limit: ' . $maxHits);
+                header('X-RateLimit-Remaining: 0');
+                Router::sendError('RATE_LIMITED', 'Too many requests. Try again in ' . $windowSec . ' seconds.', 429);
+            }
+
+            // Record this hit
+            Database::execute(
+                "INSERT INTO rate_limit_hits (scope_key) VALUES (?)",
+                [$scopeKey]
+            );
+
+            // Set rate limit headers
+            header('X-RateLimit-Limit: ' . $maxHits);
+            header('X-RateLimit-Remaining: ' . max(0, $maxHits - $count - 1));
+        };
+    }
+
+    // ================================================================
+    // Optimistic Locking
+    // ================================================================
+
+    /**
+     * Check for concurrent edit conflicts using updated_at.
+     *
+     * Call from PATCH handlers after loading the current record.
+     * If the client sent an updated_at value and it differs from
+     * the DB value, sends 409 Conflict.
+     *
+     * @param array  $body   Request body (checks for 'updated_at' key).
+     * @param array  $record Current DB record (must have 'updated_at' key).
+     * @param string $entity Human-readable name for error message (e.g., 'work order').
+     */
+    public static function checkConflict(array $body, array $record, string $entity = 'record'): void
+    {
+        if (!array_key_exists('updated_at', $body)) {
+            return; // Client did not send updated_at; skip check (backward compatible)
+        }
+
+        $clientTs = trim($body['updated_at']);
+        $serverTs = $record['updated_at'] ?? '';
+
+        // Normalize: strip microseconds if present, compare as strings
+        $clientTs = preg_replace('/\.\d+$/', '', $clientTs);
+        $serverTs = preg_replace('/\.\d+$/', '', $serverTs);
+
+        if ($clientTs !== $serverTs) {
+            Router::sendError(
+                'CONFLICT',
+                "This {$entity} was modified by another user. Please reload and try again.",
+                409
+            );
+        }
+    }
+
+    // ================================================================
     // Internal
     // ================================================================
 

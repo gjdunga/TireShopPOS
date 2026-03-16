@@ -34,6 +34,15 @@ function permit(string ...$keys): array {
     return [Middleware::auth(), Middleware::permit(...$keys)];
 }
 
+/**
+ * Build a public rate-limited middleware stack (no auth).
+ * @param int $maxHits Max hits per window
+ * @param int $windowSec Window size in seconds
+ */
+function publicRate(int $maxHits = 30, int $windowSec = 60): array {
+    return [Middleware::rateLimit($maxHits, $windowSec)];
+}
+
 
 // ============================================================================
 // Health (no auth)
@@ -149,7 +158,7 @@ $router->with(permit('REPORT_VIEW'))->get('/api/ops/health', function () use ($a
 // Auth (no RBAC middleware; login is unauthenticated, others use token directly)
 // ============================================================================
 
-$router->post('/api/auth/login', function (array $params, array $body) {
+$router->with(publicRate(10, 60))->post('/api/auth/login', function (array $params, array $body) {
     return Auth::login($body);
 });
 
@@ -662,35 +671,41 @@ $router->with(permit('USER_MANAGE'))->patch('/api/users/{id}', function (array $
     }
 
     // Admin password reset: validate strength, hash, record history, force change
+    $passwordHash = null;
     if (array_key_exists('password', $body) && $body['password'] !== '') {
         $newPw = $body['password'];
         $strengthErr = \App\Http\Auth::validatePasswordStrength($newPw);
         if ($strengthErr !== null) {
             Router::sendError('PASSWORD_WEAK', $strengthErr, 400);
         }
-        $hash = password_hash($newPw, PASSWORD_BCRYPT, ['cost' => 12]);
+        $passwordHash = password_hash($newPw, PASSWORD_BCRYPT, ['cost' => 12]);
         $fields[] = "password_hash = ?";
-        $binds[] = $hash;
+        $binds[] = $passwordHash;
         $fields[] = "force_password_change = 1";
         $fields[] = "password_changed_at = CURRENT_TIMESTAMP";
         $changes['password_hash'] = ['old' => '***', 'new' => '***'];
-        // Record in password history
-        Database::execute(
-            "INSERT INTO password_history (user_id, password_hash) VALUES (?, ?)",
-            [$userId, $hash]
-        );
     }
 
     if (empty($fields)) {
         Router::sendError('NO_CHANGES', 'No fields to update.', 400);
     }
 
-    $binds[] = $userId;
-    Database::execute("UPDATE users SET " . implode(', ', $fields) . " WHERE user_id = ?", $binds);
+    Database::transaction(function () use ($userId, $fields, $binds, $changes, $passwordHash) {
+        if ($passwordHash !== null) {
+            Database::execute(
+                "INSERT INTO password_history (user_id, password_hash) VALUES (?, ?)",
+                [$userId, $passwordHash]
+            );
+        }
 
-    foreach ($changes as $field => $vals) {
-        auditLog('users', $userId, 'UPDATE', $field, (string) $vals['old'], (string) $vals['new'], Middleware::userId());
-    }
+        $b = $binds;
+        $b[] = $userId;
+        Database::execute("UPDATE users SET " . implode(', ', $fields) . " WHERE user_id = ?", $b);
+
+        foreach ($changes as $field => $vals) {
+            auditLog('users', $userId, 'UPDATE', $field, (string) $vals['old'], (string) $vals['new'], Middleware::userId());
+        }
+    });
 
     return ['message' => 'User updated.', 'user_id' => $userId, 'changes' => array_keys($changes)];
 });
@@ -1071,7 +1086,7 @@ $router->with(permit('CONFIG_MANAGE'))->patch('/api/config/{key}', function (arr
 // Vehicle Lookup (PlateToVIN + NHTSA + torque spec pipeline)
 // ============================================================================
 
-$router->with(permit('VEHICLE_MANAGE'))->post('/api/vehicles/lookup/plate', function (array $params, array $body) {
+$router->with([Middleware::auth(), Middleware::permit('VEHICLE_MANAGE'), Middleware::rateLimit(20, 60)])->post('/api/vehicles/lookup/plate', function (array $params, array $body) {
     $plate = trim($body['plate'] ?? '');
     $state = trim($body['state'] ?? '');
     if ($plate === '' || $state === '') {
@@ -1085,7 +1100,7 @@ $router->with(permit('VEHICLE_MANAGE'))->post('/api/vehicles/lookup/plate', func
     return $result;
 });
 
-$router->with(permit('VEHICLE_MANAGE'))->post('/api/vehicles/lookup/vin', function (array $params, array $body) {
+$router->with([Middleware::auth(), Middleware::permit('VEHICLE_MANAGE'), Middleware::rateLimit(20, 60)])->post('/api/vehicles/lookup/vin', function (array $params, array $body) {
     $vin = trim($body['vin'] ?? '');
     if ($vin === '') {
         Router::sendError('MISSING_FIELD', 'Field "vin" is required.', 400);
@@ -1771,7 +1786,7 @@ $router->get('/api/public/appointments/slots', function () {
     return getPublicAppointmentSlots($date);
 });
 
-$router->post('/api/public/appointments', function (array $params, array $body) {
+$router->with(publicRate(5, 60))->post('/api/public/appointments', function (array $params, array $body) {
     $enabled = getSettingValue('website_appointment_enabled');
     if ($enabled !== '1') Router::sendError('DISABLED', 'Online appointments not enabled.', 403);
     // Rate limit: simple check using session-less approach

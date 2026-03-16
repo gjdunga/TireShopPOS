@@ -68,13 +68,15 @@ function updateSetting(string $key, string $value, int $userId): bool {
 }
 
 function bulkUpdateSettings(array $settings, int $userId): int {
-    $changed = 0;
-    foreach ($settings as $key => $value) {
-        if (updateSetting($key, (string) $value, $userId)) {
-            $changed++;
+    return Database::transaction(function () use ($settings, $userId) {
+        $changed = 0;
+        foreach ($settings as $key => $value) {
+            if (updateSetting($key, (string) $value, $userId)) {
+                $changed++;
+            }
         }
-    }
-    return $changed;
+        return $changed;
+    });
 }
 
 
@@ -100,13 +102,15 @@ function updateWebsiteConfig(string $key, string $value): bool {
 }
 
 function bulkUpdateWebsiteConfig(array $configs): int {
-    $changed = 0;
-    foreach ($configs as $key => $value) {
-        if (updateWebsiteConfig($key, (string) $value)) {
-            $changed++;
+    return Database::transaction(function () use ($configs) {
+        $changed = 0;
+        foreach ($configs as $key => $value) {
+            if (updateWebsiteConfig($key, (string) $value)) {
+                $changed++;
+            }
         }
-    }
-    return $changed;
+        return $changed;
+    });
 }
 
 
@@ -527,17 +531,19 @@ function getCustomFieldValues(string $entityType, int $entityId): array {
 }
 
 function setCustomFieldValues(int $entityId, array $fieldValues): int {
-    $changed = 0;
-    foreach ($fieldValues as $fieldId => $value) {
-        $stmt = getDB()->prepare(
-            "INSERT INTO custom_field_values (field_id, entity_id, field_value)
-             VALUES (?, ?, ?)
-             ON DUPLICATE KEY UPDATE field_value = VALUES(field_value)"
-        );
-        $stmt->execute([(int) $fieldId, $entityId, $value]);
-        $changed++;
-    }
-    return $changed;
+    return Database::transaction(function () use ($entityId, $fieldValues) {
+        $changed = 0;
+        foreach ($fieldValues as $fieldId => $value) {
+            $stmt = getDB()->prepare(
+                "INSERT INTO custom_field_values (field_id, entity_id, field_value)
+                 VALUES (?, ?, ?)
+                 ON DUPLICATE KEY UPDATE field_value = VALUES(field_value)"
+            );
+            $stmt->execute([(int) $fieldId, $entityId, $value]);
+            $changed++;
+        }
+        return $changed;
+    });
 }
 
 
