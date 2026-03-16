@@ -418,7 +418,7 @@ class Auth
      * @param string $password The plaintext password
      * @return string|null Error message, or null if valid
      */
-    private static function validatePasswordStrength(string $password): ?string
+    public static function validatePasswordStrength(string $password): ?string
     {
         if (strlen($password) < 8) {
             return 'Password must be at least 8 characters.';

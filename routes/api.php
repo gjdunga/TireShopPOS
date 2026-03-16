@@ -513,6 +513,12 @@ $router->with(permit('USER_MANAGE'))->post('/api/users', function (array $params
         Router::sendError('MISSING_FIELDS', 'Fields username, display_name, password, and role_id are required.', 400);
     }
 
+    // Validate password strength (same rules as self-service password change)
+    $strengthErr = \App\Http\Auth::validatePasswordStrength($password);
+    if ($strengthErr !== null) {
+        Router::sendError('PASSWORD_WEAK', $strengthErr, 400);
+    }
+
     $exists = Database::scalar("SELECT COUNT(*) FROM users WHERE username = ?", [$username]);
     if ((int) $exists > 0) {
         Router::sendError('DUPLICATE', 'Username already exists.', 409);
@@ -568,6 +574,26 @@ $router->with(permit('USER_MANAGE'))->patch('/api/users/{id}', function (array $
         if (!(int) $body['is_active']) {
             Session::destroyAllForUser($userId);
         }
+    }
+
+    // Admin password reset: validate strength, hash, record history, force change
+    if (array_key_exists('password', $body) && $body['password'] !== '') {
+        $newPw = $body['password'];
+        $strengthErr = \App\Http\Auth::validatePasswordStrength($newPw);
+        if ($strengthErr !== null) {
+            Router::sendError('PASSWORD_WEAK', $strengthErr, 400);
+        }
+        $hash = password_hash($newPw, PASSWORD_BCRYPT, ['cost' => 12]);
+        $fields[] = "password_hash = ?";
+        $binds[] = $hash;
+        $fields[] = "force_password_change = 1";
+        $fields[] = "password_changed_at = CURRENT_TIMESTAMP";
+        $changes['password_hash'] = ['old' => '***', 'new' => '***'];
+        // Record in password history
+        Database::execute(
+            "INSERT INTO password_history (user_id, password_hash) VALUES (?, ?)",
+            [$userId, $hash]
+        );
     }
 
     if (empty($fields)) {
@@ -1164,7 +1190,7 @@ $router->with($auth)->get('/api/warranty-claims/{id}', function (array $params) 
     return $c;
 });
 
-$router->with($auth)->post('/api/warranty-claims', function (array $params, array $body) {
+$router->with(permit('WORK_ORDER_CREATE'))->post('/api/warranty-claims', function (array $params, array $body) {
     $id = fileWarrantyClaim($body, Middleware::userId());
     return ['message' => 'Claim filed.', 'claim_id' => $id];
 });
@@ -1272,12 +1298,28 @@ $router->with(permit('USER_MANAGE'))->patch('/api/custom-fields/{id}', function 
     return ['message' => 'Custom field updated.', 'changed' => $result['changed']];
 });
 
+// Custom field values: permission depends on entity type
 $router->with($auth)->get('/api/custom-field-values/{entityType}/{entityId}', function (array $params) {
-    return ['fields' => getCustomFieldValues($params['entityType'], (int) $params['entityId'])];
+    $type = $params['entityType'];
+    $allowed = ['customer', 'tire', 'vehicle', 'work_order'];
+    if (!in_array($type, $allowed, true)) {
+        Router::sendError('INVALID_ENTITY', 'Entity type must be one of: ' . implode(', ', $allowed), 400);
+    }
+    return ['values' => getCustomFieldValues($type, (int) $params['entityId'])];
 });
 
 $router->with($auth)->patch('/api/custom-field-values/{entityType}/{entityId}', function (array $params, array $body) {
-    $changed = setCustomFieldValues((int) $params['entityId'], $body['fields'] ?? []);
+    $type = $params['entityType'];
+    $allowed = ['customer', 'tire', 'vehicle', 'work_order'];
+    if (!in_array($type, $allowed, true)) {
+        Router::sendError('INVALID_ENTITY', 'Entity type must be one of: ' . implode(', ', $allowed), 400);
+    }
+    // Enforce entity-appropriate permission
+    $permMap = ['customer' => 'CUSTOMER_MANAGE', 'tire' => 'INVENTORY_EDIT', 'vehicle' => 'VEHICLE_MANAGE', 'work_order' => 'WORK_ORDER_CREATE'];
+    if (!hasPermission(Middleware::userId(), $permMap[$type])) {
+        Router::sendError('FORBIDDEN', 'You do not have permission to edit ' . $type . ' custom fields.', 403);
+    }
+    $changed = setCustomFieldValues((int) $params['entityId'], $body['values'] ?? []);
     return ['message' => 'Custom field values saved.', 'changed' => $changed];
 });
 
@@ -1412,12 +1454,18 @@ $router->with($auth)->get('/api/marketplace/listings', function () {
     return listListings($platform, $status, $limit, $offset);
 });
 
-$router->with($auth)->post('/api/marketplace/listings', function (array $params, array $body) {
+$router->with(permit('INVENTORY_EDIT'))->post('/api/marketplace/listings', function (array $params, array $body) {
     $id = createListing($body, Middleware::userId());
     return ['message' => 'Listing created.', 'listing_id' => $id];
 });
 
-$router->with($auth)->patch('/api/marketplace/listings/{id}', function (array $params, array $body) {
+$router->with(permit('INVENTORY_EDIT'))->patch('/api/marketplace/listings/{id}', function (array $params, array $body) {
+    if (array_key_exists('status', $body)) {
+        $allowed = ['draft', 'active', 'sold', 'expired', 'removed'];
+        if (!in_array($body['status'], $allowed, true)) {
+            Router::sendError('INVALID_STATUS', 'Listing status must be one of: ' . implode(', ', $allowed), 400);
+        }
+    }
     return updateListing((int) $params['id'], $body);
 });
 
@@ -1441,13 +1489,18 @@ $router->with($auth)->get('/api/marketplace/orders/{id}', function (array $param
     return $o;
 });
 
-$router->with($auth)->post('/api/marketplace/orders', function (array $params, array $body) {
+$router->with(permit('INVENTORY_EDIT'))->post('/api/marketplace/orders', function (array $params, array $body) {
     $id = importMarketplaceOrder($body);
     return ['message' => 'Order imported.', 'order_id' => $id];
 });
 
-$router->with($auth)->patch('/api/marketplace/orders/{id}/status', function (array $params, array $body) {
-    updateMarketplaceOrderStatus((int) $params['id'], $body['status']);
+$router->with(permit('INVENTORY_EDIT'))->patch('/api/marketplace/orders/{id}/status', function (array $params, array $body) {
+    $status = $body['status'] ?? '';
+    $allowed = ['pending', 'confirmed', 'shipped', 'completed', 'cancelled', 'refunded'];
+    if (!in_array($status, $allowed, true)) {
+        Router::sendError('INVALID_STATUS', 'Status must be one of: ' . implode(', ', $allowed), 400);
+    }
+    updateMarketplaceOrderStatus((int) $params['id'], $status);
     return ['message' => 'Order status updated.'];
 });
 

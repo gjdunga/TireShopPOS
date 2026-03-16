@@ -23,8 +23,8 @@ export default function CustomFieldValues({ entityType, entityId }) {
       const activeFields = (fData.fields || []).filter((f) => f.is_active);
       setFields(activeFields);
       const valMap = {};
-      (Array.isArray(vData.values) ? vData.values : Object.entries(vData.values || {}).map(([k, v]) => ({ field_id: k, value: v }))).forEach((v) => {
-        valMap[v.field_id] = v.value || '';
+      (Array.isArray(vData.values) ? vData.values : []).forEach((v) => {
+        valMap[v.field_id] = v.field_value || '';
       });
       setValues(valMap);
     });
