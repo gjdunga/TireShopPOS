@@ -7,6 +7,8 @@
 #   ./scripts/install.sh                Interactive install/upgrade
 #   ./scripts/install.sh --upgrade      Non-interactive: apply pending migrations
 #   ./scripts/install.sh --full-upgrade Pull code, rebuild frontend, migrate
+#   ./scripts/install.sh --rollback     Roll back the last applied migration
+#   ./scripts/install.sh --retry        Retry the most recent failed migration
 #   ./scripts/install.sh --check        Check for available upgrades on GitHub
 #   ./scripts/install.sh --status       Show current schema version
 #   ./scripts/install.sh --deps         Check system dependencies
@@ -17,6 +19,8 @@
 #   - Fresh install: loads base schema + all migrations
 #   - Upgrade: applies only missing migrations in order
 #   - Full upgrade: git pull + dependency check + frontend rebuild + migrate
+#   - Rollback: reverses last N migrations using down files in sql/migrations/down/
+#   - Retry: re-applies a failed migration after cleanup
 #   - Wipe and reinstall: backs up, drops all tables, reinstalls
 #   - Checks GitHub repo for new migrations not yet applied
 #   - Tracks every migration in schema_migrations (checksum, duration, errors)
@@ -857,6 +861,160 @@ do_upgrade() {
 }
 
 # ============================================================================
+# Rollback
+# ============================================================================
+
+ROLLBACK_DIR="$PROJECT_ROOT/sql/migrations/down"
+
+rollback_migration() {
+    local filename="$1"
+    local down_file="$ROLLBACK_DIR/${filename%.sql}.down.sql"
+    local os_user=$(whoami)
+
+    if [[ ! -f "$down_file" ]]; then
+        err "  No down file found: $down_file"
+        return 1
+    fi
+
+    # Check if it's a non-rollbackable stub
+    if grep -q "NON-ROLLBACKABLE" "$down_file" 2>/dev/null; then
+        err "  $filename is marked NON-ROLLBACKABLE (foundational schema)."
+        err "  Use option 4 (wipe and reinstall) instead."
+        return 1
+    fi
+
+    log "  Rolling back: $filename ..."
+    local output
+    output=$(run_sql_file "$down_file" 2>&1)
+    local exit_code=$?
+
+    if [[ $exit_code -eq 0 ]]; then
+        # Remove migration record
+        run_sql -e "DELETE FROM schema_migrations WHERE filename='$filename';" 2>/dev/null
+        log "  OK: $filename rolled back."
+        return 0
+    else
+        err "  FAIL: rollback of $filename"
+        echo "$output" | head -10
+        return 1
+    fi
+}
+
+do_rollback() {
+    local count="${1:-1}"
+
+    if [[ "$HAS_VERSION_TABLE" != "1" ]]; then
+        err "No version tracking table found. Cannot rollback."
+        return 1
+    fi
+
+    # Get applied migrations in reverse order
+    local migrations
+    migrations=$(run_sql_silent "SELECT filename FROM schema_migrations WHERE success=1 AND skipped=0 ORDER BY applied_at DESC, migration_id DESC LIMIT $count;")
+
+    if [[ -z "$migrations" ]]; then
+        info "No migrations to roll back."
+        return 0
+    fi
+
+    echo ""
+    warn "Will roll back the following migration(s):"
+    echo "$migrations" | while read -r f; do
+        local down="$ROLLBACK_DIR/${f%.sql}.down.sql"
+        if [[ -f "$down" ]] && ! grep -q "NON-ROLLBACKABLE" "$down" 2>/dev/null; then
+            echo -e "    ${GREEN}$f${NC} (down file exists)"
+        else
+            echo -e "    ${RED}$f${NC} (NON-ROLLBACKABLE)"
+        fi
+    done
+    echo ""
+
+    read -p "  Type 'ROLLBACK' to confirm: " confirm
+    if [[ "$confirm" != "ROLLBACK" ]]; then
+        info "Cancelled."
+        return 0
+    fi
+
+    local ok=0
+    local fail=0
+
+    echo "$migrations" | while read -r f; do
+        if rollback_migration "$f"; then
+            ((ok++))
+        else
+            ((fail++))
+            err "Stopping rollback due to failure."
+            break
+        fi
+    done
+
+    # Refresh version row
+    update_version_row
+
+    echo ""
+    log "Rollback complete."
+}
+
+retry_failed_migration() {
+    if [[ "$HAS_VERSION_TABLE" != "1" ]]; then
+        err "No version tracking table found."
+        return 1
+    fi
+
+    local failed
+    failed=$(run_sql_silent "SELECT filename FROM schema_migrations WHERE success=0 ORDER BY applied_at DESC LIMIT 1;")
+
+    if [[ -z "$failed" ]]; then
+        info "No failed migrations found."
+        return 0
+    fi
+
+    local filepath="$MIGRATIONS_DIR/$failed"
+    if [[ ! -f "$filepath" ]]; then
+        err "Migration file not found: $filepath"
+        return 1
+    fi
+
+    echo ""
+    warn "Found failed migration: $failed"
+    echo "  This will:"
+    echo "    1. Attempt rollback using the down file (if available)"
+    echo "    2. Remove the failed migration record"
+    echo "    3. Re-apply the migration"
+    echo ""
+
+    read -p "  Type 'RETRY' to confirm: " confirm
+    if [[ "$confirm" != "RETRY" ]]; then
+        info "Cancelled."
+        return 0
+    fi
+
+    # Try rollback first (cleanup)
+    local down_file="$ROLLBACK_DIR/${failed%.sql}.down.sql"
+    if [[ -f "$down_file" ]] && ! grep -q "NON-ROLLBACKABLE" "$down_file" 2>/dev/null; then
+        log "  Running down file for cleanup..."
+        run_sql_file "$down_file" 2>/dev/null
+    fi
+
+    # Remove failed record
+    run_sql -e "DELETE FROM schema_migrations WHERE filename='$failed' AND success=0;" 2>/dev/null
+    log "  Removed failed migration record."
+
+    # Re-apply
+    log "  Re-applying $failed..."
+    apply_migration "$filepath"
+    local result=$?
+
+    update_version_row
+
+    if [[ $result -eq 0 ]]; then
+        log "Retry successful."
+    else
+        err "Retry failed. Check the migration file and database state."
+    fi
+}
+
+# ============================================================================
 # Interactive menu
 # ============================================================================
 
@@ -890,12 +1048,14 @@ interactive_menu() {
     echo "    2) Upgrade database (apply pending migrations only)"
     echo "    3) Full upgrade (git pull, rebuild frontend, migrate)"
     echo "    4) Wipe and reinstall (backs up first)"
-    echo "    5) Check for updates on GitHub"
-    echo "    6) Check dependencies"
-    echo "    7) Show full status"
-    echo "    8) Exit"
+    echo "    5) Rollback last migration"
+    echo "    6) Retry failed migration"
+    echo "    7) Check for updates on GitHub"
+    echo "    8) Check dependencies"
+    echo "    9) Show full status"
+    echo "   10) Exit"
     echo ""
-    read -p "  Choice [1-8]: " choice
+    read -p "  Choice [1-10]: " choice
 
     case "$choice" in
         1)
@@ -951,15 +1111,28 @@ interactive_menu() {
             do_fresh_install
             ;;
         5)
-            check_github_updates
+            if [[ "$TABLE_COUNT" -eq 0 ]]; then
+                err "Database is empty. Nothing to roll back."
+                return 1
+            fi
+            echo ""
+            read -p "  How many migrations to roll back? [1]: " rb_count
+            rb_count="${rb_count:-1}"
+            do_rollback "$rb_count"
             ;;
         6)
-            check_dependencies
+            retry_failed_migration
             ;;
         7)
-            show_status
+            check_github_updates
             ;;
         8)
+            check_dependencies
+            ;;
+        9)
+            show_status
+            ;;
+        10)
             info "Bye."
             exit 0
             ;;
@@ -981,14 +1154,18 @@ main() {
         case "$arg" in
             --upgrade)       mode="upgrade" ;;
             --full-upgrade)  mode="full-upgrade" ;;
+            --rollback)      mode="rollback" ;;
+            --retry)         mode="retry" ;;
             --check)         mode="check" ;;
             --status)        mode="status" ;;
             --deps)          mode="deps" ;;
             --help|-h)
-                echo "Usage: $0 [--upgrade|--full-upgrade|--check|--status|--deps|--help]"
+                echo "Usage: $0 [--upgrade|--full-upgrade|--rollback|--retry|--check|--status|--deps|--help]"
                 echo "  (no args)       Interactive installer menu"
                 echo "  --upgrade       Apply pending database migrations only"
                 echo "  --full-upgrade  Git pull + rebuild frontend + migrate"
+                echo "  --rollback      Roll back the last applied migration"
+                echo "  --retry         Retry the most recent failed migration"
                 echo "  --check         Check GitHub for new migrations"
                 echo "  --status        Show schema version and migration history"
                 echo "  --deps          Check system dependencies"
@@ -1016,6 +1193,18 @@ main() {
             detect_engine
             check_db_state
             do_full_upgrade
+            ;;
+        rollback)
+            load_env
+            detect_engine
+            check_db_state
+            do_rollback 1
+            ;;
+        retry)
+            load_env
+            detect_engine
+            check_db_state
+            retry_failed_migration
             ;;
         check)
             load_env
