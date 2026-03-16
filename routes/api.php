@@ -44,8 +44,15 @@ $router->get('/api/health', function () use ($app) {
     $overall = $dbHealth['connected'] ? 'ok' : 'degraded';
 
     $cleaned = 0;
+    $cachesPurged = 0;
     if ($dbHealth['connected']) {
         try { $cleaned = Session::cleanup(); } catch (\Throwable $e) {}
+        // Purge expired plate lookup cache entries
+        try {
+            require_once BASE_PATH . '/php/VehicleLookupService.php';
+            $svc = new VehicleLookupService();
+            $cachesPurged = $svc->purgeExpiredCache();
+        } catch (\Throwable $e) {}
     }
 
     // Ops summary: lightweight checks only (no full ops report)
@@ -75,6 +82,7 @@ $router->get('/api/health', function () use ($app) {
         'database' => $dbHealth,
         'ops' => $opsHealth,
         'expired_sessions_cleaned' => $cleaned,
+        'expired_caches_purged' => $cachesPurged,
     ];
 });
 
@@ -429,6 +437,20 @@ $router->with(permit('REPORT_VIEW'))->get('/api/reports/lookup-cost', function (
     $start = Router::query('start', null);
     $end = Router::query('end', null);
     return ['data' => getLookupCostReport($start, $end)];
+});
+
+$router->with(permit('REPORT_VIEW'))->get('/api/reports/lookup-dashboard', function () {
+    require_once BASE_PATH . '/php/VehicleLookupService.php';
+    $svc = new VehicleLookupService();
+    return $svc->getDashboardStats();
+});
+
+$router->with(permit('REPORT_VIEW'))->get('/api/reports/lookup-monthly', function () {
+    require_once BASE_PATH . '/php/VehicleLookupService.php';
+    $svc = new VehicleLookupService();
+    $year = Router::query('year') ? (int) Router::query('year') : null;
+    $month = Router::query('month') ? (int) Router::query('month') : null;
+    return ['data' => $svc->getMonthlyCostReport($year, $month)];
 });
 
 
@@ -1586,6 +1608,14 @@ $router->get('/api/public/website-config', function () {
     $map = [];
     foreach ($configs as $c) { $map[$c['config_key']] = $c['config_value']; }
     return $map;
+});
+
+$router->get('/api/public/website-config/{key}', function (array $params) {
+    $value = getWebsiteConfigValue($params['key']);
+    if ($value === null) {
+        Router::sendError('NOT_FOUND', 'Config key not found.', 404);
+    }
+    return ['key' => $params['key'], 'value' => $value];
 });
 
 $router->get('/api/public/inventory', function () {

@@ -30,6 +30,7 @@ export default function Dashboard() {
         {can('APPOINTMENT_MANAGE') && <AppointmentsCard />}
         {can('WORK_ORDER_CREATE') && <RetorqueCard />}
         {can('INVENTORY_VIEW') && <InventoryCard />}
+        {can('REPORT_VIEW') && <LookupStatsCard />}
       </div>
     </div>
   );
@@ -206,6 +207,33 @@ function InventoryCard() {
       {stats && (
         <div className="dash-stats">
           <Stat label="Available Tires" value={stats.available} />
+        </div>
+      )}
+    </DashCard>
+  );
+}
+
+
+function LookupStatsCard() {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get('/reports/lookup-dashboard')
+      .then(setStats)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <DashCard title="Plate Lookups" link="/reports">
+      {loading && <Spinner />}
+      {stats && (
+        <div className="dash-stats">
+          <Stat label="API Calls (this month)" value={stats.total_api_calls ?? 0} />
+          <Stat label="Cost" value={'$' + Number(stats.total_cost_usd ?? 0).toFixed(2)} />
+          <Stat label="Cache Active" value={stats.cache_active ?? 0} ok />
+          <Stat label="Avg Response" value={(stats.avg_response_ms ?? 0) + 'ms'} />
         </div>
       )}
     </DashCard>

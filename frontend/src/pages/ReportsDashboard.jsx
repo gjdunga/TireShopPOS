@@ -239,13 +239,17 @@ function ServicesTab() {
 // ================================================================
 function LookupTab() {
   const [data, setData] = useState([]);
+  const [providerData, setProviderData] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/reports/lookup-cost')
-      .then((d) => setData(d.data || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    Promise.all([
+      api.get('/reports/lookup-cost').catch(() => ({ data: [] })),
+      api.get('/reports/lookup-monthly').catch(() => ({ data: [] })),
+    ]).then(([cost, monthly]) => {
+      setData(cost.data || []);
+      setProviderData(monthly.data || []);
+    }).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <Loading />;
@@ -281,6 +285,28 @@ function LookupTab() {
           <StatBox label="Total API Cost" value={'$' + totalCost.toFixed(2)} color={RED} />
         </div>
       </div>
+
+      {providerData.length > 0 && (
+        <div className="report-card" style={{ gridColumn: '1 / -1' }}>
+          <h3 className="report-card-title">Per-Provider Breakdown</h3>
+          <table className="entity-table" style={{ fontSize: '0.8125rem' }}>
+            <thead><tr><th>Month</th><th>Provider</th><th style={{ textAlign: 'right' }}>Calls</th><th style={{ textAlign: 'right' }}>Success</th><th style={{ textAlign: 'right' }}>Failed</th><th style={{ textAlign: 'right' }}>Avg ms</th><th style={{ textAlign: 'right' }}>Cost</th></tr></thead>
+            <tbody>
+              {providerData.map((r, i) => (
+                <tr key={i}>
+                  <td className="mono">{r.month}</td>
+                  <td style={{ fontWeight: 500 }}>{r.api_provider || 'unknown'}</td>
+                  <td className="mono" style={{ textAlign: 'right' }}>{r.total_calls}</td>
+                  <td className="mono" style={{ textAlign: 'right', color: 'var(--green)' }}>{r.successful_calls}</td>
+                  <td className="mono" style={{ textAlign: 'right', color: r.failed_calls > 0 ? 'var(--red)' : '' }}>{r.failed_calls}</td>
+                  <td className="mono" style={{ textAlign: 'right' }}>{Number(r.avg_response_ms || 0).toFixed(0)}</td>
+                  <td className="mono" style={{ textAlign: 'right', fontWeight: 600 }}>${Number(r.total_cost_usd || 0).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
