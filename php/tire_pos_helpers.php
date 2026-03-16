@@ -1,35 +1,34 @@
 <?php
 /**
  * ============================================================================
- * Tire Shop POS System: PHP Helpers and Business Logic
- * DunganSoft Technologies, March 2026
- * Schema Version: 2.3 (40 tables, 13 views) + 2.4 extension (3 tables, 1 view)
- * Target: PHP 8.1+, MySQL 8.x / MariaDB 10.6+
+ * TireShopPOS: Core Helpers and Business Logic
  * ============================================================================
  *
- * This file contains:
- *   1. Database connection (PDO)
- *   2. Tire size validation (metric and flotation)
- *   3. Common search queries (tire, customer, vehicle, invoice)
- *   4. Sequence generators (invoice, work order, PO numbers)
- *   5. Colorado tax and fee logic
- *   6. Torque verification gate
- *   7. Re-torque scheduling
- *   8. Waiver auto-detection
- *   9. Deposit lifecycle
- *  10. Refund split-prevention
- *  11. Password and login security
- *  12. Permission checking (RBAC)
- *  13. Audit logging
- *  14. DOT/TIN parsing and age calculation
- *  15. Report query helpers
+ * Loaded on EVERY request. Contains foundational functions used across
+ * the entire application including auth helpers, audit/activity logging,
+ * validation, tire parsing, waiver detection, and report queries.
  *
- * IMPORTANT: All monetary fields use DECIMAL in the database and should be
- * handled as strings or BCMath in PHP. Never use float for money.
+ * Function groups:
+ *   1. Database bridge     getDB()
+ *   2. Audit and activity  auditLog(), logActivity()
+ *   3. Auth helpers        isPasswordReused(), isPasswordExpired(),
+ *                          recordFailedLogin(), recordSuccessfulLogin(),
+ *                          getUserPermissions(), hasPermission()
+ *   4. Tire parsing        parseTireSize(), parseDotTin(), calculateTireAge(),
+ *                          isTireAged(), detectWaiversNeeded()
+ *   5. Waiver templates    getWaiverTemplate(), createWaiver()
+ *   6. Sequence numbers    nextSequence(), nextWorkOrderNumber(), nextPONumber()
+ *   7. Work order logic    canCompleteWorkOrder(), getRetorqueDueList(),
+ *                          scheduleRetorque(), completeRetorque()
+ *   8. Vehicle helpers     getWheelPositions()
+ *   9. Report queries      getQuarterlyFeeReport(), getServiceUsageReport(),
+ *                          getEmployeeActivity(), getSalesSummary(),
+ *                          getInventoryStats(), getTopSellingTires(), etc.
  *
- * IMPORTANT: All user-facing strings that go into queries MUST be passed
- * through prepared statements. No exceptions. Every query below uses PDO
- * placeholders.
+ * Dependencies: App\Core\Database (singleton PDO wrapper)
+ * Called by:    routes/api.php, tire_pos_crud.php, app/Http/Auth.php
+ *
+ * DunganSoft Technologies, March 2026
  * ============================================================================
  */
 

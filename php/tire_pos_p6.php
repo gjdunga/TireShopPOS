@@ -1,8 +1,30 @@
 <?php
 // ============================================================================
-// tire_pos_p6.php
-// Phase 6: Marketplace Integration CRUD functions
+// TireShopPOS: Phase 6 CRUD (Marketplace, Integrations, B2B)
+// ============================================================================
+//
+// LAZY-LOADED: only parsed when URI matches /api/(integrations|marketplace|
+// b2b|directory*|distributors). See public/index.php.
+//
+// Function groups:
+//   Integration Creds  listIntegrations(), getIntegrationCredentials(),
+//                      setIntegrationCredential(), removeIntegrationCredential()
+//   Sync Log           getSyncLog(), logSync()
+//   Marketplace        listListings(), createListing(), updateListing(),
+//                      generateListingContent()
+//   Orders             listMarketplaceOrders(), getMarketplaceOrder(),
+//                      importMarketplaceOrder(), updateMarketplaceOrderStatus()
+//   B2B Network        listB2bInventory(), addToB2bNetwork(),
+//                      removeFromB2bNetwork()
+//   Directory          listDirectoryListings(), createDirectoryListing(),
+//                      updateDirectoryListing()
+//   Distributors       searchDistributorCatalog(), placeDistributorOrder()
+//
+// Dependencies: App\Core\Database
+// Called by:    routes/api.php (when URI matches)
+//
 // DunganSoft Technologies, March 2026
+// ============================================================================
 // ============================================================================
 
 use App\Core\Database;

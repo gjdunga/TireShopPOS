@@ -1,8 +1,42 @@
 <?php
 // ============================================================================
-// tire_pos_p3.php
-// Phase 3: Online Presence CRUD functions
+// TireShopPOS: Phase 3 CRUD (Online Presence, Warranties, Wheels, Hardware)
+// ============================================================================
+//
+// LAZY-LOADED: only parsed when URI matches /api/(settings|config|warranty*|
+// wheels|fitment|custom-field*|api-key*|recalls|barcode|labels|notifications|
+// public|website-config). See public/index.php.
+//
+// Function groups:
+//   Shop Settings      getAllSettings(), bulkUpdateSettings(), getSettingValue()
+//   Website Config     getAllWebsiteConfig(), bulkUpdateWebsiteConfig()
+//   Warranty Policies  listWarrantyPolicies(), getWarrantyPolicy(),
+//                      createWarrantyPolicy(), updateWarrantyPolicy()
+//   Warranty Claims    listWarrantyClaims(), getWarrantyClaim(),
+//                      fileWarrantyClaim(), reviewWarrantyClaim(),
+//                      payWarrantyClaim()
+//   Wheels             searchWheels(), getWheel(), createWheel(), updateWheel()
+//   Wheel Fitments     addWheelFitment(), removeWheelFitment()
+//   Fitment Search     searchFitmentByVehicle(), searchFitmentReverse(),
+//                      searchByBoltPattern()
+//   Custom Fields      listCustomFields(), createCustomField(),
+//                      updateCustomField(), getCustomFieldValues(),
+//                      setCustomFieldValues()
+//   API Keys           listApiKeys(), createApiKey(), revokeApiKey()
+//   NHTSA Recalls      checkNhtsaRecalls(), checkTireRecallByDot()
+//   Barcode Labels     generateTireLabelZpl(), generateWheelLabelZpl()
+//   Barcode Scanner    lookupByBarcode()
+//   Notifications      logNotification(), markNotificationSent(),
+//                      markNotificationFailed(), listPendingNotifications(),
+//                      getNotificationLog()
+//   Public Storefront  getPublicSettings(), getPublicInventory(),
+//                      getPublicTireDetail(), getPublicAppointmentSlots()
+//
+// Dependencies: App\Core\Database
+// Called by:    routes/api.php (when URI matches)
+//
 // DunganSoft Technologies, March 2026
+// ============================================================================
 // ============================================================================
 
 use App\Core\Database;

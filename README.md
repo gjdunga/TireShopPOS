@@ -1,34 +1,140 @@
-# Tire Shop POS System
+# TireShopPOS
 
 **DunganSoft Technologies** | March 2026
 
-Point-of-sale system for tire shops with integrated vehicle lookup, torque specification management, Colorado tax/fee compliance, and full RBAC security.
+Full-stack point-of-sale system for independent tire shops. PHP 8.1+ REST API with React 19 frontend, designed for Ubuntu 24.04 LTS with Virtualmin 8.x Professional.
 
-## Repository Structure
+## Quick Start
 
-    sql/
-      tire_pos_schema_full.sql    Consolidated schema v2.4 (44 tables, 14 views, 410 torque seed rows)
+```bash
+# Clone
+git clone https://github.com/gjdunga/TireShopPOS.git
+cd TireShopPOS
 
-    php/
-      tire_pos_helpers.php        Business logic: validation, tax, torque gate, waivers, RBAC, audit
-      VehicleLookupService.php    Plate-to-VIN lookup, NHTSA decode, three-tier torque matching, caching
+# Configure
+cp deploy/.env.production.example .env
+# Edit .env with database credentials
 
-    docs/
-      tire_pos_roadmap.docx       6-phase development roadmap (14 months)
-      vehicle_lookup_integration.docx   Technical integration specification
-      instant_vehicle_lookup.docx       Client-facing feature documentation
+# Load schema
+mysql -u <user> -p <database> < sql/tire_pos_schema_full.sql
+for m in sql/migrations/*.sql; do mysql -u <user> -p <database> < "$m"; done
 
-## Schema Version History
+# Build frontend
+cd frontend && npm install && npm run build && cd ..
 
-- v2.3: 41 tables, 13 views (inventory, customers, vehicles, invoices, work orders, RBAC, audit)
-- v2.4: +3 tables, +1 view (lkp_torque_specs, plate_lookup_cache, plate_lookup_log, v_plate_lookup_monthly_cost)
+# Run (development)
+php -S localhost:8080 -t public public/index.php
+```
+
+## Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Backend | PHP 8.1+ (procedural + PSR-4 autoloader), no framework |
+| Database | MySQL 8.x / MariaDB 10.11+, 70 tables, 14 views |
+| Frontend | React 19, Vite 7, 27 page components |
+| Server | Ubuntu 24.04 LTS, Apache 2.4, PHP 8.3-FPM |
+| Hosting | Virtualmin 8.x Professional |
+| Auth | bcrypt, token sessions, RBAC (30 permissions, 5 roles) |
+
+## Key Numbers
+
+- 166 API routes
+- 70 database tables, 14 views
+- 155 PHP functions across 5 business logic files
+- 30 RBAC permissions, 5 roles (owner, manager, tech, sales, readonly)
+- 53 tire brands, 410 torque specs seeded
+- 122 integration test assertions (all passing)
+
+## Project Structure
+
+```
+app/Core/          PHP framework (Autoloader, Database, Session, Router, Auth)
+app/Http/          Auth, Middleware, Router
+config/            App and database configuration (reads .env)
+deploy/            Production deployment scripts and configs
+frontend/src/      React SPA (auth, layout, 27 page components)
+php/               Business logic (lazy-loaded by URI prefix)
+  tire_pos_helpers.php    Core helpers (924 lines, always loaded)
+  tire_pos_crud.php       CRUD operations (1,128 lines, always loaded)
+  tire_pos_p3.php         Settings, warranties, wheels, storefront (901 lines)
+  tire_pos_p6.php         Marketplace, integrations, B2B (352 lines)
+  VehicleLookupService.php  Plate/VIN lookup, NHTSA decode (845 lines)
+public/index.php   Front controller with lazy-loading gate
+routes/api.php     All 166 route definitions (1,512 lines)
+scripts/           Cron jobs (backup, session cleanup)
+sql/               Schema and migrations
+tests/             Integration test suite (122 assertions)
+```
+
+## Lazy-Loading
+
+The front controller conditionally loads PHP files based on request URI:
+
+| File | Lines | Loaded When |
+|------|-------|-------------|
+| helpers + crud | 2,052 | Always |
+| tire_pos_p3.php | 901 | /settings, /warranty*, /wheels, /public/* |
+| tire_pos_p6.php | 352 | /marketplace, /integrations, /b2b |
+| VehicleLookupService.php | 845 | /vehicles/lookup, /vehicles/validate |
+
+Typical request (work orders, customers, tires): 3,628 lines parsed.
+Before optimization: 7,447 lines. **51% reduction.**
+
+## API Authentication
+
+All authenticated endpoints require `Authorization: Bearer <token>`.
+
+```bash
+# Login
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin"}' \
+  http://localhost:8080/api/auth/login
+
+# Use token
+curl -H "Authorization: Bearer <token>" \
+  http://localhost:8080/api/work-orders
+```
+
+Default admin: username `admin`, password `admin` (force change on first login).
+
+## Deployment
+
+See `deploy/README.md` for full Virtualmin deployment guide.
+See `docs/TireShopPOS_Developer_Guide.docx` for complete API reference.
+
+```bash
+# On server
+cd /home/<user>/domains/<domain>/app
+git pull origin main
+./deploy/deploy.sh
+```
+
+## Testing
+
+```bash
+bash tests/test_backend.sh
+```
+
+Starts temporary MySQL, loads schema, boots PHP server, runs 122 assertions
+covering health, auth, RBAC, CRUD, validation, SQL injection, XSS, boundary
+values, and token invalidation.
 
 ## Requirements
 
-- PHP 8.1+
-- MySQL 8.x / MariaDB 10.6+
-- ext-curl, ext-json, ext-bcmath
-- PlateToVIN API key (environment variable: PLATETOVIN_API_KEY)
+- PHP 8.1+ with extensions: mysql, bcmath, curl, mbstring
+- MySQL 8.0+ / MariaDB 10.11+
+- Node.js 20+ (build only)
+- PlateToVIN API key (optional, for plate lookup)
+
+## Documentation
+
+| Document | Location |
+|----------|----------|
+| Developer Guide (API ref, architecture, deployment) | `docs/TireShopPOS_Developer_Guide.docx` |
+| Deployment Guide | `deploy/README.md` |
+| Development Roadmap | `docs/tire_pos_roadmap.docx` |
+| Vehicle Lookup Integration | `docs/vehicle_lookup_integration.docx` |
 
 ## License
 

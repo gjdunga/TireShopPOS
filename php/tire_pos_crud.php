@@ -2,12 +2,47 @@
 declare(strict_types=1);
 
 /**
- * CRUD Helper Functions (P2b).
+ * ============================================================================
+ * TireShopPOS: CRUD Operations
+ * ============================================================================
  *
- * Entity create/update/delete operations for all POS tables.
- * Bridges to Database::pdo() via getDB() shim from tire_pos_helpers.php.
+ * Loaded on EVERY request. Contains all create/read/update/delete functions
+ * for the core domain entities: tires, customers, vehicles, work orders,
+ * appointments, purchase orders, vendors, and supporting operations.
+ *
+ * Function groups:
+ *   Tires           getTire(), createTire(), updateTire(), writeOffTire(),
+ *                   searchTiresBySize(), searchTiresAdvanced(),
+ *                   getTirePhotos(), saveTirePhoto(), deleteTirePhoto()
+ *   Customers       getCustomer(), createCustomer(), updateCustomer(),
+ *                   searchCustomers()
+ *   Vehicles        getVehicle(), createVehicle(), updateVehicle(),
+ *                   searchVehicles(), getVehicleHistory(),
+ *                   getCustomerVehicles(), linkCustomerVehicle(),
+ *                   unlinkCustomerVehicle()
+ *   Work Orders     getWorkOrder(), createWorkOrder(), updateWorkOrder(),
+ *                   listWorkOrders(), getOpenWorkOrders(),
+ *                   assignWorkOrder(), addWorkOrderPosition(),
+ *                   updateWorkOrderPosition(), completeWorkOrder()
+ *   Appointments    getAppointment(), createAppointment(),
+ *                   updateAppointment(), cancelAppointment(),
+ *                   listAppointments(), getTodaysAppointments()
+ *   Purchase Orders getPurchaseOrder(), createPurchaseOrder(),
+ *                   addPoLineItem(), receivePurchaseOrder(),
+ *                   listPurchaseOrders(), getOpenPurchaseOrders()
+ *   Vendors         getVendor(), createVendor(), listVendors()
+ *   Services        getService(), listServices()
+ *   Config          getAllConfig(), getConfigValue(), updateConfig()
+ *   VIN             validateVin()
+ *
+ * All write functions call auditLog() and logActivity() from helpers.
+ * All functions use Database::query/execute with parameterized queries.
+ *
+ * Dependencies: App\Core\Database, tire_pos_helpers.php (auditLog, etc.)
+ * Called by:    routes/api.php
  *
  * DunganSoft Technologies, March 2026
+ * ============================================================================
  */
 
 use App\Core\Database;
