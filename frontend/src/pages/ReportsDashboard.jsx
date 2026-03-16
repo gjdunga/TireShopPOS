@@ -6,6 +6,37 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import api from '../api/client.js';
+
+// CSV download helper: fetches with auth token, triggers browser download
+function downloadCsv(path) {
+  const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+  fetch('/api' + path + (path.includes('?') ? '&' : '?') + 'format=csv', {
+    headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+  })
+    .then((r) => {
+      if (!r.ok) throw new Error('Download failed');
+      const cd = r.headers.get('Content-Disposition') || '';
+      const match = cd.match(/filename="?([^"]+)"?/);
+      const filename = match ? match[1] : 'export.csv';
+      return r.blob().then((b) => ({ b, filename }));
+    })
+    .then(({ b, filename }) => {
+      const url = URL.createObjectURL(b);
+      const a = document.createElement('a'); a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    })
+    .catch((e) => alert('CSV download error: ' + e.message));
+}
+
+function CsvBtn({ path, label }) {
+  return (
+    <button className="btn btn-ghost btn-sm" onClick={() => downloadCsv(path)}
+      style={{ fontSize: '0.7rem', gap: '0.2rem' }}>
+      CSV {label || ''}
+    </button>
+  );
+}
+
 import {
   Chart as ChartJS, CategoryScale, LinearScale,
   BarElement, ArcElement, Title, Tooltip, Legend, Filler
@@ -202,7 +233,10 @@ function ServicesTab() {
   return (
     <div className="report-grid">
       <div className="report-card report-card-wide">
-        <h3 className="report-card-title">Service Usage</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 className="report-card-title" style={{ margin: 0 }}>Service Usage</h3>
+          <CsvBtn path="/reports/service-usage" />
+        </div>
         {services.length === 0 ? <p className="text-muted">No service data.</p> : (
           <div className="chart-container"><Bar data={svcChart} options={{
             ...defaultOptions,
@@ -212,7 +246,10 @@ function ServicesTab() {
       </div>
 
       <div className="report-card report-card-wide">
-        <h3 className="report-card-title">Active Warranties ({warranties.length})</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 className="report-card-title" style={{ margin: 0 }}>Active Warranties ({warranties.length})</h3>
+          <CsvBtn path="/reports/active-warranties" />
+        </div>
         {warranties.length === 0 ? <p className="text-muted">No active warranties.</p> : (
           <table className="entity-table" style={{ fontSize: '0.8125rem' }}>
             <thead><tr><th>Reference</th><th>Customer</th><th>Tire</th><th>Expires</th></tr></thead>
@@ -271,7 +308,10 @@ function LookupTab() {
   return (
     <div className="report-grid">
       <div className="report-card report-card-wide">
-        <h3 className="report-card-title">Plate Lookup Cost Tracking</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 className="report-card-title" style={{ margin: 0 }}>Plate Lookup Cost Tracking</h3>
+          <CsvBtn path="/reports/lookup-cost" />
+        </div>
         <div className="chart-container"><Bar data={costChart} options={dollarOptions()} /></div>
       </div>
 
@@ -288,7 +328,10 @@ function LookupTab() {
 
       {providerData.length > 0 && (
         <div className="report-card" style={{ gridColumn: '1 / -1' }}>
-          <h3 className="report-card-title">Per-Provider Breakdown</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 className="report-card-title" style={{ margin: 0 }}>Per-Provider Breakdown</h3>
+            <CsvBtn path="/reports/lookup-monthly" />
+          </div>
           <table className="entity-table" style={{ fontSize: '0.8125rem' }}>
             <thead><tr><th>Month</th><th>Provider</th><th style={{ textAlign: 'right' }}>Calls</th><th style={{ textAlign: 'right' }}>Success</th><th style={{ textAlign: 'right' }}>Failed</th><th style={{ textAlign: 'right' }}>Avg ms</th><th style={{ textAlign: 'right' }}>Cost</th></tr></thead>
             <tbody>
@@ -339,7 +382,8 @@ function SalesTab() {
       <div className="report-card" style={{ gridColumn: '1 / -1' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
           <h3 className="report-card-title" style={{ margin: 0 }}>Sales Summary</h3>
-          <div style={{ display: 'flex', gap: '0.25rem' }}>
+          <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+            <CsvBtn path={`/reports/sales-summary?period=${period}`} />
             {['daily', 'weekly', 'monthly'].map((p) => (
               <button key={p} className={`btn btn-sm ${period === p ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => setPeriod(p)} style={{ textTransform: 'capitalize', fontSize: '0.75rem' }}>{p}</button>
@@ -397,9 +441,12 @@ function TopSellersTab() {
       <div className="report-card" style={{ gridColumn: '1 / -1' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
           <h3 className="report-card-title" style={{ margin: 0 }}>Top Selling Tires (90 days)</h3>
-          <select value={limit} onChange={(e) => setLimit(Number(e.target.value))} style={{ fontSize: '0.8rem' }}>
-            <option value={5}>Top 5</option><option value={10}>Top 10</option><option value={25}>Top 25</option>
-          </select>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <CsvBtn path={`/reports/top-selling-tires?limit=${limit}`} />
+            <select value={limit} onChange={(e) => setLimit(Number(e.target.value))} style={{ fontSize: '0.8rem' }}>
+              <option value={5}>Top 5</option><option value={10}>Top 10</option><option value={25}>Top 25</option>
+            </select>
+          </div>
         </div>
         {data.length === 0 ? <p className="text-muted">No tire sales data available.</p> : (
           <table className="entity-table" style={{ fontSize: '0.8125rem' }}>
@@ -450,7 +497,8 @@ function QuarterlyFeesTab() {
       <div className="report-card" style={{ gridColumn: '1 / -1' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
           <h3 className="report-card-title" style={{ margin: 0 }}>Quarterly Fee Report (CDPHE)</h3>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <CsvBtn path={`/reports/quarterly-fees?year=${year}&quarter=${quarter}`} />
             <select value={year} onChange={(e) => setYear(Number(e.target.value))} style={{ fontSize: '0.8rem' }}>
               {[now.getFullYear(), now.getFullYear() - 1].map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
@@ -511,9 +559,12 @@ function EmployeesTab() {
       <div className="report-card" style={{ gridColumn: '1 / -1' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
           <h3 className="report-card-title" style={{ margin: 0 }}>Employee Activity (30 days)</h3>
-          <select value={selected || ''} onChange={(e) => setSelected(Number(e.target.value))} style={{ fontSize: '0.8rem' }}>
-            {users.map((u) => <option key={u.user_id} value={u.user_id}>{u.display_name || u.username}</option>)}
-          </select>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            {selected && <CsvBtn path={`/reports/employee-activity?user_id=${selected}`} />}
+            <select value={selected || ''} onChange={(e) => setSelected(Number(e.target.value))} style={{ fontSize: '0.8rem' }}>
+              {users.map((u) => <option key={u.user_id} value={u.user_id}>{u.display_name || u.username}</option>)}
+            </select>
+          </div>
         </div>
         {data.length === 0 ? <p className="text-muted">No activity for this user.</p> : (
           <table className="entity-table" style={{ fontSize: '0.8125rem' }}>

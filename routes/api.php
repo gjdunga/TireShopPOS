@@ -388,16 +388,32 @@ $router->with(permit('PO_CREATE', 'PO_RECEIVE'))->get('/api/purchase-orders/open
 
 // ============================================================================
 // Reports (all require REPORT_VIEW)
+// CSV export: append ?format=csv to any report URL to download CSV.
 // ============================================================================
+require_once BASE_PATH . '/php/CsvExport.php';
 
 $router->with(permit('REPORT_VIEW'))->get('/api/reports/quarterly-fees', function () {
     $year = (int) Router::query('year', (string) date('Y'));
     $quarter = (int) Router::query('quarter', (string) ceil(date('n') / 3));
-    return ['year' => $year, 'quarter' => $quarter, 'report' => getQuarterlyFeeReport($year, $quarter)];
+    $report = getQuarterlyFeeReport($year, $quarter);
+    if (CsvExport::requested()) {
+        CsvExport::send($report, "quarterly-fees-{$year}-Q{$quarter}.csv", [
+            'fee_key' => 'Fee Code', 'fee_label' => 'Description',
+            'fee_count' => 'Count', 'fee_total' => 'Total',
+        ]);
+    }
+    return ['year' => $year, 'quarter' => $quarter, 'report' => $report];
 });
 
 $router->with(permit('REPORT_VIEW'))->get('/api/reports/service-usage', function () {
-    return ['report' => getServiceUsageReport()];
+    $report = getServiceUsageReport();
+    if (CsvExport::requested()) {
+        CsvExport::send($report, 'service-usage.csv', [
+            'service_code' => 'Code', 'service_name' => 'Service',
+            'usage_count' => 'Usage Count', 'total_revenue' => 'Revenue',
+        ]);
+    }
+    return ['report' => $report];
 });
 
 $router->with(permit('REPORT_VIEW'))->get('/api/reports/employee-activity', function () {
@@ -407,19 +423,42 @@ $router->with(permit('REPORT_VIEW'))->get('/api/reports/employee-activity', func
     if ($userId === 0) {
         Router::sendError('MISSING_PARAM', 'Query parameter "user_id" is required.', 400);
     }
-    return ['user_id' => $userId, 'start' => $start, 'end' => $end,
-            'activity' => getEmployeeActivity($userId, $start, $end)];
+    $activity = getEmployeeActivity($userId, $start, $end);
+    if (CsvExport::requested()) {
+        CsvExport::send($activity, "employee-activity-{$userId}.csv", [
+            'created_at' => 'Date', 'action_type' => 'Action',
+            'entity_type' => 'Entity', 'entity_id' => 'Record ID', 'details' => 'Details',
+        ]);
+    }
+    return ['user_id' => $userId, 'start' => $start, 'end' => $end, 'activity' => $activity];
 });
 
 $router->with(permit('REPORT_VIEW'))->get('/api/reports/active-warranties', function () {
-    return ['warranties' => getActiveWarranties()];
+    $warranties = getActiveWarranties();
+    if (CsvExport::requested()) {
+        CsvExport::send($warranties, 'active-warranties.csv', [
+            'reference_number' => 'Work Order', 'first_name' => 'First Name',
+            'last_name' => 'Last Name', 'phone_primary' => 'Phone',
+            'tire_description' => 'Tire', 'warranty_expires_at' => 'Expires',
+        ]);
+    }
+    return ['warranties' => $warranties];
 });
 
 $router->with(permit('REPORT_VIEW'))->get('/api/reports/sales-summary', function () {
     $period = Router::query('period', 'daily');
     $start = Router::query('start', null);
     $end = Router::query('end', null);
-    return ['period' => $period, 'data' => getSalesSummary($period, $start, $end)];
+    $data = getSalesSummary($period, $start, $end);
+    if (CsvExport::requested()) {
+        CsvExport::send($data, "sales-summary-{$period}.csv", [
+            'label' => 'Period', 'wo_count' => 'Work Orders',
+            'total_materials' => 'Materials', 'total_labor' => 'Labor',
+            'total_fees' => 'Fees', 'total_tax' => 'Tax',
+            'total_revenue' => 'Revenue', 'total_deposits' => 'Deposits',
+        ]);
+    }
+    return ['period' => $period, 'data' => $data];
 });
 
 $router->with(permit('REPORT_VIEW'))->get('/api/reports/inventory-stats', function () {
@@ -430,13 +469,27 @@ $router->with(permit('REPORT_VIEW'))->get('/api/reports/top-selling-tires', func
     $limit = (int) Router::query('limit', '10');
     $start = Router::query('start', null);
     $end = Router::query('end', null);
-    return ['tires' => getTopSellingTires($limit, $start, $end)];
+    $tires = getTopSellingTires($limit, $start, $end);
+    if (CsvExport::requested()) {
+        CsvExport::send($tires, 'top-selling-tires.csv', [
+            'full_size_string' => 'Size', 'brand_name' => 'Brand',
+            'model' => 'Model', 'sold_count' => 'Sold', 'avg_price' => 'Avg Price',
+        ]);
+    }
+    return ['tires' => $tires];
 });
 
 $router->with(permit('REPORT_VIEW'))->get('/api/reports/lookup-cost', function () {
     $start = Router::query('start', null);
     $end = Router::query('end', null);
-    return ['data' => getLookupCostReport($start, $end)];
+    $data = getLookupCostReport($start, $end);
+    if (CsvExport::requested()) {
+        CsvExport::send($data, 'lookup-cost.csv', [
+            'month' => 'Month', 'lookup_count' => 'Total Lookups',
+            'api_calls' => 'API Calls', 'cache_hits' => 'Cache Hits', 'api_cost' => 'Cost ($)',
+        ]);
+    }
+    return ['data' => $data];
 });
 
 $router->with(permit('REPORT_VIEW'))->get('/api/reports/lookup-dashboard', function () {
@@ -450,7 +503,16 @@ $router->with(permit('REPORT_VIEW'))->get('/api/reports/lookup-monthly', functio
     $svc = new VehicleLookupService();
     $year = Router::query('year') ? (int) Router::query('year') : null;
     $month = Router::query('month') ? (int) Router::query('month') : null;
-    return ['data' => $svc->getMonthlyCostReport($year, $month)];
+    $data = $svc->getMonthlyCostReport($year, $month);
+    if (CsvExport::requested()) {
+        CsvExport::send($data, 'lookup-monthly.csv', [
+            'month' => 'Month', 'api_provider' => 'Provider',
+            'total_calls' => 'Calls', 'successful_calls' => 'Success',
+            'failed_calls' => 'Failed', 'total_cost_usd' => 'Cost ($)',
+            'avg_response_ms' => 'Avg ms',
+        ]);
+    }
+    return ['data' => $data];
 });
 
 
