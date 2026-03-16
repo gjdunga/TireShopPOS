@@ -186,7 +186,7 @@ else
 fi
 
 SV_TOT=$(mc "SELECT total_migrations FROM schema_version WHERE id=1;")
-assert_eq "schema_version: total_migrations" "10" "$SV_TOT"
+assert_eq "schema_version: total_migrations" "11" "$SV_TOT"
 
 SV_USR=$(mc "SELECT installer_user FROM schema_version WHERE id=1;")
 TOTAL=$((TOTAL + 1))
@@ -198,10 +198,10 @@ else
 fi
 
 SM_CT=$(mc "SELECT COUNT(*) FROM schema_migrations;")
-assert_eq "schema_migrations: 10 rows" "10" "$SM_CT"
+assert_eq "schema_migrations: 11 rows" "11" "$SM_CT"
 
 SM_OK=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE success=1;")
-assert_eq "schema_migrations: all successful" "10" "$SM_OK"
+assert_eq "schema_migrations: all successful" "11" "$SM_OK"
 
 SM_FAIL=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE success=0;")
 assert_eq "schema_migrations: 0 failures" "0" "$SM_FAIL"
@@ -231,7 +231,7 @@ TC_SAME=$(mc "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=
 assert_eq "Upgrade no-op: 66 tables" "66" "$TC_SAME"
 
 SM_SAME=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE success=1 AND skipped=0;")
-assert_eq "Upgrade no-op: 10 migrations" "10" "$SM_SAME"
+assert_eq "Upgrade no-op: 11 migrations" "11" "$SM_SAME"
 
 # ---- Incremental upgrade ----
 echo -e "\n${CYAN}  [Incremental Upgrade]${NC}"
@@ -255,7 +255,7 @@ SM_009=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE filename='009_test_mig
 assert_eq "Incremental: tracked" "1" "$SM_009"
 
 SM_NOW=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE success=1;")
-assert_eq "Incremental: 11 total" "11" "$SM_NOW"
+assert_eq "Incremental: 12 total" "12" "$SM_NOW"
 
 OUTPUT=$(inst --upgrade)
 assert "Incremental re-run: no-op" "already applied" "$OUTPUT"
@@ -334,7 +334,7 @@ TC_RESTORED=$(mc "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCH
 assert_eq "Wipe: 66 tables restored" "66" "$TC_RESTORED"
 
 SV_RESTORED=$(mc "SELECT total_migrations FROM schema_version WHERE id=1;")
-assert_eq "Wipe: migrations re-tracked" "10" "$SV_RESTORED"
+assert_eq "Wipe: migrations re-tracked" "11" "$SV_RESTORED"
 
 # ---- .env parsing ----
 echo -e "\n${CYAN}  [.env Parsing]${NC}"

@@ -13,6 +13,7 @@ const TABS = [
   { key: 'hours', label: 'Hours' },
   { key: 'website', label: 'Website' },
   { key: 'appearance', label: 'Appearance' },
+  { key: 'notifications', label: 'Notifications' },
   { key: 'fields', label: 'Custom Fields' },
   { key: 'apikeys', label: 'API Keys' },
   { key: 'lookup', label: 'Vehicle Lookup' },
@@ -68,6 +69,7 @@ export default function SettingsAdmin() {
         {tab === 'hours' && <HoursTab settings={settings} onSaved={(m) => { setMsg(m); load(); }} onError={setError} />}
         {tab === 'website' && <WebsiteTab settings={settings} webConfig={webConfig} onSaved={(m) => { setMsg(m); load(); }} onError={setError} />}
         {tab === 'appearance' && <AppearanceTab webConfig={webConfig} onSaved={(m) => { setMsg(m); load(); }} onError={setError} />}
+        {tab === 'notifications' && <NotificationsTab settings={settings} onSaved={(m) => { setMsg(m); load(); }} onError={setError} />}
         {tab === 'fields' && <CustomFieldsTab onError={setError} />}
         {tab === 'apikeys' && <ApiKeysTab onError={setError} />}
         {tab === 'lookup' && <VehicleLookupTab onSaved={(m) => { setMsg(m); }} onError={setError} />}
@@ -236,6 +238,93 @@ function AppearanceTab({ webConfig, onSaved, onError }) {
       <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ marginTop: '1rem' }}>
         {saving ? <span className="spinner" /> : 'Save'}
       </button>
+    </div>
+  );
+}
+
+function NotificationsTab({ settings, onSaved, onError }) {
+  const mailKeys = ['smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_encryption', 'smtp_from'];
+  const smsKeys = ['sms_api_key', 'sms_api_secret', 'sms_from_number'];
+
+  const [form, setForm] = useState(() => {
+    const init = {};
+    [...mailKeys, ...smsKeys].forEach((k) => { init[k] = settings[k]?.setting_value || ''; });
+    return init;
+  });
+  const [saving, setSaving] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+  const [testing, setTesting] = useState(null);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const patch = {};
+      [...mailKeys, ...smsKeys].forEach((k) => { patch[k] = form[k]; });
+      await api.patch('/settings', patch);
+      onSaved('Notification settings saved.');
+    } catch (e) { onError(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const handleTest = async (type) => {
+    setTesting(type);
+    setTestResult(null);
+    try {
+      const result = await api.post(`/notifications/test-${type}`);
+      setTestResult({ type, ...result });
+    } catch (e) { setTestResult({ type, success: false, error: e.message }); }
+    finally { setTesting(null); }
+  };
+
+  return (
+    <div>
+      <STitle>Email (SMTP)</STitle>
+      <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.75rem' }}>
+        Leave SMTP Host blank to use the server's built-in mail system (Postfix). Set it for external providers like Gmail, SendGrid, or Mailgun.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.5rem' }}>
+        {mailKeys.map((k) => (
+          <div key={k} className="form-field">
+            <label className="label">{k.replace('smtp_', '').replace(/_/g, ' ')}</label>
+            <input type={k === 'smtp_pass' ? 'password' : 'text'} value={form[k]} onChange={(e) => setForm((p) => ({ ...p, [k]: e.target.value }))} />
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+        <button className="btn btn-ghost btn-sm" onClick={() => handleTest('email')} disabled={testing}>
+          {testing === 'email' ? 'Sending...' : 'Send Test Email'}
+        </button>
+      </div>
+
+      <STitle>SMS (Flowroute)</STitle>
+      <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.75rem' }}>
+        Requires a Flowroute account with SMS-enabled DID. API credentials are in the Flowroute portal under Preferences > API Control.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.5rem' }}>
+        {smsKeys.map((k) => (
+          <div key={k} className="form-field">
+            <label className="label">{k.replace('sms_', '').replace(/_/g, ' ')}</label>
+            <input type={k.includes('secret') ? 'password' : 'text'} value={form[k]} onChange={(e) => setForm((p) => ({ ...p, [k]: e.target.value }))} />
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+        <button className="btn btn-ghost btn-sm" onClick={() => handleTest('sms')} disabled={testing}>
+          {testing === 'sms' ? 'Sending...' : 'Send Test SMS'}
+        </button>
+      </div>
+
+      {testResult && (
+        <div className={`alert ${testResult.success ? 'alert-success' : 'alert-error'}`} style={{ marginTop: '0.75rem' }}>
+          {testResult.type === 'email' ? 'Email' : 'SMS'} test: {testResult.success ? 'Sent successfully' + (testResult.sent_to ? ` to ${testResult.sent_to}` : '') : testResult.error}
+        </div>
+      )}
+
+      <div style={{ marginTop: '1rem' }}>
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? <span className="spinner" /> : 'Save Notification Settings'}
+        </button>
+      </div>
     </div>
   );
 }

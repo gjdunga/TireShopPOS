@@ -1439,6 +1439,34 @@ $router->with(permit('CUSTOMER_MANAGE'))->post('/api/notifications/{id}/failed',
     return ['message' => 'Marked failed.'];
 });
 
+// --- Notification Delivery ---
+$router->with(permit('CUSTOMER_MANAGE'))->post('/api/notifications/deliver', function (array $params, array $body) {
+    require_once BASE_PATH . '/php/NotificationDelivery.php';
+    $limit = (int) ($body['limit'] ?? 20);
+    $result = NotificationDelivery::processQueue(min($limit, 50));
+    return $result;
+});
+
+$router->with(permit('CONFIG_MANAGE'))->get('/api/notifications/delivery-config', function () {
+    require_once BASE_PATH . '/php/NotificationDelivery.php';
+    return NotificationDelivery::getDeliveryConfig();
+});
+
+$router->with(permit('CUSTOMER_MANAGE'))->get('/api/notifications/delivery-stats', function () {
+    require_once BASE_PATH . '/php/NotificationDelivery.php';
+    return NotificationDelivery::getStats();
+});
+
+$router->with(permit('CONFIG_MANAGE'))->post('/api/notifications/test-email', function () {
+    require_once BASE_PATH . '/php/NotificationDelivery.php';
+    return NotificationDelivery::testEmail();
+});
+
+$router->with(permit('CONFIG_MANAGE'))->post('/api/notifications/test-sms', function () {
+    require_once BASE_PATH . '/php/NotificationDelivery.php';
+    return NotificationDelivery::testSms();
+});
+
 
 // ============================================================================
 // Phase 6: Marketplace Integration Routes

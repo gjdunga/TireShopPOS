@@ -160,10 +160,19 @@ function SendTab() {
 function PendingTab() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(null);
+  const [delivering, setDelivering] = useState(false);
+  const [deliveryResult, setDeliveryResult] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get('/notifications/pending').then((d) => setNotifications(d.notifications || [])).catch(() => {}).finally(() => setLoading(false));
+    Promise.all([
+      api.get('/notifications/pending').catch(() => ({ notifications: [] })),
+      api.get('/notifications/delivery-stats').catch(() => null),
+    ]).then(([d, s]) => {
+      setNotifications(d.notifications || []);
+      setStats(s);
+    }).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -176,8 +185,51 @@ function PendingTab() {
     try { await api.post(`/notifications/${id}/failed`, { reason: 'Manual mark as failed' }); load(); } catch {}
   };
 
+  const handleProcessQueue = async () => {
+    setDelivering(true);
+    setDeliveryResult(null);
+    try {
+      const result = await api.post('/notifications/deliver', { limit: 20 });
+      setDeliveryResult(result);
+      load();
+    } catch (e) { setDeliveryResult({ error: e.message }); }
+    finally { setDelivering(false); }
+  };
+
   return (
     <div className="card">
+      {/* Delivery controls */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '0.75rem', borderBottom: '1px solid #eee' }}>
+        <div>
+          <button className="btn btn-primary btn-sm" onClick={handleProcessQueue} disabled={delivering || notifications.length === 0}>
+            {delivering ? <span className="spinner" /> : 'Process Queue (Send All)'}
+          </button>
+          {stats && (
+            <span style={{ marginLeft: '1rem', fontSize: '0.8rem', color: '#666' }}>
+              Today: {stats.sent_today || 0} sent, {stats.failed_today || 0} failed
+              {stats.last_sent_at && ` | Last: ${stats.last_sent_at.slice(0, 16)}`}
+            </span>
+          )}
+        </div>
+        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: notifications.length > 0 ? 'var(--orange)' : 'var(--green)' }}>
+          {notifications.length} pending
+        </span>
+      </div>
+
+      {deliveryResult && (
+        <div className={`alert ${deliveryResult.error ? 'alert-error' : 'alert-success'}`} style={{ marginBottom: '0.75rem', fontSize: '0.85rem' }}>
+          {deliveryResult.error
+            ? `Delivery error: ${deliveryResult.error}`
+            : `Processed ${deliveryResult.processed}: ${deliveryResult.sent} sent, ${deliveryResult.failed} failed`
+          }
+          {deliveryResult.errors?.length > 0 && (
+            <div style={{ marginTop: '0.25rem', fontSize: '0.75rem' }}>
+              {deliveryResult.errors.map((e, i) => <div key={i}>{e}</div>)}
+            </div>
+          )}
+        </div>
+      )}
+
       {loading ? <span className="spinner" /> : notifications.length === 0 ? (
         <p className="text-muted" style={{ textAlign: 'center', padding: '2rem' }}>No pending notifications.</p>
       ) : (
