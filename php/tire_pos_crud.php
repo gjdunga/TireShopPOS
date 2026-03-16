@@ -1037,29 +1037,30 @@ function getSalesSummary(string $period = 'daily', ?string $start = null, ?strin
 
     if ($period === 'daily') {
         $start = $start ?: date('Y-m-d', strtotime('-30 days'));
-        $groupBy = "DATE(i.created_at)";
-        $label = "DATE(i.created_at) AS label";
+        $groupBy = "DATE(wo.created_at)";
+        $label = "DATE(wo.created_at) AS label";
     } elseif ($period === 'weekly') {
         $start = $start ?: date('Y-m-d', strtotime('-26 weeks'));
-        $groupBy = "YEARWEEK(i.created_at, 1)";
-        $label = "CONCAT(YEAR(i.created_at), '-W', LPAD(WEEK(i.created_at, 1), 2, '0')) AS label";
+        $groupBy = "YEARWEEK(wo.created_at, 1)";
+        $label = "CONCAT(YEAR(wo.created_at), '-W', LPAD(WEEK(wo.created_at, 1), 2, '0')) AS label";
     } else {
         $start = $start ?: date('Y-m-d', strtotime('-12 months'));
-        $groupBy = "DATE_FORMAT(i.created_at, '%Y-%m')";
-        $label = "DATE_FORMAT(i.created_at, '%Y-%m') AS label";
+        $groupBy = "DATE_FORMAT(wo.created_at, '%Y-%m')";
+        $label = "DATE_FORMAT(wo.created_at, '%Y-%m') AS label";
     }
 
     return Database::query(
         "SELECT {$label},
-                COUNT(*) AS invoice_count,
-                COALESCE(SUM(i.total), 0) AS total_revenue,
-                COALESCE(SUM(i.tax_amount), 0) AS total_tax,
-                COALESCE(SUM(i.subtotal_fees), 0) AS total_fees,
-                COALESCE(SUM(i.amount_paid), 0) AS total_collected,
-                COALESCE(SUM(i.balance_due), 0) AS total_outstanding
-         FROM invoices i
-         WHERE i.status IN ('open', 'completed')
-           AND i.created_at >= ? AND i.created_at < DATE_ADD(?, INTERVAL 1 DAY)
+                COUNT(*) AS wo_count,
+                COALESCE(SUM(wo.total_estimate), 0) AS total_revenue,
+                COALESCE(SUM(wo.subtotal_materials), 0) AS total_materials,
+                COALESCE(SUM(wo.subtotal_labor), 0) AS total_labor,
+                COALESCE(SUM(wo.tax_amount), 0) AS total_tax,
+                COALESCE(SUM(wo.subtotal_fees), 0) AS total_fees,
+                COALESCE(SUM(wo.deposit_amount), 0) AS total_deposits
+         FROM work_orders wo
+         WHERE wo.status IN ('in_progress', 'complete')
+           AND wo.created_at >= ? AND wo.created_at < DATE_ADD(?, INTERVAL 1 DAY)
          GROUP BY {$groupBy}
          ORDER BY label ASC",
         [$start, $end]
@@ -1128,16 +1129,16 @@ function getTopSellingTires(int $limit = 10, ?string $start = null, ?string $end
     $end = $end ?: date('Y-m-d');
 
     return Database::query(
-        "SELECT t.full_size_string, b.brand_name, t.model, COUNT(*) AS sold_count,
-                AVG(li.unit_price) AS avg_price
-         FROM invoice_line_items li
-         JOIN tires t ON li.tire_id = t.tire_id
+        "SELECT t.full_size_string, b.brand_name, t.model_name AS model, COUNT(*) AS sold_count,
+                AVG(wop.unit_price) AS avg_price
+         FROM work_order_positions wop
+         JOIN tires t ON wop.tire_id_new = t.tire_id
          LEFT JOIN lkp_brands b ON t.brand_id = b.brand_id
-         JOIN invoices i ON li.invoice_id = i.invoice_id
-         WHERE li.line_type = 'tire'
-           AND i.status IN ('open', 'completed')
-           AND i.created_at >= ? AND i.created_at < DATE_ADD(?, INTERVAL 1 DAY)
-         GROUP BY t.full_size_string, b.brand_name, t.model
+         JOIN work_orders wo ON wop.work_order_id = wo.work_order_id
+         WHERE wop.tire_id_new IS NOT NULL
+           AND wo.status IN ('in_progress', 'complete')
+           AND wo.created_at >= ? AND wo.created_at < DATE_ADD(?, INTERVAL 1 DAY)
+         GROUP BY t.full_size_string, b.brand_name, t.model_name
          ORDER BY sold_count DESC
          LIMIT ?",
         [$start, $end, $limit]

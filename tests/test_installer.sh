@@ -156,10 +156,10 @@ assert "Install: applies 007" "007_estimated" "$OUTPUT"
 assert "Install: completes" "install complete" "$OUTPUT"
 
 TC_AFTER=$(mc "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$TEST_DB' AND TABLE_TYPE='BASE TABLE';")
-assert_eq "Post-install: 72 tables" "72" "$TC_AFTER"
+assert_eq "Post-install: 66 tables" "66" "$TC_AFTER"
 
 VC_AFTER=$(mc "SELECT COUNT(*) FROM information_schema.VIEWS WHERE TABLE_SCHEMA='$TEST_DB';")
-assert_eq "Post-install: 14 views" "14" "$VC_AFTER"
+assert_eq "Post-install: 9 views" "9" "$VC_AFTER"
 
 # ---- Version tracking ----
 echo -e "\n${CYAN}  [Version Tracking]${NC}"
@@ -186,7 +186,7 @@ else
 fi
 
 SV_TOT=$(mc "SELECT total_migrations FROM schema_version WHERE id=1;")
-assert_eq "schema_version: total_migrations" "8" "$SV_TOT"
+assert_eq "schema_version: total_migrations" "9" "$SV_TOT"
 
 SV_USR=$(mc "SELECT installer_user FROM schema_version WHERE id=1;")
 TOTAL=$((TOTAL + 1))
@@ -198,10 +198,10 @@ else
 fi
 
 SM_CT=$(mc "SELECT COUNT(*) FROM schema_migrations;")
-assert_eq "schema_migrations: 8 rows" "8" "$SM_CT"
+assert_eq "schema_migrations: 9 rows" "9" "$SM_CT"
 
 SM_OK=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE success=1;")
-assert_eq "schema_migrations: all successful" "8" "$SM_OK"
+assert_eq "schema_migrations: all successful" "9" "$SM_OK"
 
 SM_FAIL=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE success=0;")
 assert_eq "schema_migrations: 0 failures" "0" "$SM_FAIL"
@@ -228,10 +228,10 @@ OUTPUT=$(inst --upgrade)
 assert "Upgrade no-op: nothing to do" "already applied" "$OUTPUT"
 
 TC_SAME=$(mc "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$TEST_DB' AND TABLE_TYPE='BASE TABLE';")
-assert_eq "Upgrade no-op: 72 tables" "72" "$TC_SAME"
+assert_eq "Upgrade no-op: 66 tables" "66" "$TC_SAME"
 
 SM_SAME=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE success=1 AND skipped=0;")
-assert_eq "Upgrade no-op: 8 migrations" "8" "$SM_SAME"
+assert_eq "Upgrade no-op: 9 migrations" "9" "$SM_SAME"
 
 # ---- Incremental upgrade ----
 echo -e "\n${CYAN}  [Incremental Upgrade]${NC}"
@@ -255,7 +255,7 @@ SM_009=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE filename='009_test_mig
 assert_eq "Incremental: tracked" "1" "$SM_009"
 
 SM_NOW=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE success=1;")
-assert_eq "Incremental: 9 total" "9" "$SM_NOW"
+assert_eq "Incremental: 10 total" "10" "$SM_NOW"
 
 OUTPUT=$(inst --upgrade)
 assert "Incremental re-run: no-op" "already applied" "$OUTPUT"
@@ -331,10 +331,10 @@ else
 fi
 
 TC_RESTORED=$(mc "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$TEST_DB' AND TABLE_TYPE='BASE TABLE';")
-assert_eq "Wipe: 72 tables restored" "72" "$TC_RESTORED"
+assert_eq "Wipe: 66 tables restored" "66" "$TC_RESTORED"
 
 SV_RESTORED=$(mc "SELECT total_migrations FROM schema_version WHERE id=1;")
-assert_eq "Wipe: migrations re-tracked" "8" "$SV_RESTORED"
+assert_eq "Wipe: migrations re-tracked" "9" "$SV_RESTORED"
 
 # ---- .env parsing ----
 echo -e "\n${CYAN}  [.env Parsing]${NC}"

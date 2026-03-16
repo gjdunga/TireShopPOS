@@ -1,6 +1,6 @@
 // ================================================================
 // PrintTemplates (P2g)
-// Printable views: invoice, work order, deposit receipt, estimate.
+// Printable views: work order summary, estimate.
 // Each loads its own data and renders a print-ready layout.
 // DunganSoft Technologies, March 2026
 // ================================================================

@@ -204,7 +204,7 @@ function ServicesTab() {
             <tbody>
               {warranties.slice(0, 20).map((w) => (
                 <tr key={w.line_id}>
-                  <td className="mono">{w.invoice_number}</td>
+                  <td className="mono">{w.reference_number}</td>
                   <td>{w.first_name} {w.last_name}</td>
                   <td>{w.tire_description}</td>
                   <td className="mono">{w.warranty_expires_at}</td>

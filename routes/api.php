@@ -619,7 +619,7 @@ $router->with(permit('USER_MANAGE'))->get('/api/roles/{id}/permissions', functio
 
 
 // ============================================================================
-// Sequence generators (auth only, used internally by invoice/WO creation)
+// Sequence generators (auth only, used by WO/PO creation)
 // ============================================================================
 
 $router->with(permit('WORK_ORDER_CREATE'))->get('/api/sequences/next-work-order', function () {
@@ -1447,7 +1447,7 @@ $router->with($auth)->post('/api/marketplace/orders', function (array $params, a
 });
 
 $router->with($auth)->patch('/api/marketplace/orders/{id}/status', function (array $params, array $body) {
-    updateMarketplaceOrderStatus((int) $params['id'], $body['status'], $body['invoice_id'] ?? null);
+    updateMarketplaceOrderStatus((int) $params['id'], $body['status']);
     return ['message' => 'Order status updated.'];
 });
 

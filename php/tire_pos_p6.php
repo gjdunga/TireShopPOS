@@ -232,13 +232,9 @@ function getMarketplaceOrder(int $orderId): ?array {
     return $order;
 }
 
-function updateMarketplaceOrderStatus(int $orderId, string $status, ?int $invoiceId = null): void {
-    $sql = "UPDATE marketplace_orders SET status = ?";
-    $params = [$status];
-    if ($invoiceId) { $sql .= ", invoice_id = ?"; $params[] = $invoiceId; }
-    $sql .= " WHERE order_id = ?";
-    $params[] = $orderId;
-    getDB()->prepare($sql)->execute($params);
+function updateMarketplaceOrderStatus(int $orderId, string $status): void {
+    getDB()->prepare("UPDATE marketplace_orders SET status = ? WHERE order_id = ?")
+        ->execute([$status, $orderId]);
 }
 
 

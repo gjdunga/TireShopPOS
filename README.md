@@ -40,7 +40,7 @@ php -S localhost:8080 -t public public/index.php
 ## Key Numbers
 
 - 169 API routes
-- 70 database tables, 14 views
+- 66 database tables, 9 views
 - 188 PHP functions across 5 business logic files + provider layer
 - 30 RBAC permissions, 5 roles (owner, manager, tech, sales, readonly)
 - 53 tire brands, 410 torque specs seeded

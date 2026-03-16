@@ -166,12 +166,12 @@ function updateWarrantyPolicy(int $policyId, array $data): array {
 // ============================================================================
 
 function fileWarrantyClaim(array $data, int $createdBy): int {
-    // Validate: claim within coverage
+    // Validate: claim within coverage (now tracked via work_order_line_items)
     $line = Database::queryOne(
-        "SELECT li.warranty_expires_at, li.invoice_id, i.customer_id
-         FROM invoice_line_items li
-         JOIN invoices i ON li.invoice_id = i.invoice_id
-         WHERE li.line_id = ? AND li.line_type = 'warranty'",
+        "SELECT woli.warranty_expires_at, wo.work_order_id, wo.customer_id
+         FROM work_order_line_items woli
+         JOIN work_orders wo ON woli.work_order_id = wo.work_order_id
+         WHERE woli.line_id = ? AND woli.line_type = 'warranty'",
         [$data['line_id']]
     );
     if (!$line) throw new RuntimeException('Warranty line item not found');
@@ -181,12 +181,12 @@ function fileWarrantyClaim(array $data, int $createdBy): int {
     }
 
     $sql = "INSERT INTO warranty_claims
-            (invoice_id, line_id, customer_id, policy_id, tire_id, claim_date,
+            (work_order_id, position_id, customer_id, policy_id, tire_id, claim_date,
              failure_description, mileage_at_failure, claim_amount, notes)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     $stmt = getDB()->prepare($sql);
     $stmt->execute([
-        $line['invoice_id'], (int) $data['line_id'], $line['customer_id'],
+        $line['work_order_id'], $data['position_id'] ?? null, $line['customer_id'],
         (int) $data['policy_id'], isset($data['tire_id']) ? (int) $data['tire_id'] : null,
         $data['claim_date'] ?? date('Y-m-d'),
         $data['failure_description'],
@@ -228,11 +228,11 @@ function getWarrantyClaim(int $claimId): ?array {
     return Database::queryOne(
         "SELECT wc.*, c.first_name, c.last_name, c.phone_primary,
                 wp.policy_name, wp.policy_code, wp.max_claim_amount, wp.deductible,
-                i.invoice_number
+                wo.wo_number
          FROM warranty_claims wc
          LEFT JOIN customers c ON wc.customer_id = c.customer_id
          LEFT JOIN warranty_policies wp ON wc.policy_id = wp.policy_id
-         LEFT JOIN invoices i ON wc.invoice_id = i.invoice_id
+         LEFT JOIN work_orders wo ON wc.work_order_id = wo.work_order_id
          WHERE wc.claim_id = ?",
         [$claimId]
     );

@@ -835,16 +835,16 @@ function getEmployeeActivity(int $userId, string $startDate, string $endDate): a
  * Active road hazard warranties.
  */
 function getActiveWarranties(): array {
-    $sql = "SELECT li.line_id, li.warranty_expires_at, li.warranty_terms,
-                   i.invoice_number, c.first_name, c.last_name, c.phone_primary,
-                   li.description AS tire_description
-            FROM invoice_line_items li
-            JOIN invoices i ON li.invoice_id = i.invoice_id
-            JOIN customers c ON i.customer_id = c.customer_id
-            WHERE li.line_type = 'warranty'
-              AND li.warranty_expires_at >= CURDATE()
-              AND i.status = 'completed'
-            ORDER BY li.warranty_expires_at ASC";
+    $sql = "SELECT woli.line_id, woli.warranty_expires_at, woli.warranty_terms,
+                   wo.wo_number AS reference_number, c.first_name, c.last_name, c.phone_primary,
+                   woli.description AS tire_description
+            FROM work_order_line_items woli
+            JOIN work_orders wo ON woli.work_order_id = wo.work_order_id
+            JOIN customers c ON wo.customer_id = c.customer_id
+            WHERE woli.line_type = 'warranty'
+              AND woli.warranty_expires_at >= CURDATE()
+              AND wo.status = 'complete'
+            ORDER BY woli.warranty_expires_at ASC";
     return getDB()->query($sql)->fetchAll();
 }
 
