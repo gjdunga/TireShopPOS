@@ -21,9 +21,30 @@ class PlateToVinProvider implements PlateProviderInterface
     private const BASE_URL = 'https://platetovin.com/api/convert';
     private const TIMEOUT  = 10;
 
+    /** @inheritDoc */
     public function getName(): string  { return 'PlateToVIN'; }
+
+    /** @inheritDoc */
     public function getSlug(): string  { return 'platetovin'; }
+
+    /** Fixed $0.05 per call. */
     public function getCostCents(): int { return 5; }
+
+    /**
+     * Call PlateToVIN plate-to-VIN endpoint.
+     *
+     * Request:  POST https://platetovin.com/api/convert
+     * Headers:  Authorization: {apiKey}  (no "Bearer" prefix)
+     * Body:     { "plate": "...", "state": "..." }
+     * Response: { success, vin: { vin, year, make, model, trim, engine,
+     *             style, driveType, fuel, color: { name, abbreviation },
+     *             transmission } }
+     *
+     * Note: PlateToVIN nests vehicle data under a "vin" key in the response.
+     * The color field is an object with name and abbreviation sub-fields.
+     *
+     * @inheritDoc
+     */
 
     public function lookup(string $plate, string $state, string $apiKey, callable $logger): ?array
     {

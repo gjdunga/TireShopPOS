@@ -19,9 +19,27 @@ class AutoDevProvider implements PlateProviderInterface
     private const BASE_URL = 'https://api.auto.dev/plate';
     private const TIMEOUT  = 10;
 
+    /** @inheritDoc */
     public function getName(): string  { return 'Auto.dev'; }
+
+    /** @inheritDoc */
     public function getSlug(): string  { return 'autodev'; }
-    public function getCostCents(): int { return 0; } // Free tier, usage-based after 1k/month
+
+    /**
+     * Auto.dev free tier: 1,000 calls/month at $0.00, usage-based after.
+     * We report 0 cents; actual overage cost depends on the user's plan.
+     */
+    public function getCostCents(): int { return 0; }
+
+    /**
+     * Call Auto.dev plate-to-VIN endpoint.
+     *
+     * Request:  GET https://api.auto.dev/plate/{state}/{plate}
+     * Headers:  Authorization: Bearer {apiKey}
+     * Response: { vin, year, make, model, trim, drivetrain, engine, transmission, isDefault }
+     *
+     * @inheritDoc
+     */
 
     public function lookup(string $plate, string $state, string $apiKey, callable $logger): ?array
     {

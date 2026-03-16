@@ -39,9 +39,9 @@ php -S localhost:8080 -t public public/index.php
 
 ## Key Numbers
 
-- 166 API routes
+- 170 API routes
 - 70 database tables, 14 views
-- 155 PHP functions across 5 business logic files
+- 188 PHP functions across 5 business logic files + provider layer
 - 30 RBAC permissions, 5 roles (owner, manager, tech, sales, readonly)
 - 53 tire brands, 410 torque specs seeded
 - 122 integration test assertions (all passing)
@@ -61,7 +61,7 @@ php/               Business logic (lazy-loaded by URI prefix)
   tire_pos_p6.php         Marketplace, integrations, B2B (352 lines)
   VehicleLookupService.php  Plate/VIN lookup, NHTSA decode (845 lines)
 public/index.php   Front controller with lazy-loading gate
-routes/api.php     All 166 route definitions (1,512 lines)
+routes/api.php     All 170 route definitions
 scripts/           Cron jobs (backup, session cleanup)
 sql/               Schema and migrations
 tests/             Integration test suite (122 assertions)

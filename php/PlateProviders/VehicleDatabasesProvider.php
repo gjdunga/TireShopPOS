@@ -20,9 +20,25 @@ class VehicleDatabasesProvider implements PlateProviderInterface
     private const BASE_URL = 'https://api.vehicledatabases.com/license-plate-lookup';
     private const TIMEOUT  = 10;
 
+    /** @inheritDoc */
     public function getName(): string  { return 'VehicleDatabases'; }
+
+    /** @inheritDoc */
     public function getSlug(): string  { return 'vehicledatabases'; }
-    public function getCostCents(): int { return 10; } // Varies by plan; estimate
+
+    /** Varies by subscription tier; 10 cents is an estimate. */
+    public function getCostCents(): int { return 10; }
+
+    /**
+     * Call VehicleDatabases license plate lookup endpoint.
+     *
+     * Request:  GET https://api.vehicledatabases.com/license-plate-lookup/{plate}/{state}
+     * Headers:  x-AuthKey: {apiKey}
+     * Response: { vin, year, make, model, trim, body_type, drive_type,
+     *             engine, transmission, fuel_type, doors }
+     *
+     * @inheritDoc
+     */
 
     public function lookup(string $plate, string $state, string $apiKey, callable $logger): ?array
     {
