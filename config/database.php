@@ -21,6 +21,9 @@ return [
     'username' => Env::get('DB_USERNAME', 'root'),
     'password' => Env::get('DB_PASSWORD', ''),
 
+    // Unix socket (overrides host:port when set, used for local testing)
+    'socket' => Env::get('DB_SOCKET', ''),
+
     // Character set: must be utf8mb4 to match schema CREATE TABLE defaults
     'charset' => 'utf8mb4',
     'collation' => 'utf8mb4_unicode_ci',

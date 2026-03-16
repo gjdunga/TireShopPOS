@@ -5,6 +5,8 @@
 // DunganSoft Technologies, March 2026
 // ============================================================================
 
+use App\Core\Database;
+
 // ============================================================================
 // Integration Credentials
 // ============================================================================
@@ -131,7 +133,7 @@ function generateListingContent(int $tireId, string $platform): array {
     );
     if (!$tire) throw new RuntimeException('Tire not found');
 
-    $size = $tire['full_size_string'] ?? '';
+    $size = $tire['size_display'] ?? $tire['full_size_string'] ?? '';
     $brand = $tire['brand_name'] ?? 'Unknown';
     $model = $tire['model'] ?? '';
     $cond = ucfirst($tire['condition'] ?? 'used');

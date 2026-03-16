@@ -5,6 +5,8 @@
 // DunganSoft Technologies, March 2026
 // ============================================================================
 
+use App\Core\Database;
+
 // ============================================================================
 // Discount Groups
 // ============================================================================
@@ -413,14 +415,14 @@ function getPricingAdvice(int $tireId): array {
            AND li.line_type = 'tire'
            AND i.status IN ('open','completed')
            AND i.created_at >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)",
-        [$tire['full_size_string'], $condition]
+        [$tire['size_display'] ?? $tire['full_size_string'] ?? '', $condition]
     );
     $avgComp = $comps[0]['avg_price'] ? round((float) $comps[0]['avg_price'], 2) : null;
     $compCount = (int) ($comps[0]['sale_count'] ?? 0);
 
     return [
         'tire_id' => $tireId,
-        'size' => $tire['full_size_string'],
+        'size' => $tire['size_display'] ?? $tire['full_size_string'] ?? '',
         'brand' => $brand,
         'brand_tier' => $brandTier,
         'condition' => $condition,

@@ -38,14 +38,25 @@ class Database
 
         $cfg = Config::file('database');
 
-        $dsn = sprintf(
-            '%s:host=%s;port=%d;dbname=%s;charset=%s',
-            $cfg['driver'] ?? 'mysql',
-            $cfg['host'] ?? '127.0.0.1',
-            $cfg['port'] ?? 3306,
-            $cfg['database'] ?? 'tire_shop',
-            $cfg['charset'] ?? 'utf8mb4'
-        );
+        $socket = $cfg['socket'] ?? '';
+        if ($socket !== '') {
+            $dsn = sprintf(
+                '%s:unix_socket=%s;dbname=%s;charset=%s',
+                $cfg['driver'] ?? 'mysql',
+                $socket,
+                $cfg['database'] ?? 'tire_shop',
+                $cfg['charset'] ?? 'utf8mb4'
+            );
+        } else {
+            $dsn = sprintf(
+                '%s:host=%s;port=%d;dbname=%s;charset=%s',
+                $cfg['driver'] ?? 'mysql',
+                $cfg['host'] ?? '127.0.0.1',
+                $cfg['port'] ?? 3306,
+                $cfg['database'] ?? 'tire_shop',
+                $cfg['charset'] ?? 'utf8mb4'
+            );
+        }
 
         $options = $cfg['options'] ?? [];
 

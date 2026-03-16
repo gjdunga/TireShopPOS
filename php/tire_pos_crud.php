@@ -33,12 +33,12 @@ function getTire(int $tireId): ?array {
 function createTire(array $data, int $createdBy): int {
     $fields = [
         'brand_id', 'tire_type_id', 'construction_type_id',
-        'section_width', 'aspect_ratio', 'rim_diameter',
+        'width_mm', 'aspect_ratio', 'wheel_diameter', 'size_format',
         'speed_rating_id', 'load_index_id', 'load_construction_id',
-        'model_name', 'full_size_string', 'dot_tin', 'mfg_week', 'mfg_year',
+        'model_name', 'full_size_string', 'dot_tin_raw', 'dot_mfg_week', 'dot_mfg_year',
         'tread_depth_32nds', 'condition', 'status',
-        'acquisition_source_id', 'acquisition_cost', 'retail_price',
-        'bin_location', 'notes'
+        'acquisition_source_id', 'cost', 'retail_price',
+        'bin_facility', 'bin_shelf', 'bin_level', 'notes'
     ];
 
     $setCols = [];
@@ -61,7 +61,7 @@ function createTire(array $data, int $createdBy): int {
     }
 
     $placeholders = implode(', ', array_fill(0, count($setCols), '?'));
-    $colList = implode(', ', $setCols);
+    $colList = implode(', ', array_map(fn($c) => "`{$c}`", $setCols));
 
     Database::execute(
         "INSERT INTO tires ({$colList}) VALUES ({$placeholders})",
@@ -82,9 +82,9 @@ function updateTire(int $tireId, array $data, int $updatedBy): array {
 
     $editable = [
         'brand_id', 'tire_type_id', 'construction_type_id',
-        'model_name', 'full_size_string', 'dot_tin', 'mfg_week', 'mfg_year',
+        'model_name', 'full_size_string', 'dot_tin_raw', 'dot_mfg_week', 'dot_mfg_year',
         'tread_depth_32nds', 'condition', 'status',
-        'acquisition_cost', 'retail_price', 'bin_location', 'notes'
+        'cost', 'retail_price', 'bin_facility', 'bin_shelf', 'bin_level', 'notes'
     ];
 
     $sets = [];
@@ -93,7 +93,7 @@ function updateTire(int $tireId, array $data, int $updatedBy): array {
 
     foreach ($editable as $f) {
         if (array_key_exists($f, $data) && (string) ($data[$f] ?? '') !== (string) ($tire[$f] ?? '')) {
-            $sets[] = "{$f} = ?";
+            $sets[] = "`{$f}` = ?";
             $binds[] = $data[$f];
             $changes[$f] = ['old' => $tire[$f], 'new' => $data[$f]];
         }
@@ -391,8 +391,8 @@ function getWorkOrder(int $woId): ?array {
     if ($wo !== null) {
         $wo['positions'] = Database::query(
             "SELECT wop.*,
-                    t_ex.full_size_string AS existing_tire_size, t_ex.brand_name AS existing_tire_brand,
-                    t_new.full_size_string AS new_tire_size, t_new.brand_name AS new_tire_brand
+                    t_ex.size_display AS full_size_string, t_ex.brand_name AS existing_tire_brand,
+                    t_new.size_display AS new_tire_size, t_new.brand_name AS new_tire_brand
              FROM work_order_positions wop
              LEFT JOIN v_tire_inventory t_ex ON wop.tire_id_existing = t_ex.tire_id
              LEFT JOIN v_tire_inventory t_new ON wop.tire_id_new = t_new.tire_id
@@ -409,8 +409,9 @@ function createWorkOrder(array $data, int $createdBy): int {
 
     Database::execute(
         "INSERT INTO work_orders (wo_number, customer_id, vehicle_id, assigned_tech_id,
-                                   status, mileage_in, customer_complaint, special_notes, created_by)
-         VALUES (?, ?, ?, ?, 'intake', ?, ?, ?, ?)",
+                                   status, mileage_in, customer_complaint, special_notes,
+                                   estimated_price, created_by)
+         VALUES (?, ?, ?, ?, 'intake', ?, ?, ?, ?, ?)",
         [
             $woNumber,
             (int) ($data['customer_id'] ?? 0),
@@ -419,6 +420,7 @@ function createWorkOrder(array $data, int $createdBy): int {
             $data['mileage_in'] ?? null,
             $data['customer_complaint'] ?? null,
             $data['special_notes'] ?? null,
+            isset($data['estimated_price']) && $data['estimated_price'] !== '' ? $data['estimated_price'] : null,
             $createdBy,
         ]
     );
@@ -437,6 +439,7 @@ function updateWorkOrder(int $woId, array $data, int $updatedBy): array {
 
     $editable = ['customer_id', 'vehicle_id', 'mileage_in', 'mileage_out',
                  'customer_complaint', 'tech_diagnosis', 'special_notes', 'status',
+                 'estimated_price',
                  'torque_spec_used', 'torque_verified_by', 'torque_verified_at'];
     $sets = [];
     $binds = [];
@@ -582,7 +585,7 @@ function getInvoice(int $invoiceId): ?array {
     );
     if ($inv !== null) {
         $inv['line_items'] = Database::query(
-            "SELECT li.*, t.full_size_string AS tire_size
+            "SELECT li.*, t.size_display AS tire_size
              FROM invoice_line_items li
              LEFT JOIN v_tire_inventory t ON li.tire_id = t.tire_id
              WHERE li.invoice_id = ? ORDER BY li.display_order, li.line_id",

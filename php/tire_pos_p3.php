@@ -5,6 +5,8 @@
 // DunganSoft Technologies, March 2026
 // ============================================================================
 
+use App\Core\Database;
+
 // ============================================================================
 // Shop Settings
 // ============================================================================
@@ -359,7 +361,7 @@ function searchFitmentByVehicle(string $make, string $model, ?int $year = null):
         );
         if ($vehicle && $vehicle['oem_tire_size']) {
             $tires = Database::query(
-                "SELECT * FROM v_tire_inventory WHERE full_size_string = ? AND status = 'available' LIMIT 20",
+                "SELECT * FROM v_tire_inventory WHERE size_display = ? AND status = 'available' LIMIT 20",
                 [$vehicle['oem_tire_size']]
             );
         }
@@ -404,7 +406,7 @@ function searchFitmentReverse(string $size): array {
 
     // Also find tires in stock with this size
     $inStock = Database::query(
-        "SELECT * FROM v_tire_inventory WHERE full_size_string = ? AND status = 'available' LIMIT 20",
+        "SELECT * FROM v_tire_inventory WHERE size_display = ? AND status = 'available' LIMIT 20",
         [$size]
     );
 
@@ -556,7 +558,7 @@ function getPublicInventory(array $filters, int $limit = 24, int $offset = 0): a
     $params = [];
 
     if (!empty($filters['size'])) {
-        $where[] = 't.full_size_string LIKE ?';
+        $where[] = 't.size_display LIKE ?';
         $params[] = '%' . $filters['size'] . '%';
     }
     if (!empty($filters['brand_id'])) {
@@ -583,7 +585,7 @@ function getPublicInventory(array $filters, int $limit = 24, int $offset = 0): a
     $params[] = $offset;
     // Exclude cost and internal fields from public query
     $rows = Database::query(
-        "SELECT t.tire_id, t.full_size_string, t.brand_name, t.model,
+        "SELECT t.tire_id, t.size_display, t.brand_name, t.model,
                 t.`condition`, t.tread_depth_32nds, t.retail_price, t.dot_tin,
                 t.width_mm, t.aspect_ratio, t.wheel_diameter, t.construction
          FROM v_tire_inventory t
@@ -597,7 +599,7 @@ function getPublicInventory(array $filters, int $limit = 24, int $offset = 0): a
 
 function getPublicTireDetail(int $tireId): ?array {
     return Database::queryOne(
-        "SELECT t.tire_id, t.full_size_string, t.brand_name, t.model,
+        "SELECT t.tire_id, t.size_display, t.brand_name, t.model,
                 t.`condition`, t.tread_depth_32nds, t.retail_price, t.dot_tin,
                 t.width_mm, t.aspect_ratio, t.wheel_diameter, t.construction,
                 t.notes
@@ -771,7 +773,7 @@ function checkTireRecallByDot(string $dotTin): array {
 
 function generateTireLabelZpl(int $tireId): string {
     $tire = Database::queryOne(
-        "SELECT t.tire_id, t.full_size_string, t.dot_tin, t.retail_price,
+        "SELECT t.tire_id, t.size_display, t.dot_tin, t.retail_price,
                 t.tread_depth_32nds, t.`condition`, t.bin_facility, t.bin_shelf,
                 t.bin_level, b.brand_name
          FROM v_tire_inventory t
@@ -782,7 +784,7 @@ function generateTireLabelZpl(int $tireId): string {
 
     if (!$tire) throw new RuntimeException('Tire not found');
 
-    $size = $tire['full_size_string'] ?? '';
+    $size = $tire['size_display'] ?? $tire['full_size_string'] ?? '' ?? '';
     $brand = $tire['brand_name'] ?? '';
     $price = '$' . number_format((float) ($tire['retail_price'] ?? 0), 2);
     $cond = strtoupper($tire['condition'] ?? '');
