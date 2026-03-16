@@ -131,6 +131,7 @@ values, and token invalidation.
 
 | Document | Location |
 |----------|----------|
+| Installation Guide (setup, upgrade, troubleshooting) | `docs/TireShopPOS_Installation_Guide.docx` |
 | Developer Guide (API ref, architecture, deployment) | `docs/TireShopPOS_Developer_Guide.docx` |
 | Deployment Guide | `deploy/README.md` |
 | Development Roadmap | `docs/tire_pos_roadmap.docx` |
