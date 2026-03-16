@@ -612,15 +612,11 @@ function isPasswordExpired(int $userId, int $maxAgeDays = 30): bool {
  * Check if a user has a specific permission.
  * Uses the role_permissions junction table.
  *
- * Permission keys are defined in the permissions table:
+ * Active permission keys (17):
  *   INVENTORY_VIEW, INVENTORY_ADD, INVENTORY_EDIT, INVENTORY_WRITE_OFF,
- *   CUSTOMER_MANAGE, INVOICE_CREATE, INVOICE_VOID, PAYMENT_ACCEPT,
- *   REFUND_REQUEST, REFUND_APPROVE, REFUND_APPROVE_HIGH, DEPOSIT_ACCEPT,
- *   DEPOSIT_FORFEIT, FEE_WAIVE, PRICE_OVERRIDE, PRICE_OVERRIDE_HIGH,
- *   REPORT_VIEW, USER_MANAGE, CONFIG_MANAGE, AUDIT_VIEW,
+ *   CUSTOMER_MANAGE, REPORT_VIEW, USER_MANAGE, CONFIG_MANAGE, AUDIT_VIEW,
  *   WORK_ORDER_CREATE, WORK_ORDER_ASSIGN, VEHICLE_MANAGE, PO_CREATE,
- *   PO_RECEIVE, WAIVER_CREATE, CASH_DRAWER_OPEN, CASH_DRAWER_CLOSE,
- *   APPOINTMENT_MANAGE, PHOTO_UPLOAD
+ *   PO_RECEIVE, WAIVER_CREATE, APPOINTMENT_MANAGE, PHOTO_UPLOAD
  */
 function hasPermission(int $userId, string $permissionKey): bool {
     $sql = "SELECT COUNT(*) FROM role_permissions rp

@@ -1129,20 +1129,6 @@ function getInventoryStats(): array {
     ];
 }
 
-function getPaymentMethodBreakdown(?string $start = null, ?string $end = null): array {
-    $start = $start ?: date('Y-m-d', strtotime('-30 days'));
-    $end = $end ?: date('Y-m-d');
-
-    return Database::query(
-        "SELECT p.payment_method, COUNT(*) AS txn_count, COALESCE(SUM(p.amount), 0) AS total_amount
-         FROM payments p
-         WHERE p.processed_at >= ? AND p.processed_at < DATE_ADD(?, INTERVAL 1 DAY)
-         GROUP BY p.payment_method
-         ORDER BY total_amount DESC",
-        [$start, $end]
-    );
-}
-
 function getTopSellingTires(int $limit = 10, ?string $start = null, ?string $end = null): array {
     $start = $start ?: date('Y-m-d', strtotime('-90 days'));
     $end = $end ?: date('Y-m-d');

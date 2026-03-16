@@ -35,14 +35,14 @@ php -S localhost:8080 -t public public/index.php
 | Frontend | React 19, Vite 7, 27 page components |
 | Server | Ubuntu 24.04 LTS, Apache 2.4, PHP 8.3-FPM |
 | Hosting | Virtualmin 8.x Professional |
-| Auth | bcrypt, token sessions, RBAC (30 permissions, 5 roles) |
+| Auth | bcrypt, token sessions, RBAC (17 permissions, 5 roles) |
 
 ## Key Numbers
 
 - 169 API routes
 - 66 database tables, 9 views
-- 188 PHP functions across 5 business logic files + provider layer
-- 30 RBAC permissions, 5 roles (owner, manager, tech, sales, readonly)
+- 187 PHP functions across 5 business logic files + provider layer
+- 17 RBAC permissions, 5 roles (owner, manager, tech, sales, readonly)
 - 53 tire brands, 410 torque specs seeded
 - 122 integration test assertions (all passing)
 

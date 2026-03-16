@@ -415,8 +415,6 @@ $router->with(permit('REPORT_VIEW'))->get('/api/reports/sales-summary', function
 
 $router->with(permit('REPORT_VIEW'))->get('/api/reports/inventory-stats', function () {
     return getInventoryStats();
-    $end = Router::query('end', null);
-    return ['breakdown' => getPaymentMethodBreakdown($start, $end)];
 });
 
 $router->with(permit('REPORT_VIEW'))->get('/api/reports/top-selling-tires', function () {

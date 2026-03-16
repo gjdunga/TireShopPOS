@@ -1,6 +1,7 @@
 /* ================================================================
-   SupportOps (P2f)
-   Cash drawer, appointments, PO, refunds, quote tool.
+   Operations Page Styles
+   Shared by: AppointmentList, PurchaseOrderList, PurchaseOrderDetail,
+              QuoteTool. Originally named SupportOps during P2f.
    ================================================================ */
 
 .ops-two-col {
