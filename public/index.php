@@ -14,8 +14,10 @@
 declare(strict_types=1);
 
 // ---- Define base paths ----
-define('BASE_PATH', dirname(__DIR__));
-define('PUBLIC_PATH', __DIR__);
+// In production, deploy/api-index.php pre-defines these before including us.
+// In dev (php -S), this file is the entry point so we define them here.
+if (!defined('BASE_PATH'))  define('BASE_PATH', dirname(__DIR__));
+if (!defined('PUBLIC_PATH')) define('PUBLIC_PATH', __DIR__);
 
 // ---- Bootstrap autoloader ----
 require_once BASE_PATH . '/app/Core/Autoloader.php';
@@ -39,18 +41,18 @@ require_once BASE_PATH . '/php/tire_pos_crud.php';
 // so the file only needs to be loaded before the matching closure runs.
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 
-// P3 (901 lines): settings, warranties, wheels, fitment, custom fields,
+// P3 (935 lines): settings, warranties, wheels, fitment, custom fields,
 // API keys, recalls, barcodes, labels, notifications, public storefront.
 if (preg_match('#^/api/(settings|config|warranty|wheels|fitment|custom-field|api-key|recalls|barcode|labels|notifications|public|website-config)#', $uri)) {
     require_once BASE_PATH . '/php/tire_pos_p3.php';
 }
 
-// P6 (352 lines): marketplace, integrations, B2B, directory, distributors.
+// P6 (374 lines): marketplace, integrations, B2B, directory, distributors.
 if (preg_match('#^/api/(integrations|marketplace|b2b|directory|distributors)#', $uri)) {
     require_once BASE_PATH . '/php/tire_pos_p6.php';
 }
 
-// VehicleLookupService (845 lines): plate lookup, VIN decode/validate.
+// VehicleLookupService (794 lines): plate lookup, VIN decode/validate.
 // PlateProviders routes use inline require_once and don't need this gate.
 if (preg_match('#^/api/vehicles/(lookup|validate)#', $uri)) {
     require_once BASE_PATH . '/php/VehicleLookupService.php';

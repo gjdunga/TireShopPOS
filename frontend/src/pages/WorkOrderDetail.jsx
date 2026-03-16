@@ -167,17 +167,6 @@ export default function WorkOrderDetail() {
     } catch (err) { setError(err.message); }
   };
 
-  // Create invoice from work order
-  const handleCreateInvoice = async () => {
-    try {
-      const result = await api.post('/invoices', {
-        customer_id: wo.customer_id,
-        work_order_id: wo.work_order_id,
-      });
-      navigate(`/invoices/${result.invoice_id}`);
-    } catch (err) { setError(err.message); }
-  };
-
   // Customer search (for new WO)
   const searchCustomers = async () => {
     if (custSearch.trim().length < 2) return;
@@ -327,12 +316,6 @@ export default function WorkOrderDetail() {
                 <button className="btn btn-sm" style={{ background: 'var(--green)', color: 'white' }} onClick={handleComplete}>
                   Complete Work Order
                 </button>
-              )}
-              {!isNew && wo?.status === 'complete' && !wo?.invoice_id && can('INVOICE_CREATE') && (
-                <button className="btn btn-primary btn-sm" onClick={handleCreateInvoice}>Create Invoice</button>
-              )}
-              {!isNew && wo?.invoice_id && (
-                <Link to={`/invoices/${wo.invoice_id}`} className="btn btn-ghost btn-sm">View Invoice</Link>
               )}
             </div>
           </div>

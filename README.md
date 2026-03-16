@@ -39,7 +39,7 @@ php -S localhost:8080 -t public public/index.php
 
 ## Key Numbers
 
-- 170 API routes
+- 169 API routes
 - 70 database tables, 14 views
 - 188 PHP functions across 5 business logic files + provider layer
 - 30 RBAC permissions, 5 roles (owner, manager, tech, sales, readonly)
@@ -55,13 +55,13 @@ config/            App and database configuration (reads .env)
 deploy/            Production deployment scripts and configs
 frontend/src/      React SPA (auth, layout, 27 page components)
 php/               Business logic (lazy-loaded by URI prefix)
-  tire_pos_helpers.php    Core helpers (924 lines, always loaded)
-  tire_pos_crud.php       CRUD operations (1,128 lines, always loaded)
-  tire_pos_p3.php         Settings, warranties, wheels, storefront (901 lines)
-  tire_pos_p6.php         Marketplace, integrations, B2B (352 lines)
-  VehicleLookupService.php  Plate/VIN lookup, NHTSA decode (845 lines)
+  tire_pos_helpers.php    Core helpers (923 lines, always loaded)
+  tire_pos_crud.php       CRUD operations (1,163 lines, always loaded)
+  tire_pos_p3.php         Settings, warranties, wheels, storefront (935 lines)
+  tire_pos_p6.php         Marketplace, integrations, B2B (374 lines)
+  VehicleLookupService.php  Plate/VIN lookup, NHTSA decode (794 lines)
 public/index.php   Front controller with lazy-loading gate
-routes/api.php     All 170 route definitions
+routes/api.php     All 169 route definitions
 scripts/           Cron jobs (backup, session cleanup)
 sql/               Schema and migrations
 tests/             Integration test suite (122 assertions)

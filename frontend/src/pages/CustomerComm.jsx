@@ -19,9 +19,6 @@ const TEMPLATES = [
   { key: 'wo_status', label: 'Work Order Update',
     subject: 'Work Order Status Update',
     body: 'Hi {name}, your vehicle service (WO #{wo_number}) has been updated to: {status}. Contact us at {phone} with any questions.' },
-  { key: 'deposit_expiring', label: 'Deposit Expiring',
-    subject: 'Deposit Expiring Soon',
-    body: 'Hi {name}, your deposit of ${amount} is expiring on {date}. Please contact us at {phone} to complete your purchase before the expiration date.' },
   { key: 'custom', label: 'Custom Message', subject: '', body: '' },
 ];
 

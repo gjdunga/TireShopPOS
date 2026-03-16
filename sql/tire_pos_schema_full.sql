@@ -1,16 +1,25 @@
 -- ============================================================================
 -- Tire Shop POS System: Consolidated Database Schema v2.4
--- Target: MySQL 8.x / MariaDB 10.6+
+-- Target: MySQL 8.0+ / MariaDB 10.6+
 -- Charset: utf8mb4 throughout
 -- Generated for DunganSoft Technologies
 -- Date: March 2026
 -- ============================================================================
--- Table count: 44 tables, 14 views
--- Domains: Inventory (13), Vehicles (2), Work Orders (2), Customers (1),
---          Services (2), Transactions (4), Refunds (1), Vendors (3),
---          Waivers (1), Photos (1), Cash Drawer (2), Scheduling (1),
---          Fees/Compliance (2), Access Control (5), Audit (2),
---          Vehicle Lookup (3 tables, 1 view)
+-- Table count: 44 base tables + 14 views + migration tables (008)
+--
+-- Active domains: Inventory (13), Vehicles (2), Work Orders (2),
+--   Customers (1), Services (2), Vendors (3), Waivers (1), Photos (1),
+--   Scheduling (1), Fees/Compliance (2), Access Control (5), Audit (2),
+--   Vehicle Lookup (3 tables, 1 view)
+--
+-- Deprecated domains (tables retained for FK/view compatibility):
+--   Transactions (4: invoices, invoice_line_items, payments, deposits)
+--   Refunds (1: refunds)
+--   Cash Drawer (2: cash_drawers, cash_drawer_transactions)
+--   These 7 tables have no API routes and no CRUD functions. They are
+--   kept in the DDL because tire_disposal_log.invoice_id and 8 views
+--   reference them via foreign keys and JOINs. They will be removed
+--   in a future schema version that also cleans up those dependencies.
 -- ============================================================================
 
 SET NAMES utf8mb4;
@@ -301,17 +310,6 @@ INSERT INTO permissions (permission_key, description, min_role) VALUES
 ('INVENTORY_EDIT',      'Edit tire details and pricing',            'manager'),
 ('INVENTORY_WRITE_OFF', 'Write off damaged or unsellable tires',    'manager'),
 ('CUSTOMER_MANAGE',     'Create and edit customer records',         'tire_tech'),
-('INVOICE_CREATE',      'Create new invoices',                      'tire_tech'),
-('INVOICE_VOID',        'Void an invoice',                          'manager'),
-('PAYMENT_ACCEPT',      'Accept payments',                          'tire_tech'),
-('REFUND_REQUEST',      'Request a refund (manager approval)',      'tire_tech'),
-('REFUND_APPROVE',      'Approve refund up to threshold',           'manager'),
-('REFUND_APPROVE_HIGH', 'Approve refund above threshold',           'owner'),
-('DEPOSIT_ACCEPT',      'Accept customer deposits',                 'tire_tech'),
-('DEPOSIT_FORFEIT',     'Forfeit expired deposits',                 'manager'),
-('FEE_WAIVE',           'Waive government tire fees',               'owner'),
-('PRICE_OVERRIDE',      'Override catalog price up to threshold',   'manager'),
-('PRICE_OVERRIDE_HIGH', 'Override catalog price above threshold',   'owner'),
 ('REPORT_VIEW',         'View reports and dashboards',              'manager'),
 ('USER_MANAGE',         'Create/edit/deactivate user accounts',     'owner'),
 ('CONFIG_MANAGE',       'Edit system configuration',                'owner'),
@@ -325,8 +323,6 @@ INSERT INTO permissions (permission_key, description, min_role) VALUES
 ('PO_CREATE',           'Create purchase orders to vendors',        'manager'),
 ('PO_RECEIVE',          'Receive inventory against purchase orders', 'tire_tech'),
 ('WAIVER_CREATE',       'Create and manage customer waivers',       'tire_tech'),
-('CASH_DRAWER_OPEN',    'Open daily cash drawer',                   'manager'),
-('CASH_DRAWER_CLOSE',   'Close and reconcile cash drawer',          'manager'),
 ('APPOINTMENT_MANAGE',  'Create and manage appointments',           'tire_tech'),
 ('PHOTO_UPLOAD',        'Upload photos to tire/work order records', 'tire_tech');
 
@@ -625,7 +621,8 @@ INSERT INTO service_parts (service_id, part_name, default_cost, is_taxable) VALU
 ((SELECT service_id FROM service_catalog WHERE service_code='VALVE_RPL'),'Valve stem',    2.50, 1);
 
 -- ============================================================================
--- DOMAIN 8: TRANSACTIONS (4 tables)
+-- DOMAIN 8: TRANSACTIONS (4 tables) [DEPRECATED: no API routes or CRUD]
+-- Retained for FK/view compatibility. See schema header.
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS invoices (
@@ -730,7 +727,8 @@ CREATE TABLE IF NOT EXISTS deposits (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
--- DOMAIN 9: REFUNDS (1 table)
+-- DOMAIN 9: REFUNDS (1 table) [DEPRECATED: no API routes or CRUD]
+-- Retained for FK/view compatibility. See schema header.
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS refunds (
@@ -943,7 +941,8 @@ CREATE TABLE IF NOT EXISTS tire_photos (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
--- DOMAIN 14: CASH DRAWER (2 tables) [v2.3]
+-- DOMAIN 14: CASH DRAWER (2 tables) [DEPRECATED: no API routes or CRUD]
+-- Retained for FK/view compatibility. See schema header.
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS cash_drawers (

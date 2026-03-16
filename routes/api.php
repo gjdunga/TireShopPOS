@@ -622,10 +622,6 @@ $router->with(permit('USER_MANAGE'))->get('/api/roles/{id}/permissions', functio
 // Sequence generators (auth only, used internally by invoice/WO creation)
 // ============================================================================
 
-$router->with(permit('INVOICE_CREATE'))->get('/api/sequences/next-invoice', function () {
-    return ['number' => nextInvoiceNumber()];
-});
-
 $router->with(permit('WORK_ORDER_CREATE'))->get('/api/sequences/next-work-order', function () {
     return ['number' => nextWorkOrderNumber()];
 });
@@ -1173,7 +1169,7 @@ $router->with($auth)->post('/api/warranty-claims', function (array $params, arra
     return ['message' => 'Claim filed.', 'claim_id' => $id];
 });
 
-$router->with(permit('REFUND_APPROVE'))->post('/api/warranty-claims/{id}/review', function (array $params, array $body) {
+$router->with(permit('CONFIG_MANAGE'))->post('/api/warranty-claims/{id}/review', function (array $params, array $body) {
     $action = $body['action'] ?? '';
     if (!in_array($action, ['approve', 'deny'])) {
         Router::sendError('INVALID_ACTION', 'Action must be "approve" or "deny".', 400);
@@ -1183,7 +1179,7 @@ $router->with(permit('REFUND_APPROVE'))->post('/api/warranty-claims/{id}/review'
     return ['message' => "Claim {$action}d."];
 });
 
-$router->with(permit('REFUND_APPROVE'))->post('/api/warranty-claims/{id}/pay', function (array $params, array $body) {
+$router->with(permit('CONFIG_MANAGE'))->post('/api/warranty-claims/{id}/pay', function (array $params, array $body) {
     payWarrantyClaim((int) $params['id'], $body['amount'], Middleware::userId());
     return ['message' => 'Claim paid.'];
 });

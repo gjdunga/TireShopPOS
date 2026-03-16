@@ -34,7 +34,8 @@
  *   - ext-curl (HTTP calls to providers and NHTSA)
  *   - ext-json (response parsing)
  *
- * IMPORTANT: Requires PLATETOVIN_API_KEY in environment or config.
+ * IMPORTANT: Plate provider and API key are configured via Settings > Vehicle Lookup.
+ * Falls back to PLATETOVIN_API_KEY env var if no provider is set in the UI.
  * IMPORTANT: All monetary tracking uses integer cents (cost_cents column).
  * ============================================================================
  */

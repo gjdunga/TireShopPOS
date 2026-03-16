@@ -31,10 +31,7 @@ return [
     // Logging
     'log_level' => Env::get('APP_LOG_LEVEL', 'error'),
 
-    // CORS allowed origin (* = any, or specific domain like https://tireshop.local)
-    'cors_origin' => Env::get('CORS_ORIGIN', '*'),
-
-    // CORS: allowed origin for API requests (default: any origin)
+    // CORS allowed origin (* = any, or specific domain like https://pos.example.com)
     'cors_origin' => Env::get('CORS_ORIGIN', '*'),
 
 ];

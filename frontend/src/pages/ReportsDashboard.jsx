@@ -200,7 +200,7 @@ function ServicesTab() {
         <h3 className="report-card-title">Active Warranties ({warranties.length})</h3>
         {warranties.length === 0 ? <p className="text-muted">No active warranties.</p> : (
           <table className="entity-table" style={{ fontSize: '0.8125rem' }}>
-            <thead><tr><th>Invoice</th><th>Customer</th><th>Tire</th><th>Expires</th></tr></thead>
+            <thead><tr><th>Reference</th><th>Customer</th><th>Tire</th><th>Expires</th></tr></thead>
             <tbody>
               {warranties.slice(0, 20).map((w) => (
                 <tr key={w.line_id}>
