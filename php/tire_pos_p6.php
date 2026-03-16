@@ -127,15 +127,14 @@ function updateListing(int $listingId, array $data): array {
 
 function generateListingContent(int $tireId, string $platform): array {
     $tire = Database::queryOne(
-        "SELECT t.*, b.brand_name FROM v_tire_inventory t
-         LEFT JOIN lkp_brands b ON t.brand_id = b.brand_id WHERE t.tire_id = ?",
+        "SELECT t.* FROM v_tire_inventory t WHERE t.tire_id = ?",
         [$tireId]
     );
     if (!$tire) throw new RuntimeException('Tire not found');
 
     $size = $tire['size_display'] ?? $tire['full_size_string'] ?? '';
     $brand = $tire['brand_name'] ?? 'Unknown';
-    $model = $tire['model'] ?? '';
+    $model = $tire['model_name'] ?? $tire['model'] ?? '';
     $cond = ucfirst($tire['condition'] ?? 'used');
     $tread = ($tire['tread_depth_32nds'] ?? '') . '/32"';
     $price = number_format((float) ($tire['retail_price'] ?? 0), 2);
@@ -145,7 +144,7 @@ function generateListingContent(int $tireId, string $platform): array {
     if ($platform === 'ebay') {
         $desc = "{$cond} {$brand} {$model} tire, size {$size}.\n\n"
             . "Tread Depth: {$tread}\n"
-            . "DOT: " . ($tire['dot_tin'] ?? 'N/A') . "\n\n"
+            . "DOT: " . ($tire['dot_tin_raw'] ?? 'N/A') . "\n\n"
             . "Professionally inspected. Mounting and balancing available at our Canon City, CO shop.\n"
             . "Road hazard warranty available for purchase.\n\n"
             . "Ships within 2 business days. Local pickup also available.";

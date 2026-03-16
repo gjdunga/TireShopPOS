@@ -1328,11 +1328,11 @@ $router->with($auth)->get('/api/lookups/brands', function () {
 });
 
 $router->with($auth)->get('/api/lookups/tire-types', function () {
-    return ['tire_types' => Database::query("SELECT tire_type_id, type_name FROM lkp_tire_types WHERE is_active = 1 ORDER BY type_name")];
+    return ['tire_types' => Database::query("SELECT type_id, type_code, type_label FROM lkp_tire_types WHERE is_active = 1 ORDER BY type_label")];
 });
 
 $router->with($auth)->get('/api/lookups/construction-types', function () {
-    return ['construction_types' => Database::query("SELECT construction_type_id, construction_name FROM lkp_construction_types ORDER BY construction_name")];
+    return ['construction_types' => Database::query("SELECT construction_id, code, label FROM lkp_construction_types ORDER BY label")];
 });
 
 
