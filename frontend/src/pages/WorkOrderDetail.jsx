@@ -35,6 +35,9 @@ const EMPTY_WO = {
   customer_id: '', vehicle_id: '', assigned_tech_id: '',
   mileage_in: '', customer_complaint: '', special_notes: '',
   estimated_price: '',
+  deposit_amount: '', deposit_method: '',
+  subtotal_materials: '', subtotal_labor: '', subtotal_fees: '',
+  tax_rate: '', tax_amount: '', total_estimate: '',
 };
 
 export default function WorkOrderDetail() {
@@ -88,6 +91,14 @@ export default function WorkOrderDetail() {
           customer_complaint: woData.customer_complaint || '',
           special_notes: woData.special_notes || '',
           estimated_price: woData.estimated_price || '',
+          deposit_amount: woData.deposit_amount || '',
+          deposit_method: woData.deposit_method || '',
+          subtotal_materials: woData.subtotal_materials || '',
+          subtotal_labor: woData.subtotal_labor || '',
+          subtotal_fees: woData.subtotal_fees || '',
+          tax_rate: woData.tax_rate || '',
+          tax_amount: woData.tax_amount || '',
+          total_estimate: woData.total_estimate || '',
           status: woData.status || 'intake',
         });
         setPositions(woData.positions || []);
@@ -302,6 +313,56 @@ export default function WorkOrderDetail() {
               </div>
             </div>
 
+            {/* Financial breakdown */}
+            <div style={{ marginTop: '1rem', padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e0e0e0' }}>
+              <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--navy)' }}>Pricing Breakdown</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.5rem' }}>
+                <div className="form-field"><label className="label" style={{ fontSize: '0.75rem' }}>Materials (taxable)</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><span>$</span>
+                    <input type="number" step="0.01" min="0" value={form.subtotal_materials || ''} onChange={handleChange('subtotal_materials')} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }} />
+                  </div></div>
+                <div className="form-field"><label className="label" style={{ fontSize: '0.75rem' }}>Labor (not taxed)</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><span>$</span>
+                    <input type="number" step="0.01" min="0" value={form.subtotal_labor || ''} onChange={handleChange('subtotal_labor')} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }} />
+                  </div></div>
+                <div className="form-field"><label className="label" style={{ fontSize: '0.75rem' }}>Fees</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><span>$</span>
+                    <input type="number" step="0.01" min="0" value={form.subtotal_fees || ''} onChange={handleChange('subtotal_fees')} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }} />
+                  </div></div>
+                <div className="form-field"><label className="label" style={{ fontSize: '0.75rem' }}>Tax Rate (%)</label>
+                  <input type="number" step="0.01" min="0" max="100" value={form.tax_rate ? (Number(form.tax_rate) * 100).toFixed(2) : ''} onChange={(e) => setForm(p => ({ ...p, tax_rate: e.target.value ? (Number(e.target.value) / 100).toFixed(4) : '' }))} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }} />
+                </div>
+                <div className="form-field"><label className="label" style={{ fontSize: '0.75rem' }}>Tax Amount</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><span>$</span>
+                    <input type="number" step="0.01" min="0" value={form.tax_amount || ''} onChange={handleChange('tax_amount')} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }} />
+                  </div></div>
+                <div className="form-field"><label className="label" style={{ fontSize: '0.75rem' }}>Total Estimate</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><span style={{ fontWeight: 700 }}>$</span>
+                    <input type="number" step="0.01" min="0" value={form.total_estimate || ''} onChange={handleChange('total_estimate')} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', fontWeight: 600 }} />
+                  </div></div>
+              </div>
+
+              {/* Deposit */}
+              <div style={{ marginTop: '0.75rem', paddingTop: '0.5rem', borderTop: '1px solid #ddd' }}>
+                <div style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.4rem', color: 'var(--navy)' }}>Deposit</div>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div className="form-field" style={{ width: '120px' }}><label className="label" style={{ fontSize: '0.75rem' }}>Amount</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><span>$</span>
+                      <input type="number" step="0.01" min="0" value={form.deposit_amount || ''} onChange={handleChange('deposit_amount')} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }} />
+                    </div></div>
+                  <div className="form-field" style={{ width: '140px' }}><label className="label" style={{ fontSize: '0.75rem' }}>Method</label>
+                    <select value={form.deposit_method || ''} onChange={handleChange('deposit_method')} style={{ fontSize: '0.85rem' }}>
+                      <option value="">None</option>
+                      <option value="cash">Cash</option>
+                      <option value="credit_card">Credit Card</option>
+                      <option value="debit_card">Debit Card</option>
+                      <option value="check">Check</option>
+                      <option value="other">Other</option>
+                    </select></div>
+                </div>
+              </div>
+            </div>
+
             <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {isNew ? (
                 <button className="btn btn-primary" onClick={handleCreate} disabled={saving || !form.customer_id}>
@@ -361,7 +422,7 @@ export default function WorkOrderDetail() {
 
 function PositionGrid({ woId, positions, onChanged }) {
   const [adding, setAdding] = useState(false);
-  const [newPos, setNewPos] = useState({ position_code: 'LF', action_requested: 'install', tire_id_new: '', tread_depth_in: '', psi_in: '' });
+  const [newPos, setNewPos] = useState({ position_code: 'LF', action_requested: 'install', tire_id_new: '', unit_price: '', tread_depth_in: '', psi_in: '' });
   const [saving, setSaving] = useState(false);
 
   const usedPositions = positions.map((p) => p.position_code);
@@ -372,7 +433,7 @@ function PositionGrid({ woId, positions, onChanged }) {
     try {
       await api.post(`/work-orders/${woId}/positions`, newPos);
       setAdding(false);
-      setNewPos({ position_code: availablePositions[0] || 'LF', action_requested: 'install', tire_id_new: '', tread_depth_in: '', psi_in: '' });
+      setNewPos({ position_code: availablePositions[0] || 'LF', action_requested: 'install', tire_id_new: '', unit_price: '', tread_depth_in: '', psi_in: '' });
       onChanged();
     } catch (err) { alert('Error: ' + err.message); }
     finally { setSaving(false); }
@@ -407,6 +468,7 @@ function PositionGrid({ woId, positions, onChanged }) {
               <div className="pos-body">
                 {pos.new_tire_size && <div className="pos-tire"><span className="label">New:</span> {pos.new_tire_brand} {pos.new_tire_size}</div>}
                 {pos.existing_tire_size && <div className="pos-tire"><span className="label">Existing:</span> {pos.existing_tire_brand} {pos.existing_tire_size}</div>}
+                {pos.unit_price && <div style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--navy)', fontWeight: 600 }}>${Number(pos.unit_price).toFixed(2)}</div>}
 
                 <div className="pos-metrics">
                   {pos.tread_depth_in != null && <span>Tread In: {pos.tread_depth_in}/32</span>}
@@ -468,6 +530,10 @@ function PositionGrid({ woId, positions, onChanged }) {
               <input type="number" value={newPos.tire_id_new} onChange={(e) => setNewPos((p) => ({ ...p, tire_id_new: e.target.value }))} />
             </div>
             <div className="form-field" style={{ minWidth: 80 }}>
+              <label className="label">Unit Price</label>
+              <input type="number" step="0.01" min="0" placeholder="$" value={newPos.unit_price} onChange={(e) => setNewPos((p) => ({ ...p, unit_price: e.target.value }))} style={{ fontFamily: 'var(--font-mono)' }} />
+            </div>
+            <div className="form-field" style={{ minWidth: 80 }}>
               <label className="label">Tread In</label>
               <input type="number" min="0" max="32" value={newPos.tread_depth_in} onChange={(e) => setNewPos((p) => ({ ...p, tread_depth_in: e.target.value }))} />
             </div>
@@ -496,6 +562,16 @@ function PositionGrid({ woId, positions, onChanged }) {
 function TorqueGate({ wo, completable, torqueForm, setTorqueForm, techs, onVerify }) {
   const isVerified = wo?.torque_verified_by && wo?.torque_verified_at;
   const canComplete = completable?.can_complete;
+  const [scheduling, setScheduling] = useState(false);
+
+  const handleScheduleRetorque = async () => {
+    setScheduling(true);
+    try {
+      await api.post(`/work-orders/${wo.work_order_id}/schedule-retorque`);
+      onVerify(); // reload
+    } catch (err) { alert('Error: ' + err.message); }
+    finally { setScheduling(false); }
+  };
 
   return (
     <div>
@@ -504,6 +580,22 @@ function TorqueGate({ wo, completable, torqueForm, setTorqueForm, techs, onVerif
           <div className="alert alert-success" style={{ marginBottom: '0.5rem' }}>
             Torque verified: {wo.torque_spec_used} ft-lbs at {wo.torque_verified_at?.slice(0, 16)?.replace('T', ' ')}
           </div>
+          {wo.retorque_due_date && !wo.retorque_completed && (
+            <div className="alert" style={{ background: '#fff3cd', color: '#856404', marginBottom: '0.5rem' }}>
+              Re-torque due: {wo.retorque_due_date}
+              {wo.retorque_due_miles && ` or ${wo.retorque_due_miles.toLocaleString()} miles`}
+            </div>
+          )}
+          {wo.retorque_completed && (
+            <div className="alert alert-success" style={{ marginBottom: '0.5rem' }}>
+              Re-torque completed: {wo.retorque_completed_at?.slice(0, 16)?.replace('T', ' ')}
+            </div>
+          )}
+          {!wo.retorque_due_date && !wo.retorque_completed && (
+            <button className="btn btn-ghost btn-sm" onClick={handleScheduleRetorque} disabled={scheduling}>
+              {scheduling ? <span className="spinner" /> : 'Schedule Re-torque'}
+            </button>
+          )}
         </div>
       ) : (
         <div>
