@@ -104,6 +104,7 @@ function getSyncLog(string $integration = '', int $limit = 50, int $offset = 0):
 // ============================================================================
 
 function createListing(array $data, int $createdBy): int {
+    InputValidator::check('marketplace_listings', $data, ['platform', 'title']);
     $sql = "INSERT INTO marketplace_listings
             (platform, tire_id, wheel_id, title, description, price, status, created_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
@@ -138,6 +139,7 @@ function listListings(string $platform = '', string $status = '', int $limit = 5
 }
 
 function updateListing(int $listingId, array $data): array {
+    InputValidator::check('marketplace_listings', $data);
     $editable = ['title', 'description', 'price', 'status', 'external_id', 'external_url',
                  'listed_at', 'expires_at', 'sync_status', 'last_synced_at'];
     $sets = []; $params = [];
@@ -198,6 +200,7 @@ function generateListingContent(int $tireId, string $platform): array {
 // ============================================================================
 
 function importMarketplaceOrder(array $data): int {
+    InputValidator::check('marketplace_orders', $data, ['platform']);
     $sql = "INSERT INTO marketplace_orders
             (platform, external_order_id, buyer_name, buyer_email, buyer_phone,
              buyer_address, order_total, platform_fees, shipping_cost, status, ordered_at, notes)
@@ -266,6 +269,7 @@ function listB2bInventory(string $listingType = '', bool $visibleOnly = true): a
 }
 
 function addToB2bNetwork(array $data): int {
+    InputValidator::check('b2b_network_inventory', $data);
     $sql = "INSERT INTO b2b_network_inventory
             (tire_id, wheel_id, listing_type, wholesale_price, min_quantity, max_quantity, description)
             VALUES (?, ?, ?, ?, ?, ?, ?)";
@@ -292,6 +296,7 @@ function listDirectoryListings(): array {
 }
 
 function createDirectoryListing(array $data): int {
+    InputValidator::check('directory_listings', $data, ['directory_name']);
     $sql = "INSERT INTO directory_listings (directory_name, listing_url, listing_status, profile_data, notes)
             VALUES (?, ?, ?, ?, ?)";
     getDB()->prepare($sql)->execute([
@@ -304,6 +309,7 @@ function createDirectoryListing(array $data): int {
 }
 
 function updateDirectoryListing(int $dirId, array $data): void {
+    InputValidator::check('directory_listings', $data);
     $editable = ['listing_url', 'listing_status', 'profile_data', 'notes', 'last_verified'];
     $sets = []; $params = [];
     foreach ($editable as $col) {

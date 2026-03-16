@@ -598,13 +598,14 @@ $router->with(permit('USER_MANAGE'))->get('/api/users/{id}', function (array $pa
 });
 
 $router->with(permit('USER_MANAGE'))->post('/api/users', function (array $params, array $body) {
+    InputValidator::check('users', $body, ['username', 'display_name']);
     $username = trim($body['username'] ?? '');
     $displayName = trim($body['display_name'] ?? '');
     $password = $body['password'] ?? '';
     $roleId = (int) ($body['role_id'] ?? 0);
 
-    if ($username === '' || $displayName === '' || $password === '' || $roleId === 0) {
-        Router::sendError('MISSING_FIELDS', 'Fields username, display_name, password, and role_id are required.', 400);
+    if ($password === '' || $roleId === 0) {
+        Router::sendError('MISSING_FIELDS', 'Fields password and role_id are required.', 400);
     }
 
     // Validate password strength (same rules as self-service password change)
@@ -636,6 +637,7 @@ $router->with(permit('USER_MANAGE'))->post('/api/users', function (array $params
 
 $router->with(permit('USER_MANAGE'))->patch('/api/users/{id}', function (array $params, array $body) {
     $userId = (int) $params['id'];
+    InputValidator::check('users', $body);
 
     $user = Database::queryOne("SELECT * FROM users WHERE user_id = ?", [$userId]);
     if ($user === null) {

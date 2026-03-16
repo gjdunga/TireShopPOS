@@ -66,6 +66,7 @@ function getTire(int $tireId): ?array {
 }
 
 function createTire(array $data, int $createdBy): int {
+    InputValidator::check('tires', $data);
     $fields = [
         'brand_id', 'tire_type_id', 'construction_id',
         'width_mm', 'aspect_ratio', 'wheel_diameter', 'size_format',
@@ -135,6 +136,7 @@ function updateTire(int $tireId, array $data, int $updatedBy): array {
         throw new \RuntimeException('Tire not found.');
     }
     \App\Http\Middleware::checkConflict($data, $tire, 'tire');
+    InputValidator::check('tires', $data);
 
     $editable = [
         'brand_id', 'tire_type_id', 'construction_id',
@@ -244,12 +246,7 @@ function getCustomer(int $customerId): ?array {
 }
 
 function createCustomer(array $data, int $createdBy): int {
-    $required = ['first_name', 'last_name'];
-    foreach ($required as $r) {
-        if (empty(trim($data[$r] ?? ''))) {
-            throw new \InvalidArgumentException("Field \"{$r}\" is required.");
-        }
-    }
+    InputValidator::check('customers', $data, ['first_name', 'last_name']);
 
     Database::execute(
         "INSERT INTO customers (first_name, last_name, phone_primary, phone_secondary, email, address_line1, address_line2, city, state, zip, is_tax_exempt, tax_exempt_id, notes, created_by)
@@ -284,6 +281,7 @@ function updateCustomer(int $customerId, array $data, int $updatedBy): array {
         throw new \RuntimeException('Customer not found.');
     }
     \App\Http\Middleware::checkConflict($data, $customer, 'customer');
+    InputValidator::check('customers', $data);
 
     $editable = ['first_name', 'last_name', 'phone_primary', 'phone_secondary', 'email',
                  'address_line1', 'address_line2', 'city', 'state', 'zip',
@@ -330,12 +328,7 @@ function getVehicle(int $vehicleId): ?array {
 }
 
 function createVehicle(array $data, int $createdBy): int {
-    $required = ['year', 'make', 'model'];
-    foreach ($required as $r) {
-        if (empty(trim((string) ($data[$r] ?? '')))) {
-            throw new \InvalidArgumentException("Field \"{$r}\" is required.");
-        }
-    }
+    InputValidator::check('vehicles', $data, ['year', 'make', 'model']);
 
     Database::execute(
         "INSERT INTO vehicles (year, make, model, trim_level, vin, license_plate, license_state,
@@ -373,6 +366,7 @@ function updateVehicle(int $vehicleId, array $data, int $updatedBy): array {
         throw new \RuntimeException('Vehicle not found.');
     }
     \App\Http\Middleware::checkConflict($data, $vehicle, 'vehicle');
+    InputValidator::check('vehicles', $data);
 
     $editable = ['year', 'make', 'model', 'trim_level', 'vin', 'license_plate',
                  'license_state', 'color', 'drivetrain', 'lug_count', 'lug_pattern',
@@ -511,6 +505,7 @@ function updateWorkOrder(int $woId, array $data, int $updatedBy): array {
         throw new \RuntimeException('Work order not found.');
     }
     \App\Http\Middleware::checkConflict($data, $wo, 'work order');
+    InputValidator::check('work_orders', $data);
 
     $editable = ['customer_id', 'vehicle_id', 'mileage_in', 'mileage_out',
                  'customer_complaint', 'tech_diagnosis', 'special_notes', 'status',
@@ -673,6 +668,7 @@ function getPurchaseOrder(int $poId): ?array {
 }
 
 function createPurchaseOrder(array $data, int $createdBy): int {
+    InputValidator::check('purchase_orders', $data);
     $vendorId = (int) ($data['vendor_id'] ?? 0);
     if ($vendorId === 0) {
         throw new \InvalidArgumentException('Field "vendor_id" is required.');
@@ -697,6 +693,7 @@ function addPoLineItem(int $poId, array $data, int $addedBy): int {
     if ($po === null) {
         throw new \RuntimeException('Purchase order not found.');
     }
+    InputValidator::check('po_line_items', $data);
 
     Database::execute(
         "INSERT INTO po_line_items (po_id, description, size_string, brand, quantity_ordered, unit_cost)
@@ -820,10 +817,8 @@ function listAppointments(?string $startDate, ?string $endDate): array {
 }
 
 function createAppointment(array $data, int $createdBy): int {
-    $date = $data['appointment_date'] ?? '';
-    if ($date === '') {
-        throw new \InvalidArgumentException('Field "appointment_date" is required.');
-    }
+    InputValidator::check('appointments', $data, ['appointment_date']);
+    $date = $data['appointment_date'];
 
     Database::execute(
         "INSERT INTO appointments (customer_id, vehicle_id, appointment_date, appointment_time,
@@ -853,6 +848,7 @@ function updateAppointment(int $apptId, array $data, int $updatedBy): array {
         throw new \RuntimeException('Appointment not found.');
     }
     \App\Http\Middleware::checkConflict($data, $appt, 'appointment');
+    InputValidator::check('appointments', $data);
 
     $editable = ['customer_id', 'vehicle_id', 'appointment_date', 'appointment_time',
                  'duration_minutes', 'service_type', 'notes', 'status'];
@@ -951,10 +947,8 @@ function getVendor(int $vendorId): ?array {
 }
 
 function createVendor(array $data, int $createdBy): int {
-    $name = trim($data['vendor_name'] ?? '');
-    if ($name === '') {
-        throw new \InvalidArgumentException('Field "vendor_name" is required.');
-    }
+    InputValidator::check('vendors', $data, ['vendor_name']);
+    $name = trim($data['vendor_name']);
 
     Database::execute(
         "INSERT INTO vendors (vendor_name, contact_name, phone, email, address, account_number, notes, is_active)

@@ -128,6 +128,7 @@ function getWarrantyPolicy(int $policyId): ?array {
 }
 
 function createWarrantyPolicy(array $data): int {
+    InputValidator::check('warranty_policies', $data, ['policy_name', 'policy_code']);
     $sql = "INSERT INTO warranty_policies
             (policy_name, policy_code, coverage_months, coverage_miles, price,
              is_per_tire, terms_text, exclusions_text, max_claim_amount, deductible)
@@ -275,6 +276,7 @@ function payWarrantyClaim(int $claimId, string $amount, int $paidBy): void {
 // ============================================================================
 
 function createWheel(array $data): int {
+    InputValidator::check('wheels', $data);
     $sql = "INSERT INTO wheels
             (brand, model, diameter, width, bolt_pattern, offset_mm, center_bore,
              material, finish, `condition`, retail_price, cost, quantity_on_hand,
@@ -305,6 +307,7 @@ function getWheel(int $wheelId): ?array {
 }
 
 function updateWheel(int $wheelId, array $data): array {
+    InputValidator::check('wheels', $data);
     $editable = ['brand', 'model', 'diameter', 'width', 'bolt_pattern', 'offset_mm',
                  'center_bore', 'material', 'finish', 'condition', 'retail_price',
                  'cost', 'quantity_on_hand', 'bin_location', 'notes', 'is_active'];
@@ -360,6 +363,7 @@ function searchWheels(array $filters, int $limit = 25, int $offset = 0): array {
 }
 
 function addWheelFitment(int $wheelId, array $data): int {
+    InputValidator::check('wheel_fitments', $data, ['make', 'model']);
     $sql = "INSERT INTO wheel_fitments (wheel_id, make, model, year_start, year_end, trim_level, is_oem, notes)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
     $stmt = getDB()->prepare($sql);
@@ -489,6 +493,7 @@ function listCustomFields(string $entityType, bool $activeOnly = true): array {
 }
 
 function createCustomField(array $data): int {
+    InputValidator::check('custom_fields', $data, ['field_name', 'field_label']);
     $sql = "INSERT INTO custom_fields (entity_type, field_name, field_label, field_type, select_options, is_required, sort_order)
             VALUES (?, ?, ?, ?, ?, ?, ?)";
     $stmt = getDB()->prepare($sql);

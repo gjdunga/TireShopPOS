@@ -35,6 +35,7 @@ $app->boot();
 // tires, work orders, appointments, purchase orders, vendors, reports).
 require_once BASE_PATH . '/php/tire_pos_helpers.php';
 require_once BASE_PATH . '/php/tire_pos_crud.php';
+require_once BASE_PATH . '/php/InputValidator.php';
 
 // Lazy-load: only parse additional files when the URI requires them.
 // Closures in routes/api.php are registered but not executed until dispatch,
