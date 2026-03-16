@@ -1,6 +1,6 @@
 # TireShopPOS
 
-**DunganSoft Technologies** | Version 1.0.0 | March 2026
+**DunganSoft Technologies** | Version 1.0.1 | March 2026
 
 Full-stack point-of-sale system for independent tire shops. PHP 8.1+ REST API with React 19 frontend, designed for Ubuntu 24.04 LTS with Virtualmin 8.x Professional.
 
@@ -39,9 +39,9 @@ php -S localhost:8080 -t public public/index.php
 
 ## Key Numbers
 
-- 169 API routes
+- 172 API routes
 - 66 database tables, 9 views
-- 187 PHP functions across 5 business logic files + provider layer
+- 195 PHP functions across 5 business logic files + provider layer
 - 17 RBAC permissions, 5 roles (owner, manager, tech, sales, readonly)
 - 53 tire brands, 410 torque specs seeded
 - 122 integration test assertions (all passing)

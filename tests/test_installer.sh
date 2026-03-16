@@ -168,7 +168,7 @@ SV_CT=$(mc "SELECT COUNT(*) FROM schema_version;")
 assert_eq "schema_version: 1 row" "1" "$SV_CT"
 
 SV_APP=$(mc "SELECT app_version FROM schema_version WHERE id=1;")
-assert_eq "schema_version: app_version" "1.0.0" "$SV_APP"
+assert_eq "schema_version: app_version" "1.0.1" "$SV_APP"
 
 SV_ENG=$(mc "SELECT db_engine FROM schema_version WHERE id=1;")
 assert "schema_version: engine" "MySQL" "$SV_ENG"
@@ -292,7 +292,7 @@ echo -e "\n${CYAN}  [Status Display]${NC}"
 OUTPUT=$(inst --status)
 assert "Status: database name" "$TEST_DB" "$OUTPUT"
 assert_re "Status: engine" "MySQL|MariaDB" "$OUTPUT"
-assert "Status: app version" "1.0.0" "$OUTPUT"
+assert "Status: app version" "1.0.1" "$OUTPUT"
 assert "Status: migration history" "001_sessions" "$OUTPUT"
 
 # ---- GitHub check ----

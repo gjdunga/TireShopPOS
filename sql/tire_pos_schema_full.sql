@@ -1,5 +1,5 @@
 -- ============================================================================
--- Tire Shop POS System: Consolidated Database Schema v1.0.0
+-- Tire Shop POS System: Consolidated Database Schema v1.0.1
 -- Target: MySQL 8.0+ / MariaDB 10.6+
 -- Charset: utf8mb4 throughout
 -- Generated for DunganSoft Technologies
