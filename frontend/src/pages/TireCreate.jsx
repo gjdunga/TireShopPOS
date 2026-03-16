@@ -12,6 +12,8 @@ import api from '../api/client.js';
 export default function TireCreate() {
   const navigate = useNavigate();
   const [brands, setBrands] = useState([]);
+  const [tireTypes, setTireTypes] = useState([]);
+  const [constructionTypes, setConstructionTypes] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [parsedSize, setParsedSize] = useState(null);
@@ -20,6 +22,8 @@ export default function TireCreate() {
     full_size_string: '',
     brand_id: '',
     model_name: '',
+    tire_type: '',
+    construction_type: '',
     condition: 'new',
     tread_depth_32nds: '',
     retail_price: '',
@@ -30,9 +34,15 @@ export default function TireCreate() {
   });
 
   useEffect(() => {
-    api.get('/lookups/brands')
-      .then((d) => setBrands(d.brands || []))
-      .catch(() => {});
+    Promise.all([
+      api.get('/lookups/brands').catch(() => ({ brands: [] })),
+      api.get('/lookups/tire-types').catch(() => ({ types: [] })),
+      api.get('/lookups/construction-types').catch(() => ({ types: [] })),
+    ]).then(([b, tt, ct]) => {
+      setBrands(b.brands || []);
+      setTireTypes(tt.types || []);
+      setConstructionTypes(ct.types || []);
+    });
   }, []);
 
   const handleChange = (field) => (e) => {
@@ -106,6 +116,22 @@ export default function TireCreate() {
             <div className="form-field">
               <label className="label">Model</label>
               <input type="text" value={form.model_name} onChange={handleChange('model_name')} />
+            </div>
+
+            <div className="form-field">
+              <label className="label">Tire Type</label>
+              <select value={form.tire_type} onChange={handleChange('tire_type')}>
+                <option value="">Select...</option>
+                {tireTypes.map((t) => <option key={t.code || t} value={t.code || t}>{t.label || t.code || t}</option>)}
+              </select>
+            </div>
+
+            <div className="form-field">
+              <label className="label">Construction</label>
+              <select value={form.construction_type} onChange={handleChange('construction_type')}>
+                <option value="">Select...</option>
+                {constructionTypes.map((t) => <option key={t.code || t} value={t.code || t}>{t.label || t.code || t}</option>)}
+              </select>
             </div>
 
             <div className="form-field">

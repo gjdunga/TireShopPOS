@@ -30,9 +30,11 @@ export default function CustomerComm() {
       <div style={{ display: 'flex', gap: '0.375rem', marginBottom: '1rem', borderBottom: '1px solid var(--lgray)', paddingBottom: '0.75rem' }}>
         <button className={`btn btn-sm ${tab === 'send' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('send')}>Send Message</button>
         <button className={`btn btn-sm ${tab === 'pending' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('pending')}>Pending Queue</button>
+        <button className={`btn btn-sm ${tab === 'history' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('history')}>Customer History</button>
       </div>
       {tab === 'send' && <SendTab />}
       {tab === 'pending' && <PendingTab />}
+      {tab === 'history' && <HistoryTab />}
     </div>
   );
 }
@@ -170,6 +172,10 @@ function PendingTab() {
     try { await api.post(`/notifications/${id}/sent`); load(); } catch {}
   };
 
+  const handleMarkFailed = async (id) => {
+    try { await api.post(`/notifications/${id}/failed`, { reason: 'Manual mark as failed' }); load(); } catch {}
+  };
+
   return (
     <div className="card">
       {loading ? <span className="spinner" /> : notifications.length === 0 ? (
@@ -185,11 +191,84 @@ function PendingTab() {
                 <td>{n.notification_type}</td>
                 <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.subject || n.body?.slice(0, 40)}</td>
                 <td className="mono">{n.created_at?.slice(0, 16)}</td>
-                <td><button className="btn btn-primary btn-sm" onClick={() => handleMarkSent(n.notification_id)}>Mark Sent</button></td>
+                <td>
+                  <div style={{ display: 'flex', gap: '0.25rem' }}>
+                    <button className="btn btn-primary btn-sm" onClick={() => handleMarkSent(n.notification_id)}>Sent</button>
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', color: 'var(--red)' }}
+                      onClick={() => handleMarkFailed(n.notification_id)}>Failed</button>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+    </div>
+  );
+}
+
+function HistoryTab() {
+  const [q, setQ] = useState('');
+  const [customers, setCustomers] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (q.length < 2) { setCustomers([]); return; }
+    const t = setTimeout(() => {
+      api.get(`/customers/search?q=${encodeURIComponent(q)}&limit=10`).then((d) => setCustomers(d.customers || [])).catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  useEffect(() => {
+    if (!selected) return;
+    setLoading(true);
+    api.get(`/notifications/customer/${selected.customer_id}`)
+      .then((d) => setHistory(d.notifications || []))
+      .catch(() => setHistory([]))
+      .finally(() => setLoading(false));
+  }, [selected]);
+
+  return (
+    <div className="card">
+      <div style={{ marginBottom: '0.75rem' }}>
+        <label className="label">Search Customer</label>
+        <input type="text" value={q} onChange={(e) => { setQ(e.target.value); setSelected(null); }} placeholder="Name, phone, or email..." />
+        {customers.length > 0 && !selected && (
+          <div style={{ border: '1px solid #ddd', borderRadius: '4px', maxHeight: '150px', overflow: 'auto', marginTop: '0.25rem' }}>
+            {customers.map((c) => (
+              <div key={c.customer_id} onClick={() => { setSelected(c); setQ(`${c.first_name} ${c.last_name}`); setCustomers([]); }}
+                style={{ padding: '0.4rem 0.6rem', cursor: 'pointer', borderBottom: '1px solid #eee', fontSize: '0.85rem' }}>
+                {c.first_name} {c.last_name} <span className="text-muted">{c.phone_primary}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {selected && (
+        loading ? <span className="spinner" /> : history.length === 0 ? (
+          <p className="text-muted">No notification history for {selected.first_name} {selected.last_name}.</p>
+        ) : (
+          <table className="entity-table" style={{ fontSize: '0.8125rem' }}>
+            <thead><tr><th>Date</th><th>Channel</th><th>Type</th><th>Subject</th><th>Status</th></tr></thead>
+            <tbody>
+              {history.map((n) => (
+                <tr key={n.notification_id}>
+                  <td className="mono" style={{ fontSize: '0.75rem' }}>{(n.created_at || '').slice(0, 16)}</td>
+                  <td style={{ textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 600 }}>{n.channel}</td>
+                  <td>{n.notification_type}</td>
+                  <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.subject || ''}</td>
+                  <td><span style={{ fontSize: '0.7rem', fontWeight: 600,
+                    color: n.status === 'sent' ? 'var(--green)' : n.status === 'failed' ? 'var(--red)' : '#888'
+                  }}>{n.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
       )}
     </div>
   );

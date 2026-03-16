@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
 import api from '../api/client.js';
+import CustomFieldValues from './CustomFieldValues.jsx';
 import './TireDetail.css';
 
 export default function TireDetail() {
@@ -108,6 +109,8 @@ export default function TireDetail() {
           <SectionTitle>Waiver Check</SectionTitle>
           <WaiverCheck tireId={tire.tire_id} />
         </div>
+
+        <CustomFieldValues entityType="tire" entityId={tire.tire_id} />
       </div>
     </div>
   );
@@ -342,11 +345,15 @@ function DotInfo({ tireId, dotTin }) {
 }
 
 
-// ---- Waiver Detection ----
+// ---- Waiver Detection and Creation ----
 
 function WaiverCheck({ tireId }) {
   const [waivers, setWaivers] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [templateText, setTemplateText] = useState({});
+  const [acknowledged, setAcknowledged] = useState({});
+  const [saving, setSaving] = useState(null);
+  const [msg, setMsg] = useState(null);
 
   useEffect(() => {
     api.get(`/tires/${tireId}/waivers`)
@@ -354,6 +361,25 @@ function WaiverCheck({ tireId }) {
       .catch(() => setWaivers([]))
       .finally(() => setLoading(false));
   }, [tireId]);
+
+  const viewTemplate = async (type) => {
+    if (templateText[type]) { setTemplateText((p) => { const n = { ...p }; delete n[type]; return n; }); return; }
+    try {
+      const data = await api.get(`/waivers/template/${type}`);
+      setTemplateText((p) => ({ ...p, [type]: data.text || data.statutory_text || 'No template text available.' }));
+    } catch { setTemplateText((p) => ({ ...p, [type]: 'Error loading template.' })); }
+  };
+
+  const createWaiver = async (type) => {
+    setSaving(type);
+    try {
+      await api.post('/waivers', { waiver_type: type, tire_id: tireId, customer_acknowledged: true });
+      setAcknowledged((p) => ({ ...p, [type]: true }));
+      setMsg('Waiver recorded.');
+      setTimeout(() => setMsg(null), 3000);
+    } catch (e) { setMsg('Error: ' + e.message); }
+    finally { setSaving(null); }
+  };
 
   if (loading) return <span className="spinner" />;
 
@@ -366,15 +392,31 @@ function WaiverCheck({ tireId }) {
       <div className="alert alert-warning" style={{ marginBottom: '0.5rem' }}>
         {waivers.length} waiver{waivers.length > 1 ? 's' : ''} required before sale:
       </div>
-      <ul className="dash-list">
-        {waivers.map((w, i) => (
-          <li key={i} style={{ padding: '0.35rem 0' }}>
-            <span className="badge" style={{ background: 'var(--orange-lt)', color: 'var(--orange)' }}>
-              {w.replace(/_/g, ' ')}
-            </span>
-          </li>
-        ))}
-      </ul>
+      {msg && <div className={`alert ${msg.startsWith('Error') ? 'alert-error' : 'alert-success'}`} style={{ marginBottom: '0.5rem', fontSize: '0.8rem' }}>{msg}</div>}
+      {waivers.map((w, i) => (
+        <div key={i} style={{ padding: '0.5rem', marginBottom: '0.5rem', background: acknowledged[w] ? '#d4edda' : '#fff3cd', borderRadius: '4px', border: '1px solid #ddd' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{w.replace(/_/g, ' ')}</span>
+            <div style={{ display: 'flex', gap: '0.25rem' }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => viewTemplate(w)} style={{ fontSize: '0.7rem' }}>
+                {templateText[w] ? 'Hide' : 'View Template'}
+              </button>
+              {!acknowledged[w] && (
+                <button className="btn btn-primary btn-sm" onClick={() => createWaiver(w)}
+                  disabled={saving === w} style={{ fontSize: '0.7rem' }}>
+                  {saving === w ? '...' : 'Record Acknowledgment'}
+                </button>
+              )}
+              {acknowledged[w] && <span style={{ fontSize: '0.7rem', color: 'var(--green)', fontWeight: 600 }}>Acknowledged</span>}
+            </div>
+          </div>
+          {templateText[w] && (
+            <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'white', borderRadius: '4px', fontSize: '0.8rem', whiteSpace: 'pre-wrap', color: '#333' }}>
+              {templateText[w]}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

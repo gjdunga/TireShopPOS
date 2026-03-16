@@ -236,8 +236,99 @@ export function StorefrontFitment() {
           {(results.tires || []).length === 0 && (results.wheels || []).length === 0 && (
             <p style={{ color: '#999' }}>No matching inventory found for this vehicle. Call us for availability.</p>
           )}
+          {(results.wheels || []).length > 0 && (
+            <div style={{ marginTop: '1.5rem' }}>
+              <h2>Wheels Available</h2>
+              <div className="sf-tire-grid">
+                {results.wheels.map((w) => (
+                  <div key={w.wheel_id} className="sf-tire-card">
+                    <div className="sf-tire-size">{w.size || `${w.diameter}"x${w.width}"`}</div>
+                    <div className="sf-tire-brand">{w.brand} {w.model || ''}</div>
+                    <div className="sf-tire-price">${Number(w.retail_price || 0).toFixed(2)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
+
+      {/* Reverse fitment: search by tire size */}
+      <div className="sf-section" style={{ marginTop: '2rem', borderTop: '1px solid #eee', paddingTop: '1.5rem' }}>
+        <h2>Search by Tire Size</h2>
+        <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '0.75rem' }}>Enter a tire size to see which vehicles it fits.</p>
+        <ReverseFitment />
+      </div>
+
+      {/* Wheels catalog */}
+      <div className="sf-section" style={{ marginTop: '2rem', borderTop: '1px solid #eee', paddingTop: '1.5rem' }}>
+        <h2>Wheels In Stock</h2>
+        <WheelsCatalog />
+      </div>
+    </div>
+  );
+}
+
+function ReverseFitment() {
+  const [size, setSize] = useState('');
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleSearch = async () => {
+    if (!size) return;
+    setLoading(true);
+    try { setResults(await pubGet(`/fitment/reverse?size=${encodeURIComponent(size)}`)); }
+    catch {} finally { setLoading(false); }
+  };
+
+  return (
+    <div>
+      <div className="sf-filters">
+        <input type="text" value={size} onChange={(e) => setSize(e.target.value)} placeholder="e.g. 265/70R17" className="sf-input" />
+        <button className="sf-btn sf-btn-primary" onClick={handleSearch} disabled={loading || !size}>
+          {loading ? 'Searching...' : 'Find Vehicles'}
+        </button>
+      </div>
+      {results && (
+        <div style={{ marginTop: '0.75rem' }}>
+          {(results.vehicles || []).length > 0 ? (
+            <ul style={{ listStyle: 'none', padding: 0 }}>
+              {results.vehicles.map((v, i) => (
+                <li key={i} style={{ padding: '0.4rem 0', borderBottom: '1px solid #f0f0f0', fontSize: '0.9rem' }}>
+                  {v.year && `${v.year} `}{v.make} {v.model} {v.trim && <span style={{ color: '#888' }}>({v.trim})</span>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p style={{ color: '#999' }}>No vehicle fitment data found for this size.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WheelsCatalog() {
+  const [wheels, setWheels] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    pubGet('/wheels').then((d) => setWheels(d.wheels || [])).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <p style={{ color: '#999' }}>Loading wheels...</p>;
+  if (wheels.length === 0) return <p style={{ color: '#999' }}>No wheels currently in stock.</p>;
+
+  return (
+    <div className="sf-tire-grid">
+      {wheels.map((w) => (
+        <div key={w.wheel_id} className="sf-tire-card">
+          <div className="sf-tire-size">{w.size || `${w.diameter}"x${w.width}"`}</div>
+          <div className="sf-tire-brand">{w.brand} {w.model || ''}</div>
+          {w.bolt_pattern && <div style={{ fontSize: '0.8rem', color: '#888' }}>{w.bolt_pattern}</div>}
+          <div className="sf-tire-price">${Number(w.retail_price || 0).toFixed(2)}</div>
+        </div>
+      ))}
     </div>
   );
 }

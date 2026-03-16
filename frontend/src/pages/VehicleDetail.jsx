@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
 import api from '../api/client.js';
+import CustomFieldValues from './CustomFieldValues.jsx';
 import './CustomerSearch.css';
 
 const DRIVETRAINS = ['2WD', '4WD', 'AWD', 'FWD', 'RWD'];
@@ -209,6 +210,8 @@ export default function VehicleDetail() {
             </div>
           </div>
         )}
+
+        {!isNew && <CustomFieldValues entityType="vehicle" entityId={Number(id)} />}
       </div>
     </div>
   );

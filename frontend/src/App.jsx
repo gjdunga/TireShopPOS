@@ -53,19 +53,12 @@ import { StorefrontShell, StorefrontHome, StorefrontInventory, StorefrontTireDet
 import { lazy, Suspense } from 'react';
 const MarketplaceHub = lazy(() => import('./pages/MarketplaceHub.jsx'));
 const ReportsDashboard = lazy(() => import('./pages/ReportsDashboard.jsx'));
+const UserManagement = lazy(() => import('./pages/UserManagement.jsx'));
+const AuditLog = lazy(() => import('./pages/AuditLog.jsx'));
 const LazyPrintWorkOrder = lazy(() => import('./pages/PrintTemplates.jsx').then(m => ({ default: m.PrintWorkOrder })));
 const LazyPrintEstimate = lazy(() => import('./pages/PrintTemplates.jsx').then(m => ({ default: m.PrintEstimate })));
 const SuspenseFallback = <div style={{padding:'2rem',textAlign:'center'}}>Loading...</div>;
 import NotFound from './pages/NotFound.jsx';
-
-function Placeholder({ title }) {
-  return (
-    <div>
-      <h1 style={{ fontSize: '1.5rem', marginBottom: '0.75rem' }}>{title}</h1>
-      <div className="card" style={{ color: 'var(--gray)' }}><p>Coming soon.</p></div>
-    </div>
-  );
-}
 
 export default function App() {
   return (
@@ -113,8 +106,8 @@ export default function App() {
               <Route path="warranties" element={<WarrantyManager />} />
               <Route path="communications" element={<CustomerComm />} />
               <Route path="marketplace" element={<Suspense fallback={SuspenseFallback}><MarketplaceHub /></Suspense>} />
-              <Route path="audit" element={<Placeholder title="Audit Log" />} />
-              <Route path="users" element={<Placeholder title="User Management" />} />
+              <Route path="audit" element={<Suspense fallback={SuspenseFallback}><AuditLog /></Suspense>} />
+              <Route path="users" element={<Suspense fallback={SuspenseFallback}><UserManagement /></Suspense>} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Route>

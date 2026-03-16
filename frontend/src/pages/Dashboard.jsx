@@ -158,15 +158,34 @@ function RetorqueCard() {
       {data?.due_list?.length > 0 && (
         <ul className="dash-list">
           {data.due_list.slice(0, 5).map((item, i) => (
-            <li key={i}>
-              <span className="mono">{item.work_order_number || `WO #${item.work_order_id}`}</span>
-              {item.due_date && <span className="text-muted"> by {item.due_date}</span>}
+            <li key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span className="mono">{item.work_order_number || `WO #${item.work_order_id}`}</span>
+                {item.due_date && <span className="text-muted"> by {item.due_date}</span>}
+              </div>
+              <RetorqueCompleteBtn id={item.work_order_id} onDone={() => window.location.reload()} />
             </li>
           ))}
         </ul>
       )}
       {count === 0 && !loading && <p className="text-muted" style={{ fontSize: '0.875rem' }}>None due.</p>}
     </DashCard>
+  );
+}
+
+function RetorqueCompleteBtn({ id, onDone }) {
+  const [busy, setBusy] = useState(false);
+  const handle = async () => {
+    setBusy(true);
+    try { await api.post(`/retorque/${id}/complete`); onDone(); }
+    catch (e) { alert('Error: ' + e.message); }
+    finally { setBusy(false); }
+  };
+  return (
+    <button className="btn btn-sm" onClick={handle} disabled={busy}
+      style={{ fontSize: '0.625rem', background: 'var(--green)', color: 'white', padding: '0.15rem 0.4rem' }}>
+      {busy ? '...' : 'Done'}
+    </button>
   );
 }
 

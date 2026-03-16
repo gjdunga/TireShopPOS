@@ -171,7 +171,7 @@ function OrdersTab() {
       </div>
       {loading ? <span className="spinner" /> : (
         <table className="entity-table">
-          <thead><tr><th>Platform</th><th>Ext Order</th><th>Buyer</th><th>Total</th><th>Fees</th><th>Date</th><th>Status</th></tr></thead>
+          <thead><tr><th>Platform</th><th>Ext Order</th><th>Buyer</th><th>Total</th><th>Fees</th><th>Date</th><th>Status</th><th></th></tr></thead>
           <tbody>
             {(data.rows || []).map((o) => (
               <tr key={o.order_id}>
@@ -182,13 +182,37 @@ function OrdersTab() {
                 <td className="mono" style={{ color: 'var(--red)' }}>${Number(o.platform_fees).toFixed(2)}</td>
                 <td className="mono">{o.ordered_at?.slice(0, 10)}</td>
                 <td><span className={`badge ${ORDER_STATUS_COLORS[o.status] || ''}`}>{o.status}</span></td>
+                <td>
+                  {o.status !== 'completed' && o.status !== 'cancelled' && o.status !== 'refunded' && (
+                    <OrderStatusButton orderId={o.order_id} current={o.status} onChanged={load} />
+                  )}
+                </td>
               </tr>
             ))}
-            {(data.rows || []).length === 0 && <tr><td colSpan={7} className="text-muted" style={{ textAlign: 'center' }}>No orders.</td></tr>}
+            {(data.rows || []).length === 0 && <tr><td colSpan={8} className="text-muted" style={{ textAlign: 'center' }}>No orders.</td></tr>}
           </tbody>
         </table>
       )}
     </div>
+  );
+}
+
+function OrderStatusButton({ orderId, current, onChanged }) {
+  const NEXT = { pending: 'confirmed', confirmed: 'shipped', shipped: 'completed' };
+  const next = NEXT[current];
+  if (!next) return null;
+  const [busy, setBusy] = useState(false);
+  const handle = async () => {
+    setBusy(true);
+    try { await api.patch(`/marketplace/orders/${orderId}/status`, { status: next }); onChanged(); }
+    catch (e) { alert('Error: ' + e.message); }
+    finally { setBusy(false); }
+  };
+  return (
+    <button className="btn btn-ghost btn-sm" onClick={handle} disabled={busy}
+      style={{ fontSize: '0.65rem', textTransform: 'capitalize' }}>
+      {busy ? '...' : `Mark ${next}`}
+    </button>
   );
 }
 
@@ -236,6 +260,16 @@ function DistributorsTab() {
             <div style={{ padding: '1rem', background: 'var(--lgray)', borderRadius: 'var(--radius-sm)' }}>
               <p style={{ fontWeight: 500, marginBottom: '0.25rem' }}>{results.distributor?.toUpperCase()} Integration</p>
               <p className="text-muted" style={{ fontSize: '0.875rem' }}>{results.note}</p>
+              {results.items && results.items.length > 0 && (
+                <div style={{ marginTop: '0.75rem' }}>
+                  {results.items.map((item, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px solid #eee' }}>
+                      <div><span className="mono">{item.part_number || item.size || 'Item'}</span> {item.description && <span className="text-muted"> {item.description}</span>}</div>
+                      <DistributorOrderButton distributor={distributor} item={item} />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-muted">No results.</p>
@@ -248,6 +282,26 @@ function DistributorsTab() {
 
 
 // --- Classifieds Tab ---
+
+function DistributorOrderButton({ distributor, item }) {
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const handle = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/distributors/${distributor}/order`, { items: [item] });
+      setDone(true);
+    } catch (e) { alert('Error: ' + e.message); }
+    finally { setBusy(false); }
+  };
+  if (done) return <span style={{ fontSize: '0.75rem', color: 'var(--green)', fontWeight: 600 }}>Ordered</span>;
+  return (
+    <button className="btn btn-primary btn-sm" onClick={handle} disabled={busy} style={{ fontSize: '0.7rem' }}>
+      {busy ? '...' : 'Place Order'}
+    </button>
+  );
+}
+
 function ClassifiedsTab() {
   const [tireId, setTireId] = useState('');
   const [platform, setPlatform] = useState('craigslist');
