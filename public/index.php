@@ -51,6 +51,7 @@ if (preg_match('#^/api/(integrations|marketplace|b2b|directory|distributors)#', 
 }
 
 // VehicleLookupService (845 lines): plate lookup, VIN decode/validate.
+// PlateProviders routes use inline require_once and don't need this gate.
 if (preg_match('#^/api/vehicles/(lookup|validate)#', $uri)) {
     require_once BASE_PATH . '/php/VehicleLookupService.php';
 }

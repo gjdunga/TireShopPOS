@@ -1008,6 +1008,90 @@ $router->with(permit('VEHICLE_MANAGE'))->get('/api/vehicles/torque-spec', functi
 
 
 // ============================================================================
+// Plate Provider Configuration (owner only)
+// ============================================================================
+
+// Catalog: list all available providers with metadata for the settings UI
+$router->with(permit('CONFIG_MANAGE'))->get('/api/plate-providers', function () {
+    require_once BASE_PATH . '/php/PlateProviders/ProviderFactory.php';
+    return [
+        'providers' => PlateProviderFactory::catalog(),
+        'current'   => PlateProviderFactory::getConfiguredSlug(),
+    ];
+});
+
+// Current config: which provider is active and whether the key is set
+$router->with(permit('CONFIG_MANAGE'))->get('/api/plate-providers/config', function () {
+    require_once BASE_PATH . '/php/PlateProviders/ProviderFactory.php';
+    $slug = PlateProviderFactory::getConfiguredSlug();
+    $key  = PlateProviderFactory::getConfiguredApiKey();
+    $catalog = PlateProviderFactory::catalog();
+    return [
+        'provider'    => $slug,
+        'has_api_key' => !empty($key),
+        'api_key_preview' => $key ? (substr($key, 0, 8) . str_repeat('*', max(0, strlen($key) - 8))) : '',
+        'meta'        => $catalog[$slug] ?? null,
+    ];
+});
+
+// Update: change provider and/or API key
+$router->with(permit('CONFIG_MANAGE'))->patch('/api/plate-providers/config', function (array $params, array $body) {
+    require_once BASE_PATH . '/php/PlateProviders/ProviderFactory.php';
+    $slug   = trim($body['provider'] ?? '');
+    $apiKey = trim($body['api_key'] ?? '');
+
+    if (empty($slug)) {
+        Router::sendError('MISSING_FIELD', 'Field "provider" is required.', 400);
+    }
+
+    $catalog = PlateProviderFactory::catalog();
+    if (!isset($catalog[$slug])) {
+        Router::sendError('INVALID_PROVIDER', 'Unknown provider: ' . $slug, 400);
+    }
+
+    if (empty($apiKey)) {
+        Router::sendError('MISSING_FIELD', 'Field "api_key" is required.', 400);
+    }
+
+    PlateProviderFactory::saveConfig($slug, $apiKey, Middleware::userId());
+
+    return [
+        'message'  => 'Plate lookup provider updated.',
+        'provider' => $slug,
+        'name'     => $catalog[$slug]['name'],
+    ];
+});
+
+// Test: verify the configured provider can reach its API
+$router->with(permit('CONFIG_MANAGE'))->post('/api/plate-providers/test', function (array $params, array $body) {
+    require_once BASE_PATH . '/php/PlateProviders/ProviderFactory.php';
+    $slug   = trim($body['provider'] ?? PlateProviderFactory::getConfiguredSlug());
+    $apiKey = trim($body['api_key'] ?? PlateProviderFactory::getConfiguredApiKey());
+    $plate  = trim($body['plate'] ?? '');
+    $state  = trim($body['state'] ?? '');
+
+    if (empty($plate) || empty($state)) {
+        Router::sendError('MISSING_FIELD', 'Fields "plate" and "state" are required for testing.', 400);
+    }
+
+    $provider = PlateProviderFactory::create($slug);
+    $logs = [];
+    $logger = function (string $prov, string $url, int $status, bool $ok, ?string $err, ?int $ms, int $cost) use (&$logs) {
+        $logs[] = compact('prov', 'url', 'status', 'ok', 'err', 'ms', 'cost');
+    };
+
+    $result = $provider->lookup(strtoupper($plate), strtoupper($state), $apiKey, $logger);
+
+    return [
+        'success'  => $result !== null,
+        'provider' => $provider->getName(),
+        'vehicle'  => $result,
+        'log'      => $logs,
+    ];
+});
+
+
+// ============================================================================
 // Lookup Tables (auth only, used by UI dropdowns)
 // ============================================================================
 

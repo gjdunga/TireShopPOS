@@ -11,9 +11,13 @@
  * Standalone service class for the Instant Vehicle Lookup feature.
  * Handles the four-stage lookup pipeline:
  *   1. Cache check (plate_lookup_cache, 90-day TTL)
- *   2. PlateToVIN API ($0.05 per call)
+ *   2. Plate provider API (configurable: Auto.dev, PlateToVIN, VehicleDatabases)
  *   3. NHTSA VPIC API (free, enrichment only)
  *   4. Torque spec matching (local, three-tier fallback)
+ *
+ * Provider selection is stored in shop_settings (plate_provider key).
+ * Default provider: Auto.dev (1,000 free calls/month).
+ * See php/PlateProviders/ for provider implementations.
  *
  * Public methods:
  *   lookupByPlate(plate, state, userId)  -- full pipeline
@@ -26,7 +30,8 @@
  *
  * Dependencies:
  *   - tire_pos_helpers.php (getDB(), auditLog(), logActivity())
- *   - ext-curl (HTTP calls to PlateToVIN and NHTSA)
+ *   - php/PlateProviders/ (provider implementations)
+ *   - ext-curl (HTTP calls to providers and NHTSA)
  *   - ext-json (response parsing)
  *
  * IMPORTANT: Requires PLATETOVIN_API_KEY in environment or config.
@@ -42,33 +47,29 @@ class VehicleLookupService
     // Configuration
     // ========================================================================
 
-    /** PlateToVIN API base URL */
-    private const PLATE_API_URL = 'https://api.platetovin.com/convert';
-
     /** NHTSA VPIC API base URL */
     private const NHTSA_API_URL = 'https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues';
 
-    /** Cost per PlateToVIN call in cents */
-    private const PLATE_API_COST_CENTS = 5;
-
     /** Cache TTL in days */
     private const CACHE_TTL_DAYS = 90;
-
-    /** HTTP timeout for PlateToVIN (seconds) */
-    private const PLATE_API_TIMEOUT = 10;
 
     /** HTTP timeout for NHTSA (seconds) */
     private const NHTSA_API_TIMEOUT = 15;
 
     private PDO $db;
+    private PlateProviderInterface $plateProvider;
     private string $apiKey;
 
-    public function __construct(?string $apiKey = null)
+    public function __construct(?string $apiKey = null, ?PlateProviderInterface $provider = null)
     {
         $this->db = getDB();
+
+        // Load provider from settings or use injected one
+        require_once __DIR__ . '/PlateProviders/ProviderFactory.php';
+        $this->plateProvider = $provider ?? PlateProviderFactory::create();
         $this->apiKey = $apiKey
-            ?? getenv('PLATETOVIN_API_KEY')
-            ?: '';
+            ?? PlateProviderFactory::getConfiguredApiKey()
+            ?: (getenv('PLATETOVIN_API_KEY') ?: '');
     }
 
     // ========================================================================
@@ -118,8 +119,16 @@ class VehicleLookupService
             ];
         }
 
-        // Stage 2: PlateToVIN API
-        $plateResult = $this->callPlateToVin($plate, $state, $userId);
+        // Stage 2: Plate provider API (configurable via settings)
+        $providerName = $this->plateProvider->getName();
+        $loggerFn = function (string $provider, string $url, int $httpStatus,
+                              bool $success, ?string $error, ?int $ms, int $costCents)
+                    use ($plate, $state, $userId) {
+            $this->logApiCall($plate, $state, $provider, $url,
+                $httpStatus, $success, $error, $ms, $userId, $costCents);
+        };
+
+        $plateResult = $this->plateProvider->lookup($plate, $state, $this->apiKey, $loggerFn);
         if ($plateResult === null) {
             // API failed; no cache available. Manual entry required.
             return null;
@@ -131,7 +140,7 @@ class VehicleLookupService
             $nhtsaData = $this->callNhtsaVpic($plateResult['vin'], $userId);
         }
 
-        // Merge: PlateToVIN is primary, NHTSA enriches
+        // Merge: plate provider is primary, NHTSA enriches
         $vehicle = $this->mergeVehicleData($plateResult, $nhtsaData);
 
         // Cache the result
@@ -491,75 +500,12 @@ class VehicleLookupService
     // PRIVATE: API Calls
     // ========================================================================
 
-    /**
-     * Call PlateToVIN API. Logs every call to plate_lookup_log.
-     * Returns parsed vehicle data or null on failure.
-     */
-    private function callPlateToVin(string $plate, string $state, ?int $userId): ?array
-    {
-        if (empty($this->apiKey)) {
-            $this->logApiCall($plate, $state, 'PlateToVIN', self::PLATE_API_URL,
-                0, false, 'Missing API key', null, $userId);
-            return null;
-        }
-
-        $url = self::PLATE_API_URL . '?' . http_build_query([
-            'plate' => $plate,
-            'state' => $state,
-        ]);
-
-        $startMs = hrtime(true);
-
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => self::PLATE_API_TIMEOUT,
-            CURLOPT_HTTPHEADER     => [
-                'Authorization: Bearer ' . $this->apiKey,
-                'Accept: application/json',
-            ],
-        ]);
-
-        $response = curl_exec($ch);
-        $httpStatus = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
-
-        $elapsedMs = (int) ((hrtime(true) - $startMs) / 1_000_000);
-
-        if ($response === false || $httpStatus !== 200) {
-            $errorMsg = $curlError ?: "HTTP {$httpStatus}";
-            $this->logApiCall($plate, $state, 'PlateToVIN', $url,
-                $httpStatus, false, $errorMsg, $elapsedMs, $userId);
-            return null;
-        }
-
-        $data = json_decode($response, true);
-        if (!$data || empty($data['vin'])) {
-            $this->logApiCall($plate, $state, 'PlateToVIN', $url,
-                $httpStatus, false, 'Empty or invalid response', $elapsedMs, $userId);
-            return null;
-        }
-
-        $this->logApiCall($plate, $state, 'PlateToVIN', $url,
-            $httpStatus, true, null, $elapsedMs, $userId);
-
-        return [
-            'vin'        => $data['vin'] ?? null,
-            'year'       => isset($data['year']) ? (int) $data['year'] : null,
-            'make'       => $data['make'] ?? null,
-            'model'      => $data['model'] ?? null,
-            'trim_level' => $data['trim'] ?? null,
-            'engine'     => $data['engine'] ?? null,
-            'drive_type' => $data['driveType'] ?? null,
-            'color'      => $data['color'] ?? null,
-            'body_style' => $data['style'] ?? null,
-        ];
-    }
+    // Plate provider call is now delegated to PlateProviderInterface::lookup()
+    // via $this->plateProvider in lookupByPlate(). See php/PlateProviders/.
 
     /**
      * Call NHTSA VPIC API to decode a VIN. Free, no auth required.
-     * Non-fatal: returns null on failure (system continues with PlateToVIN data).
+     * Non-fatal: returns null on failure (system continues with plate provider data).
      */
     private function callNhtsaVpic(string $vin, ?int $userId): ?array
     {
@@ -614,7 +560,7 @@ class VehicleLookupService
     // ========================================================================
 
     /**
-     * Merge PlateToVIN and NHTSA data. PlateToVIN is authoritative for
+     * Merge plate provider and NHTSA data. Plate provider is authoritative for
      * identity fields (VIN, year, make, model, color). NHTSA enriches
      * with engine details, body style, drive type, and GVWR.
      */
@@ -623,14 +569,14 @@ class VehicleLookupService
         $merged = $plate;
 
         if ($nhtsa !== null) {
-            // NHTSA enriches; does not override PlateToVIN identity fields
+            // NHTSA enriches; does not override plate provider identity fields
             $merged['body_style'] = $nhtsa['body_style'] ?? $plate['body_style'] ?? null;
             $merged['engine']     = $nhtsa['engine'] ?? $plate['engine'] ?? null;
             $merged['drive_type'] = $nhtsa['drive_type'] ?? $plate['drive_type'] ?? null;
             $merged['gvwr']       = $nhtsa['gvwr'] ?? null;
             $merged['fuel_type']  = $nhtsa['fuel_type'] ?? null;
 
-            // Use NHTSA trim if PlateToVIN did not provide one
+            // Use NHTSA trim if plate provider did not provide one
             if (empty($merged['trim_level']) && !empty($nhtsa['trim_level'])) {
                 $merged['trim_level'] = $nhtsa['trim_level'];
             }
@@ -774,11 +720,13 @@ class VehicleLookupService
         $expiresAt = (new DateTime())->modify('+' . self::CACHE_TTL_DAYS . ' days')
                                       ->format('Y-m-d H:i:s');
 
+        $providerName = $this->plateProvider->getName();
+
         $sql = "INSERT INTO plate_lookup_cache
                     (plate_number, plate_state, vin, year, make, model, trim_level,
                      body_style, engine, drive_type, color, api_provider,
                      api_response, cached_at, expires_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PlateToVIN', ?, NOW(), ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?)
                 ON DUPLICATE KEY UPDATE
                     vin = VALUES(vin), year = VALUES(year), make = VALUES(make),
                     model = VALUES(model), trim_level = VALUES(trim_level),
@@ -799,6 +747,7 @@ class VehicleLookupService
             $vehicle['engine'] ?? null,
             $vehicle['drive_type'] ?? null,
             $vehicle['color'] ?? null,
+            $providerName,
             json_encode($vehicle),
             $expiresAt,
         ]);
@@ -825,9 +774,9 @@ class VehicleLookupService
         ?int $userId,
         ?int $costCents = null
     ): void {
-        // Default cost: PlateToVIN = 5 cents, NHTSA = 0
+        // Default cost: providers pass their own, NHTSA = 0
         if ($costCents === null) {
-            $costCents = ($provider === 'PlateToVIN') ? self::PLATE_API_COST_CENTS : 0;
+            $costCents = 0;
         }
 
         $sql = "INSERT INTO plate_lookup_log

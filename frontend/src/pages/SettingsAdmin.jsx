@@ -15,6 +15,7 @@ const TABS = [
   { key: 'appearance', label: 'Appearance' },
   { key: 'fields', label: 'Custom Fields' },
   { key: 'apikeys', label: 'API Keys' },
+  { key: 'lookup', label: 'Vehicle Lookup' },
 ];
 
 export default function SettingsAdmin() {
@@ -69,6 +70,7 @@ export default function SettingsAdmin() {
         {tab === 'appearance' && <AppearanceTab webConfig={webConfig} onSaved={(m) => { setMsg(m); load(); }} onError={setError} />}
         {tab === 'fields' && <CustomFieldsTab onError={setError} />}
         {tab === 'apikeys' && <ApiKeysTab onError={setError} />}
+        {tab === 'lookup' && <VehicleLookupTab onSaved={(m) => { setMsg(m); }} onError={setError} />}
       </div>
     </div>
   );
@@ -399,6 +401,236 @@ function ApiKeysTab({ onError }) {
     </div>
   );
 }
+
+// ================================================================
+// Vehicle Lookup Provider Setup
+// ================================================================
+
+function VehicleLookupTab({ onSaved, onError }) {
+  const [providers, setProviders] = useState(null);
+  const [current, setCurrent] = useState('autodev');
+  const [apiKey, setApiKey] = useState('');
+  const [keyPreview, setKeyPreview] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testPlate, setTestPlate] = useState('');
+  const [testState, setTestState] = useState('CO');
+  const [testResult, setTestResult] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      api.get('/plate-providers'),
+      api.get('/plate-providers/config'),
+    ])
+      .then(([catalog, config]) => {
+        setProviders(catalog.providers || {});
+        setCurrent(catalog.current || config.provider || 'autodev');
+        setKeyPreview(config.api_key_preview || '');
+      })
+      .catch((err) => onError(err.message))
+      .finally(() => setLoading(false));
+  }, [onError]);
+
+  const handleSave = () => {
+    if (!apiKey && !keyPreview) {
+      onError('API key is required.');
+      return;
+    }
+    setSaving(true);
+    api.patch('/plate-providers/config', {
+      provider: current,
+      api_key: apiKey || keyPreview.replace(/\*/g, ''),
+    })
+      .then((res) => {
+        onSaved(res.message || 'Provider updated.');
+        setKeyPreview(apiKey ? (apiKey.substring(0, 8) + '********') : keyPreview);
+        setApiKey('');
+        setShowKey(false);
+      })
+      .catch((err) => onError(err.message))
+      .finally(() => setSaving(false));
+  };
+
+  const handleTest = () => {
+    if (!testPlate || !testState) {
+      onError('Enter a plate and state to test.');
+      return;
+    }
+    setTesting(true);
+    setTestResult(null);
+    api.post('/plate-providers/test', {
+      provider: current,
+      api_key: apiKey || undefined,
+      plate: testPlate,
+      state: testState,
+    })
+      .then((res) => setTestResult(res))
+      .catch((err) => setTestResult({ success: false, error: err.message }))
+      .finally(() => setTesting(false));
+  };
+
+  if (loading || !providers) {
+    return <div style={{ padding: '1rem' }}><span className="spinner" /></div>;
+  }
+
+  const meta = providers[current];
+  const US_STATES = [
+    'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS',
+    'KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY',
+    'NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
+  ];
+
+  return (
+    <div>
+      <STitle>Vehicle Lookup Provider</STitle>
+      <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: '1rem' }}>
+        Configure which plate-to-VIN API provider to use for license plate lookups.
+        All providers return VIN, year, make, and model. NHTSA enrichment (free) runs
+        automatically after the plate lookup.
+      </p>
+
+      {/* Provider dropdown */}
+      <div style={{ marginBottom: '1rem' }}>
+        <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem', fontSize: '0.85rem' }}>
+          Provider
+        </label>
+        <select
+          value={current}
+          onChange={(e) => { setCurrent(e.target.value); setTestResult(null); }}
+          style={{ width: '100%', maxWidth: '400px', padding: '0.5rem', borderRadius: '4px',
+                   border: '1px solid #ccc', fontSize: '0.9rem' }}
+        >
+          {Object.values(providers).map((p) => (
+            <option key={p.slug} value={p.slug}>
+              {p.name} ({p.pricing})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Provider info card */}
+      {meta && (
+        <div style={{ background: '#f0f5fa', border: '1px solid #d0dde8', borderRadius: '6px',
+                      padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.82rem' }}>
+          <div><strong>{meta.name}</strong></div>
+          <div style={{ marginTop: '0.25rem' }}>Pricing: {meta.pricing}</div>
+          <div>Auth: {meta.auth_header}</div>
+          <div style={{ marginTop: '0.25rem' }}>
+            <a href={meta.docs_url} target="_blank" rel="noopener noreferrer"
+               style={{ color: '#2e75b6' }}>
+              API Documentation
+            </a>
+            {' | '}
+            <a href={meta.url} target="_blank" rel="noopener noreferrer"
+               style={{ color: '#2e75b6' }}>
+              {meta.url}
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* API Key */}
+      <div style={{ marginBottom: '1rem' }}>
+        <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem', fontSize: '0.85rem' }}>
+          API Key
+          {keyPreview && !apiKey && (
+            <span style={{ fontWeight: 400, color: '#888', marginLeft: '0.5rem', fontSize: '0.8rem' }}>
+              (current: {keyPreview})
+            </span>
+          )}
+        </label>
+        <div style={{ display: 'flex', gap: '0.5rem', maxWidth: '500px' }}>
+          <input
+            type={showKey ? 'text' : 'password'}
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder={keyPreview ? 'Enter new key to change' : 'Enter API key'}
+            style={{ flex: 1, padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc',
+                     fontSize: '0.9rem', fontFamily: 'monospace' }}
+          />
+          <button type="button" className="btn btn-sm btn-ghost"
+            onClick={() => setShowKey(!showKey)} style={{ whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+            {showKey ? 'Hide' : 'Show'}
+          </button>
+        </div>
+      </div>
+
+      {/* Save */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}
+          style={{ marginRight: '0.5rem' }}>
+          {saving ? 'Saving...' : 'Save Provider Settings'}
+        </button>
+      </div>
+
+      {/* Test section */}
+      <STitle>Test Connection</STitle>
+      <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.75rem' }}>
+        Enter a real plate to verify the provider is working. This makes a live API call.
+      </p>
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', flexWrap: 'wrap',
+                    marginBottom: '0.75rem' }}>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.15rem' }}>Plate</label>
+          <input value={testPlate} onChange={(e) => setTestPlate(e.target.value.toUpperCase())}
+            placeholder="ABC123" style={{ width: '120px', padding: '0.4rem', borderRadius: '4px',
+            border: '1px solid #ccc', fontSize: '0.9rem', fontFamily: 'monospace' }} />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.15rem' }}>State</label>
+          <select value={testState} onChange={(e) => setTestState(e.target.value)}
+            style={{ padding: '0.4rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.9rem' }}>
+            {US_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <button className="btn btn-sm btn-ghost" onClick={handleTest} disabled={testing}
+          style={{ marginBottom: '0.15rem' }}>
+          {testing ? 'Testing...' : 'Test Lookup'}
+        </button>
+      </div>
+
+      {/* Test result */}
+      {testResult && (
+        <div style={{
+          background: testResult.success ? '#e8f5e9' : '#fdecea',
+          border: '1px solid ' + (testResult.success ? '#a5d6a7' : '#ef9a9a'),
+          borderRadius: '6px', padding: '0.75rem 1rem', fontSize: '0.82rem',
+          maxWidth: '600px',
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>
+            {testResult.success ? 'Success' : 'Failed'}
+            {testResult.provider && ` (${testResult.provider})`}
+          </div>
+          {testResult.error && <div style={{ color: '#c62828' }}>{testResult.error}</div>}
+          {testResult.vehicle && (
+            <div style={{ marginTop: '0.25rem' }}>
+              <div>VIN: <code>{testResult.vehicle.vin || 'N/A'}</code></div>
+              <div>{testResult.vehicle.year} {testResult.vehicle.make} {testResult.vehicle.model}
+                {testResult.vehicle.trim_level ? ` ${testResult.vehicle.trim_level}` : ''}</div>
+              {testResult.vehicle.engine && <div>Engine: {testResult.vehicle.engine}</div>}
+              {testResult.vehicle.drive_type && <div>Drive: {testResult.vehicle.drive_type}</div>}
+            </div>
+          )}
+          {testResult.log && testResult.log.length > 0 && (
+            <div style={{ marginTop: '0.5rem', fontSize: '0.78rem', color: '#666' }}>
+              {testResult.log.map((l, i) => (
+                <div key={i}>
+                  {l.prov}: HTTP {l.status} {l.ok ? 'OK' : 'FAIL'}
+                  {l.ms != null ? ` (${l.ms}ms)` : ''}
+                  {l.err ? ` ${l.err}` : ''}
+                  {l.cost > 0 ? ` [$${(l.cost / 100).toFixed(2)}]` : ''}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function STitle({ children }) {
   return <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '0.9375rem', fontWeight: 600,
