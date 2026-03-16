@@ -75,6 +75,12 @@ version_le() {
 }
 
 check_dependencies() {
+    # Allow CI/testing to skip dep check
+    if [[ "${SKIP_DEP_CHECK:-0}" == "1" ]]; then
+        info "Dependency check skipped (SKIP_DEP_CHECK=1)"
+        return 0
+    fi
+
     # Load pinned versions
     local vconf="$PROJECT_ROOT/config/versions.conf"
     if [[ ! -f "$vconf" ]]; then
@@ -488,17 +494,18 @@ backup_database() {
     local timestamp=$(date +%Y%m%d_%H%M%S)
     local backup_file="$backup_dir/${DB_DATABASE}_${timestamp}.sql.gz"
 
-    log "Backing up $DB_DATABASE to $backup_file ..."
+    # Use >&2 for log messages since this function is called via $() which captures stdout
+    log "Backing up $DB_DATABASE to $backup_file ..." >&2
     mysqldump $MYSQL_AUTH --default-character-set=utf8mb4 \
         --single-transaction --routines --triggers --events \
         "$DB_DATABASE" 2>/dev/null | gzip > "$backup_file"
 
     if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
         local size=$(du -h "$backup_file" | cut -f1)
-        log "Backup complete: $backup_file ($size)"
+        log "Backup complete: $backup_file ($size)" >&2
         echo "$backup_file"
     else
-        err "Backup failed!"
+        err "Backup failed!" >&2
         rm -f "$backup_file"
         return 1
     fi
@@ -511,28 +518,27 @@ backup_database() {
 wipe_database() {
     warn "Dropping all tables in $DB_DATABASE ..."
 
-    # Disable FK checks, drop all tables, re-enable
-    local tables
-    tables=$(run_sql_silent "SELECT GROUP_CONCAT(table_name SEPARATOR ',') FROM information_schema.TABLES WHERE TABLE_SCHEMA='$DB_DATABASE' AND TABLE_TYPE='BASE TABLE';")
+    # Build a single SQL script: disable FK checks, drop all views, drop all tables, re-enable
+    # NOTE: We query table names one per row to avoid GROUP_CONCAT truncation
+    # (default group_concat_max_len is 1024 bytes, not enough for 72+ tables)
+    local drop_sql="SET FOREIGN_KEY_CHECKS=0;"
 
-    if [[ -n "$tables" && "$tables" != "NULL" ]]; then
-        run_sql -e "SET FOREIGN_KEY_CHECKS=0;"
-        # Drop views first
-        local views
-        views=$(run_sql_silent "SELECT GROUP_CONCAT(table_name SEPARATOR ',') FROM information_schema.VIEWS WHERE TABLE_SCHEMA='$DB_DATABASE';")
-        if [[ -n "$views" && "$views" != "NULL" ]]; then
-            IFS=',' read -ra VARR <<< "$views"
-            for v in "${VARR[@]}"; do
-                run_sql -e "DROP VIEW IF EXISTS \`$v\`;" 2>/dev/null
-            done
-        fi
-        # Drop tables
-        IFS=',' read -ra TARR <<< "$tables"
-        for t in "${TARR[@]}"; do
-            run_sql -e "DROP TABLE IF EXISTS \`$t\`;" 2>/dev/null
-        done
-        run_sql -e "SET FOREIGN_KEY_CHECKS=1;"
-    fi
+    # Collect views (one per line)
+    while IFS= read -r v; do
+        [[ -z "$v" ]] && continue
+        drop_sql="${drop_sql} DROP VIEW IF EXISTS \`$v\`;"
+    done < <(run_sql_silent "SELECT table_name FROM information_schema.VIEWS WHERE TABLE_SCHEMA='$DB_DATABASE';")
+
+    # Collect tables (one per line)
+    while IFS= read -r t; do
+        [[ -z "$t" ]] && continue
+        drop_sql="${drop_sql} DROP TABLE IF EXISTS \`$t\`;"
+    done < <(run_sql_silent "SELECT table_name FROM information_schema.TABLES WHERE TABLE_SCHEMA='$DB_DATABASE' AND TABLE_TYPE='BASE TABLE';")
+
+    drop_sql="${drop_sql} SET FOREIGN_KEY_CHECKS=1;"
+
+    # Execute everything in one session so FK disable persists across all DROPs
+    echo "$drop_sql" | run_sql 2>/dev/null
 
     log "Database wiped."
 }
@@ -801,6 +807,27 @@ do_upgrade() {
         run_sql -e "INSERT IGNORE INTO schema_migrations (filename, checksum, success, applied_by, app_version) VALUES ('008_schema_version.sql', '$ck008', 1, '$(whoami)', '$APP_VERSION');" 2>/dev/null
         update_version_row
         log "Version tracking installed. Pre-existing migrations recorded as applied."
+    fi
+
+    # Audit checksums of already-applied migrations against local files
+    log "Auditing applied migration checksums..."
+    local changed_count=0
+    for mig in "$MIGRATIONS_DIR"/*.sql; do
+        [[ ! -f "$mig" ]] && continue
+        local fn=$(basename "$mig")
+        local current_ck=$(file_checksum "$mig")
+        local stored_ck
+        stored_ck=$(run_sql_silent "SELECT checksum FROM schema_migrations WHERE filename='$fn' AND success=1 LIMIT 1;" 2>/dev/null)
+        if [[ -n "$stored_ck" && "$stored_ck" != "NULL" && "$stored_ck" != "$current_ck" ]]; then
+            warn "  CHANGED: $fn"
+            warn "    Applied checksum: ${stored_ck:0:16}..."
+            warn "    Current file:     ${current_ck:0:16}..."
+            ((changed_count++))
+        fi
+    done
+    if [[ $changed_count -gt 0 ]]; then
+        warn "$changed_count migration file(s) have changed since they were applied."
+        warn "These will NOT be re-applied. Review changes manually if needed."
     fi
 
     local pending
