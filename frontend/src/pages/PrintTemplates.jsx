@@ -82,119 +82,6 @@ function ShopHeader() {
 }
 
 // ================================================================
-// Invoice Print
-// ================================================================
-export function PrintInvoice() {
-  const { id } = useParams();
-  const [inv, setInv] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    api.get(`/invoices/${id}`)
-      .then(setInv)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [id]);
-
-  const lineItems = inv?.line_items || [];
-  const payments = inv?.payments || [];
-
-  return (
-    <PrintLayout title="Invoice" loading={loading} error={error}>
-      {inv && (
-        <>
-          <div className="print-title">INVOICE</div>
-          <div className="print-meta">
-            <div className="print-meta-item">
-              <div className="print-meta-label">Invoice #</div>
-              <div className="mono">{inv.invoice_number}</div>
-            </div>
-            <div className="print-meta-item">
-              <div className="print-meta-label">Date</div>
-              <div>{inv.created_at?.slice(0, 10)}</div>
-            </div>
-            <div className="print-meta-item">
-              <div className="print-meta-label">Customer</div>
-              <div>{inv.customer_first} {inv.customer_last}</div>
-            </div>
-            <div className="print-meta-item">
-              <div className="print-meta-label">Status</div>
-              <div style={{ textTransform: 'uppercase', fontWeight: 600 }}>{inv.status}</div>
-            </div>
-          </div>
-
-          <table className="print-table">
-            <thead>
-              <tr><th>Description</th><th>Type</th><th className="right">Qty</th><th className="right">Unit Price</th><th className="right">Total</th></tr>
-            </thead>
-            <tbody>
-              {lineItems.map((li) => (
-                <tr key={li.line_id}>
-                  <td>{li.description}{li.tire_size ? ` (${li.tire_size})` : ''}</td>
-                  <td style={{ textTransform: 'capitalize' }}>{li.line_type}</td>
-                  <td className="right mono">{Number(li.quantity)}</td>
-                  <td className="right mono">${Number(li.unit_price).toFixed(2)}</td>
-                  <td className="right mono">${Number(li.line_total).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="print-totals">
-            <div className="print-total-row"><span>Subtotal (taxable)</span><span className="mono">${Number(inv.subtotal_taxable).toFixed(2)}</span></div>
-            <div className="print-total-row"><span>Subtotal (non-taxable)</span><span className="mono">${Number(inv.subtotal_nontaxable).toFixed(2)}</span></div>
-            <div className="print-total-row"><span>Fees</span><span className="mono">${Number(inv.subtotal_fees).toFixed(2)}</span></div>
-            {Number(inv.discount_amount) > 0 && (
-              <div className="print-total-row"><span>Discount</span><span className="mono">-${Number(inv.discount_amount).toFixed(2)}</span></div>
-            )}
-            <div className="print-total-row"><span>Tax ({(Number(inv.tax_rate) * 100).toFixed(2)}%)</span><span className="mono">${Number(inv.tax_amount).toFixed(2)}</span></div>
-            <div className="print-total-row grand"><span>TOTAL</span><span className="mono">${Number(inv.total).toFixed(2)}</span></div>
-            <div className="print-total-row"><span>Paid</span><span className="mono">${Number(inv.amount_paid).toFixed(2)}</span></div>
-            {Number(inv.balance_due) > 0 && (
-              <div className="print-total-row" style={{ fontWeight: 600, color: '#C9202F' }}>
-                <span>Balance Due</span><span className="mono">${Number(inv.balance_due).toFixed(2)}</span>
-              </div>
-            )}
-          </div>
-
-          {payments.length > 0 && (
-            <div className="print-section" style={{ marginTop: '1rem' }}>
-              <div className="print-section-title">Payments</div>
-              <table className="print-table">
-                <thead><tr><th>Date</th><th>Method</th><th className="right">Amount</th><th>Reference</th></tr></thead>
-                <tbody>
-                  {payments.map((p) => (
-                    <tr key={p.payment_id}>
-                      <td>{p.processed_at?.slice(0, 10)}</td>
-                      <td style={{ textTransform: 'capitalize' }}>{(p.payment_method || '').replace(/_/g, ' ')}</td>
-                      <td className="right mono">${Number(p.amount).toFixed(2)}</td>
-                      <td>{p.reference_number || ''}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <div className="print-disclosure">
-            <strong>Colorado Tire Fee Disclosure:</strong> This invoice includes Colorado tire recycling fees as required by
-            C.R.S. 25-17-202. New tire fee: $1.50/tire. Used tire fee: $1.00/tire. Disposal fee: $3.50/tire.
-            All tire sales are subject to applicable state and local sales tax. Labor is non-taxable in Colorado.
-          </div>
-
-          <div className="print-footer">
-            Thank you for your business. All sales are final unless otherwise noted.
-            Road hazard warranty terms (if purchased) are attached separately.
-          </div>
-        </>
-      )}
-    </PrintLayout>
-  );
-}
-
-
-// ================================================================
 // Work Order Print
 // ================================================================
 export function PrintWorkOrder() {
@@ -257,6 +144,12 @@ export function PrintWorkOrder() {
               <div className="print-meta-label">Status</div>
               <div style={{ textTransform: 'uppercase', fontWeight: 600 }}>{wo.status?.replace(/_/g, ' ')}</div>
             </div>
+            {wo.estimated_price != null && Number(wo.estimated_price) > 0 && (
+              <div className="print-meta-item">
+                <div className="print-meta-label">Estimated Price</div>
+                <div className="mono" style={{ fontWeight: 700, fontSize: '1.1rem' }}>${Number(wo.estimated_price).toFixed(2)}</div>
+              </div>
+            )}
           </div>
 
           {wo.customer_complaint && (
@@ -339,69 +232,6 @@ export function PrintWorkOrder() {
           </div>
         </>
       )}
-    </PrintLayout>
-  );
-}
-
-
-// ================================================================
-// Deposit Receipt Print
-// ================================================================
-export function PrintDepositReceipt() {
-  const [searchParams] = useSearchParams();
-  const depositId = searchParams.get('deposit_id');
-  const customerId = searchParams.get('customer_id');
-  const amount = searchParams.get('amount') || '0';
-  const expires = searchParams.get('expires') || '';
-  const description = searchParams.get('description') || '';
-  const customerName = searchParams.get('customer_name') || '';
-
-  return (
-    <PrintLayout title="Deposit Receipt" loading={false} error={null}>
-      <div className="print-title">DEPOSIT RECEIPT</div>
-      <div className="print-meta">
-        <div className="print-meta-item">
-          <div className="print-meta-label">Deposit ID</div>
-          <div className="mono">{depositId}</div>
-        </div>
-        <div className="print-meta-item">
-          <div className="print-meta-label">Date</div>
-          <div>{new Date().toLocaleDateString()}</div>
-        </div>
-        <div className="print-meta-item">
-          <div className="print-meta-label">Customer</div>
-          <div>{customerName || `Customer #${customerId}`}</div>
-        </div>
-      </div>
-
-      <div style={{ fontSize: '1.25rem', fontWeight: 700, margin: '1rem 0', textAlign: 'center',
-        padding: '1rem', border: '2px solid #1A2744' }}>
-        DEPOSIT AMOUNT: <span className="mono">${Number(amount).toFixed(2)}</span>
-      </div>
-
-      {description && (
-        <div className="print-section">
-          <div className="print-section-title">Description</div>
-          <div>{description}</div>
-        </div>
-      )}
-
-      <div className="print-disclosure" style={{ border: '2px solid #C9202F' }}>
-        <strong>DEPOSIT POLICY:</strong><br />
-        This deposit is non-refundable after the expiration date. The deposit will be applied to the
-        final invoice for the ordered item(s). If the customer fails to complete the purchase by the
-        expiration date, the deposit is subject to forfeiture at the discretion of shop management.<br /><br />
-        <strong>Expires:</strong> {expires || 'Per shop policy (see configuration)'}
-      </div>
-
-      <div style={{ marginTop: '2rem' }}>
-        <div className="print-meta-label">Customer Signature</div>
-        <div style={{ borderBottom: '1px solid #000', height: '2rem', marginTop: '0.25rem', width: '60%' }}></div>
-      </div>
-
-      <div className="print-footer">
-        Retain this receipt. Present at time of purchase to apply deposit.
-      </div>
     </PrintLayout>
   );
 }

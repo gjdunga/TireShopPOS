@@ -29,9 +29,6 @@ export default function Dashboard() {
         {canAny('WORK_ORDER_CREATE', 'WORK_ORDER_ASSIGN') && <WorkOrdersCard />}
         {can('APPOINTMENT_MANAGE') && <AppointmentsCard />}
         {can('WORK_ORDER_CREATE') && <RetorqueCard />}
-        {canAny('CASH_DRAWER_OPEN', 'CASH_DRAWER_CLOSE') && <CashDrawerCard />}
-        {can('DEPOSIT_ACCEPT') && <DepositsCard />}
-        {can('DEPOSIT_FORFEIT') && <ExpiredDepositsCard />}
         {can('INVENTORY_VIEW') && <InventoryCard />}
       </div>
     </div>
@@ -169,71 +166,6 @@ function RetorqueCard() {
         </ul>
       )}
       {count === 0 && !loading && <p className="text-muted" style={{ fontSize: '0.875rem' }}>None due.</p>}
-    </DashCard>
-  );
-}
-
-function CashDrawerCard() {
-  const { data, loading, error } = useApiData('/cash-drawer/today');
-
-  return (
-    <DashCard title="Cash Drawer" link="/cash-drawer">
-      {loading && <Spinner />}
-      {error && <ErrMsg msg={error} />}
-      {data && (
-        <div className="dash-stats">
-          <Stat label="Status" value={data.open ? 'OPEN' : 'CLOSED'} ok={data.open} />
-          {data.drawer && (
-            <Stat label="Opening" value={'$' + Number(data.drawer.opening_balance || 0).toFixed(2)} />
-          )}
-        </div>
-      )}
-    </DashCard>
-  );
-}
-
-function DepositsCard() {
-  const { data, loading, error } = useApiData('/deposits/expiring?within_days=7');
-  const count = data?.deposits?.length ?? 0;
-
-  return (
-    <DashCard title="Expiring Deposits (7d)" count={count} accent={count > 0 ? 'var(--orange)' : null}>
-      {loading && <Spinner />}
-      {error && <ErrMsg msg={error} />}
-      {data?.deposits?.length > 0 && (
-        <ul className="dash-list">
-          {data.deposits.slice(0, 5).map((d, i) => (
-            <li key={i}>
-              <span>${Number(d.amount || 0).toFixed(2)}</span>
-              <span className="text-muted"> expires {d.expires_at?.slice(0, 10)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {count === 0 && !loading && <p className="text-muted" style={{ fontSize: '0.875rem' }}>None expiring.</p>}
-    </DashCard>
-  );
-}
-
-function ExpiredDepositsCard() {
-  const { data, loading, error } = useApiData('/deposits/expired');
-  const count = data?.deposits?.length ?? 0;
-
-  return (
-    <DashCard title="Expired Deposits" count={count} accent={count > 0 ? 'var(--red)' : null}>
-      {loading && <Spinner />}
-      {error && <ErrMsg msg={error} />}
-      {count > 0 && (
-        <ul className="dash-list">
-          {data.deposits.slice(0, 5).map((d, i) => (
-            <li key={i}>
-              <span>${Number(d.amount || 0).toFixed(2)}</span>
-              <span className="text-muted"> expired {d.expires_at?.slice(0, 10)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {count === 0 && !loading && <p className="text-muted" style={{ fontSize: '0.875rem' }}>None expired.</p>}
     </DashCard>
   );
 }

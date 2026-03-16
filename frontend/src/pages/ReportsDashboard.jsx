@@ -7,14 +7,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../api/client.js';
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement,
+  Chart as ChartJS, CategoryScale, LinearScale,
   BarElement, ArcElement, Title, Tooltip, Legend, Filler
 } from 'chart.js';
-import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
+import { Bar, Pie, Doughnut } from 'react-chartjs-2';
 import './Reports.css';
 
 ChartJS.register(
-  CategoryScale, LinearScale, PointElement, LineElement,
+  CategoryScale, LinearScale,
   BarElement, ArcElement, Title, Tooltip, Legend, Filler
 );
 
@@ -64,14 +64,14 @@ function pieOptions(title) {
 }
 
 export default function ReportsDashboard() {
-  const [tab, setTab] = useState('sales');
+  const [tab, setTab] = useState('inventory');
 
   return (
     <div>
       <h1 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Reports</h1>
 
       <div className="report-tabs">
-        {['sales', 'inventory', 'cash', 'fees', 'services', 'lookup'].map((t) => (
+        {['inventory', 'services', 'lookup'].map((t) => (
           <button key={t} className={`btn btn-sm ${tab === t ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setTab(t)} style={{ textTransform: 'capitalize' }}>
             {t === 'lookup' ? 'Plate Lookup' : t}
@@ -80,116 +80,9 @@ export default function ReportsDashboard() {
       </div>
 
       <div style={{ marginTop: '1rem' }}>
-        {tab === 'sales' && <SalesTab />}
         {tab === 'inventory' && <InventoryTab />}
-        {tab === 'cash' && <CashTab />}
-        {tab === 'fees' && <FeesTab />}
         {tab === 'services' && <ServicesTab />}
         {tab === 'lookup' && <LookupTab />}
-      </div>
-    </div>
-  );
-}
-
-
-// ================================================================
-// Sales Tab
-// ================================================================
-function SalesTab() {
-  const [period, setPeriod] = useState('daily');
-  const [data, setData] = useState([]);
-  const [payments, setPayments] = useState([]);
-  const [topTires, setTopTires] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      api.get(`/reports/sales-summary?period=${period}`),
-      api.get('/reports/payment-methods'),
-      api.get('/reports/top-selling-tires?limit=10'),
-    ])
-      .then(([sales, pay, tires]) => {
-        setData(sales.data || []);
-        setPayments(pay.breakdown || []);
-        setTopTires(tires.tires || []);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [period]);
-
-  if (loading) return <Loading />;
-
-  const revenueChart = {
-    labels: data.map((d) => d.label),
-    datasets: [
-      { label: 'Revenue', data: data.map((d) => Number(d.total_revenue)), borderColor: NAVY, backgroundColor: 'rgba(26,39,68,0.1)', fill: true, tension: 0.3 },
-      { label: 'Collected', data: data.map((d) => Number(d.total_collected)), borderColor: GREEN, backgroundColor: 'transparent', tension: 0.3 },
-    ],
-  };
-
-  const invoiceChart = {
-    labels: data.map((d) => d.label),
-    datasets: [
-      { label: 'Invoices', data: data.map((d) => Number(d.invoice_count)), backgroundColor: NAVY, borderRadius: 3 },
-    ],
-  };
-
-  const paymentChart = {
-    labels: payments.map((p) => (p.payment_method || '').replace(/_/g, ' ')),
-    datasets: [{
-      data: payments.map((p) => Number(p.total_amount)),
-      backgroundColor: COLORS.slice(0, payments.length),
-    }],
-  };
-
-  return (
-    <div>
-      <div className="report-period-bar">
-        {['daily', 'weekly', 'monthly'].map((p) => (
-          <button key={p} className={`btn btn-sm ${period === p ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setPeriod(p)} style={{ textTransform: 'capitalize' }}>{p}</button>
-        ))}
-      </div>
-
-      <div className="report-grid">
-        <div className="report-card report-card-wide">
-          <h3 className="report-card-title">Revenue Trend</h3>
-          <div className="chart-container"><Line data={revenueChart} options={dollarOptions()} /></div>
-        </div>
-
-        <div className="report-card">
-          <h3 className="report-card-title">Invoice Count</h3>
-          <div className="chart-container"><Bar data={invoiceChart} options={{
-            ...defaultOptions,
-            plugins: { ...defaultOptions.plugins, legend: { display: false } },
-          }} /></div>
-        </div>
-
-        <div className="report-card">
-          <h3 className="report-card-title">Payment Methods</h3>
-          <div className="chart-container"><Doughnut data={paymentChart} options={pieOptions()} /></div>
-        </div>
-
-        <div className="report-card report-card-wide">
-          <h3 className="report-card-title">Top Selling Tires (90 days)</h3>
-          {topTires.length === 0 ? <p className="text-muted">No tire sales data.</p> : (
-            <table className="entity-table">
-              <thead><tr><th>Size</th><th>Brand</th><th>Model</th><th>Sold</th><th>Avg Price</th></tr></thead>
-              <tbody>
-                {topTires.map((t, i) => (
-                  <tr key={i}>
-                    <td className="mono">{t.full_size_string}</td>
-                    <td>{t.brand_name || '\u2014'}</td>
-                    <td>{t.model || '\u2014'}</td>
-                    <td className="mono" style={{ fontWeight: 600 }}>{t.sold_count}</td>
-                    <td className="mono">${Number(t.avg_price).toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -263,168 +156,6 @@ function InventoryTab() {
   );
 }
 
-
-// ================================================================
-// Cash Reconciliation Tab
-// ================================================================
-function CashTab() {
-  const [drawers, setDrawers] = useState([]);
-  const [deposits, setDeposits] = useState([]);
-  const [refunds, setRefunds] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    Promise.all([
-      api.get('/reports/cash-reconciliation'),
-      api.get('/reports/outstanding-deposits'),
-      api.get('/refunds/pending').catch(() => ({ refunds: [] })),
-    ])
-      .then(([cash, dep, ref]) => {
-        setDrawers(cash.drawers || []);
-        setDeposits(dep.deposits || []);
-        setRefunds(ref.refunds || []);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <Loading />;
-
-  const varianceData = {
-    labels: drawers.map((d) => d.drawer_date),
-    datasets: [
-      { label: 'Variance', data: drawers.map((d) => Number(d.variance || 0)),
-        backgroundColor: drawers.map((d) => Number(d.variance || 0) === 0 ? GREEN : RED),
-        borderRadius: 3 },
-    ],
-  };
-
-  return (
-    <div className="report-grid">
-      <div className="report-card report-card-wide">
-        <h3 className="report-card-title">Cash Drawer Variance (30 days)</h3>
-        <div className="chart-container"><Bar data={varianceData} options={dollarOptions()} /></div>
-      </div>
-
-      <div className="report-card report-card-wide">
-        <h3 className="report-card-title">Drawer History</h3>
-        {drawers.length === 0 ? <p className="text-muted">No drawer records.</p> : (
-          <table className="entity-table" style={{ fontSize: '0.8125rem' }}>
-            <thead><tr><th>Date</th><th>Opened By</th><th>Opening</th><th>Expected</th><th>Counted</th><th>Variance</th><th>Status</th></tr></thead>
-            <tbody>
-              {drawers.map((d) => (
-                <tr key={d.drawer_id}>
-                  <td className="mono">{d.drawer_date}</td>
-                  <td>{d.opened_by_name}</td>
-                  <td className="mono">${Number(d.opening_balance).toFixed(2)}</td>
-                  <td className="mono">{d.expected_balance != null ? '$' + Number(d.expected_balance).toFixed(2) : '\u2014'}</td>
-                  <td className="mono">{d.closing_count != null ? '$' + Number(d.closing_count).toFixed(2) : '\u2014'}</td>
-                  <td className="mono" style={{ fontWeight: 600,
-                    color: d.variance == null ? 'inherit' : Number(d.variance) === 0 ? GREEN : RED }}>
-                    {d.variance != null ? '$' + Number(d.variance).toFixed(2) : '\u2014'}
-                  </td>
-                  <td style={{ textTransform: 'capitalize' }}>{d.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <div className="report-card">
-        <h3 className="report-card-title">Outstanding Deposits ({deposits.length})</h3>
-        {deposits.length === 0 ? <p className="text-muted">No active deposits.</p> : (
-          <table className="entity-table" style={{ fontSize: '0.8125rem' }}>
-            <thead><tr><th>ID</th><th>Amount</th><th>Expires</th></tr></thead>
-            <tbody>
-              {deposits.slice(0, 15).map((d) => (
-                <tr key={d.deposit_id}>
-                  <td className="mono">{d.deposit_id}</td>
-                  <td className="mono">${Number(d.amount).toFixed(2)}</td>
-                  <td className="mono">{d.expires_at?.slice(0, 10) || '\u2014'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <div className="report-card">
-        <h3 className="report-card-title">Pending Refunds ({refunds.length})</h3>
-        {refunds.length === 0 ? <p className="text-muted">No pending refunds.</p> : (
-          <table className="entity-table" style={{ fontSize: '0.8125rem' }}>
-            <thead><tr><th>Invoice</th><th>Amount</th><th>Reason</th></tr></thead>
-            <tbody>
-              {refunds.slice(0, 10).map((r) => (
-                <tr key={r.refund_id}>
-                  <td className="mono">{r.invoice_number || r.invoice_id}</td>
-                  <td className="mono" style={{ color: RED }}>${Number(r.amount).toFixed(2)}</td>
-                  <td style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.reason}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </div>
-  );
-}
-
-
-// ================================================================
-// Fees / Tax / CDPHE Tab
-// ================================================================
-function FeesTab() {
-  const [quarterly, setQuarterly] = useState(null);
-  const [monthly, setMonthly] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    Promise.all([
-      api.get('/reports/quarterly-fees'),
-      api.get('/reports/monthly-tax'),
-    ])
-      .then(([q, m]) => { setQuarterly(q); setMonthly(m); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <Loading />;
-
-  const qReport = quarterly?.report || {};
-
-  return (
-    <div className="report-grid">
-      <div className="report-card report-card-wide">
-        <h3 className="report-card-title">CDPHE Quarterly Fee Report (Q{quarterly?.quarter} {quarterly?.year})</h3>
-        <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-          <StatBox label="New Tires Sold" value={qReport.new_tires_sold || 0} />
-          <StatBox label="Used Tires Sold" value={qReport.used_tires_sold || 0} />
-          <StatBox label="New Tire Fees" value={'$' + Number(qReport.new_tire_fee_total || 0).toFixed(2)} />
-          <StatBox label="Used Tire Fees" value={'$' + Number(qReport.used_tire_fee_total || 0).toFixed(2)} />
-          <StatBox label="Disposal Fees" value={'$' + Number(qReport.disposal_fee_total || 0).toFixed(2)} />
-          <StatBox label="Total Fees Due" value={'$' + Number(qReport.total_fees_due || 0).toFixed(2)} color={RED} />
-        </div>
-        <p style={{ fontSize: '0.75rem', color: '#777' }}>
-          Report generated per CDPHE quarterly filing requirements for tire recycling fees (C.R.S. 25-17-202).
-          Maintain this report for audit compliance.
-        </p>
-      </div>
-
-      <div className="report-card report-card-wide">
-        <h3 className="report-card-title">Monthly Tax Breakdown ({monthly?.year}-{String(monthly?.month).padStart(2, '0')})</h3>
-        {monthly?.breakdown ? (
-          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-            <StatBox label="Taxable Sales" value={'$' + Number(monthly.breakdown.taxable_total || 0).toFixed(2)} />
-            <StatBox label="Non-Taxable" value={'$' + Number(monthly.breakdown.nontaxable_total || 0).toFixed(2)} />
-            <StatBox label="Tax Collected" value={'$' + Number(monthly.breakdown.tax_collected || 0).toFixed(2)} color={RED} />
-            <StatBox label="Fee Total" value={'$' + Number(monthly.breakdown.fee_total || 0).toFixed(2)} />
-          </div>
-        ) : <p className="text-muted">No data for this month.</p>}
-      </div>
-    </div>
-  );
-}
 
 
 // ================================================================

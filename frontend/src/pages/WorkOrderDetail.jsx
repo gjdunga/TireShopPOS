@@ -34,6 +34,7 @@ const GRADES = [
 const EMPTY_WO = {
   customer_id: '', vehicle_id: '', assigned_tech_id: '',
   mileage_in: '', customer_complaint: '', special_notes: '',
+  estimated_price: '',
 };
 
 export default function WorkOrderDetail() {
@@ -86,6 +87,7 @@ export default function WorkOrderDetail() {
           mileage_out: woData.mileage_out || '',
           customer_complaint: woData.customer_complaint || '',
           special_notes: woData.special_notes || '',
+          estimated_price: woData.estimated_price || '',
           status: woData.status || 'intake',
         });
         setPositions(woData.positions || []);
@@ -299,6 +301,16 @@ export default function WorkOrderDetail() {
             <div className="form-field" style={{ marginTop: '0.5rem' }}>
               <label className="label">Special Notes</label>
               <textarea rows={2} value={form.special_notes || ''} onChange={handleChange('special_notes')} className="textarea" />
+            </div>
+
+            <div className="form-field" style={{ marginTop: '0.5rem', maxWidth: '12rem' }}>
+              <label className="label">Estimated Price</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <span style={{ fontWeight: 600, color: 'var(--navy)' }}>$</span>
+                <input type="number" step="0.01" min="0" placeholder="0.00"
+                  value={form.estimated_price || ''} onChange={handleChange('estimated_price')}
+                  style={{ fontFamily: 'var(--font-mono)' }} />
+              </div>
             </div>
 
             <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
