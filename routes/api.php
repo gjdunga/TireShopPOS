@@ -1405,13 +1405,15 @@ $router->with(permit('CUSTOMER_MANAGE'))->post('/api/notifications', function (a
     return ['message' => 'Notification logged.', 'notification_id' => $id];
 });
 
-$router->with($auth)->post('/api/notifications/{id}/sent', function (array $params) {
+$router->with(permit('CUSTOMER_MANAGE'))->post('/api/notifications/{id}/sent', function (array $params) {
     markNotificationSent((int) $params['id']);
+    auditLog('notification_log', (int) $params['id'], 'UPDATE', 'status', 'pending', 'sent', Middleware::userId());
     return ['message' => 'Marked sent.'];
 });
 
-$router->with($auth)->post('/api/notifications/{id}/failed', function (array $params, array $body) {
+$router->with(permit('CUSTOMER_MANAGE'))->post('/api/notifications/{id}/failed', function (array $params, array $body) {
     markNotificationFailed((int) $params['id'], $body['reason'] ?? $body['error'] ?? 'Unknown error');
+    auditLog('notification_log', (int) $params['id'], 'UPDATE', 'status', 'pending', 'failed', Middleware::userId());
     return ['message' => 'Marked failed.'];
 });
 

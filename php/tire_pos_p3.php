@@ -905,7 +905,9 @@ function logNotification(int $customerId, string $channel, string $type, string 
     $sql = "INSERT INTO notification_log (customer_id, channel, notification_type, subject, body, sent_by)
             VALUES (?, ?, ?, ?, ?, ?)";
     getDB()->prepare($sql)->execute([$customerId, $channel, $type, $subject, $body, $sentBy]);
-    return (int) getDB()->lastInsertId();
+    $newId = (int) getDB()->lastInsertId();
+    auditLog('notification_log', $newId, 'INSERT', null, null, null, $sentBy);
+    return $newId;
 }
 
 function getNotificationLog(int $customerId, int $limit = 20): array {
