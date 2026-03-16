@@ -935,13 +935,15 @@ $router->with($auth)->get('/api/services/{id}', function (array $params) {
 });
 
 
-// ---- Configuration (owner only) ----
+// ---- Configuration ----
+// Full config dump and writes: owner only. Single-key read: any user
+// (QuoteTool, WorkOrderDetail need tax_rate, shop_name, etc.)
 
 $router->with(permit('CONFIG_MANAGE'))->get('/api/config', function () {
     return ['config' => getAllConfig()];
 });
 
-$router->with(permit('CONFIG_MANAGE'))->get('/api/config/{key}', function (array $params) {
+$router->with($auth)->get('/api/config/{key}', function (array $params) {
     $config = getConfigValue($params['key']);
     if ($config === null) {
         Router::sendError('NOT_FOUND', 'Configuration key not found.', 404);

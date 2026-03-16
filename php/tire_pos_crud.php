@@ -465,8 +465,12 @@ function createWorkOrder(array $data, int $createdBy): int {
     Database::execute(
         "INSERT INTO work_orders (wo_number, customer_id, vehicle_id, assigned_tech_id,
                                    status, mileage_in, customer_complaint, special_notes,
-                                   estimated_price, created_by)
-         VALUES (?, ?, ?, ?, 'intake', ?, ?, ?, ?, ?)",
+                                   estimated_price,
+                                   deposit_amount, deposit_method, deposit_received_at, deposit_received_by,
+                                   subtotal_materials, subtotal_labor, subtotal_fees,
+                                   tax_rate, tax_amount, total_estimate,
+                                   created_by)
+         VALUES (?, ?, ?, ?, 'intake', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             $woNumber,
             (int) ($data['customer_id'] ?? 0),
@@ -476,6 +480,16 @@ function createWorkOrder(array $data, int $createdBy): int {
             $data['customer_complaint'] ?? null,
             $data['special_notes'] ?? null,
             isset($data['estimated_price']) && $data['estimated_price'] !== '' ? $data['estimated_price'] : null,
+            isset($data['deposit_amount']) && $data['deposit_amount'] !== '' ? $data['deposit_amount'] : null,
+            $data['deposit_method'] ?? null,
+            !empty($data['deposit_amount']) ? ($data['deposit_received_at'] ?? date('Y-m-d H:i:s')) : null,
+            !empty($data['deposit_amount']) ? ($data['deposit_received_by'] ?? $createdBy) : null,
+            $data['subtotal_materials'] ?? 0,
+            $data['subtotal_labor'] ?? 0,
+            $data['subtotal_fees'] ?? 0,
+            $data['tax_rate'] ?? 0,
+            $data['tax_amount'] ?? 0,
+            $data['total_estimate'] ?? 0,
             $createdBy,
         ]
     );
@@ -495,6 +509,9 @@ function updateWorkOrder(int $woId, array $data, int $updatedBy): array {
     $editable = ['customer_id', 'vehicle_id', 'mileage_in', 'mileage_out',
                  'customer_complaint', 'tech_diagnosis', 'special_notes', 'status',
                  'estimated_price',
+                 'deposit_amount', 'deposit_method', 'deposit_received_at', 'deposit_received_by',
+                 'subtotal_materials', 'subtotal_labor', 'subtotal_fees',
+                 'tax_rate', 'tax_amount', 'total_estimate',
                  'torque_spec_used', 'torque_verified_by', 'torque_verified_at'];
     $sets = [];
     $binds = [];
@@ -546,9 +563,10 @@ function addWorkOrderPosition(int $woId, array $data, int $createdBy): int {
     Database::execute(
         "INSERT INTO work_order_positions (work_order_id, position_code, action_requested,
                                             rotate_to_position, tire_id_existing, tire_id_new,
+                                            unit_price,
                                             tread_depth_in, tread_depth_out, psi_in, psi_out,
                                             condition_notes, condition_grade)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             $woId,
             $data['position_code'] ?? 'LF',
@@ -556,6 +574,7 @@ function addWorkOrderPosition(int $woId, array $data, int $createdBy): int {
             $data['rotate_to_position'] ?? null,
             isset($data['tire_id_existing']) ? (int) $data['tire_id_existing'] : null,
             isset($data['tire_id_new']) ? (int) $data['tire_id_new'] : null,
+            isset($data['unit_price']) && $data['unit_price'] !== '' ? $data['unit_price'] : null,
             $data['tread_depth_in'] ?? null,
             $data['tread_depth_out'] ?? null,
             $data['psi_in'] ?? null,
@@ -577,7 +596,7 @@ function updateWorkOrderPosition(int $posId, array $data, int $updatedBy): array
     }
 
     $editable = ['position_code', 'action_requested', 'rotate_to_position',
-                 'tire_id_existing', 'tire_id_new',
+                 'tire_id_existing', 'tire_id_new', 'unit_price',
                  'tread_depth_in', 'tread_depth_out', 'psi_in', 'psi_out',
                  'condition_notes', 'condition_grade',
                  'is_completed', 'completed_by', 'completed_at'];

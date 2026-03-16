@@ -32,8 +32,8 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-APP_VERSION="2.4"
-SCHEMA_VERSION="2.4"
+APP_VERSION="1.0.0"
+SCHEMA_VERSION="1.0.0"
 GITHUB_REPO="gjdunga/TireShopPOS"
 GITHUB_BRANCH="main"
 MIGRATIONS_DIR="$PROJECT_ROOT/sql/migrations"

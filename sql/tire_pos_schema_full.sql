@@ -1,25 +1,17 @@
 -- ============================================================================
--- Tire Shop POS System: Consolidated Database Schema v2.4
+-- Tire Shop POS System: Consolidated Database Schema v1.0.0
 -- Target: MySQL 8.0+ / MariaDB 10.6+
 -- Charset: utf8mb4 throughout
 -- Generated for DunganSoft Technologies
 -- Date: March 2026
 -- ============================================================================
--- Table count: 44 base tables + 14 views + migration tables (008)
+-- Base table count: 44 tables + 14 views (pre-migration).
+-- After all migrations: 66 tables, 9 views.
 --
--- Active domains: Inventory (13), Vehicles (2), Work Orders (2),
---   Customers (1), Services (2), Vendors (3), Waivers (1), Photos (1),
---   Scheduling (1), Fees/Compliance (2), Access Control (5), Audit (2),
---   Vehicle Lookup (3 tables, 1 view)
---
--- Deprecated domains (tables retained for FK/view compatibility):
---   Transactions (4: invoices, invoice_line_items, payments, deposits)
---   Refunds (1: refunds)
---   Cash Drawer (2: cash_drawers, cash_drawer_transactions)
---   These 7 tables have no API routes and no CRUD functions. They are
---   kept in the DDL because tire_disposal_log.invoice_id and 8 views
---   reference them via foreign keys and JOINs. They will be removed
---   in a future schema version that also cleans up those dependencies.
+-- Migration 009 drops 7 legacy tables (invoices, payments, cash drawers, etc.)
+-- and replaces them with the work order financial model (deposit, line items,
+-- tax calculation). This base schema still contains the legacy DDL for
+-- backward compatibility; migration 009 cleans it up.
 -- ============================================================================
 
 SET NAMES utf8mb4;
