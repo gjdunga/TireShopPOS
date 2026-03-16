@@ -338,6 +338,7 @@ $router->with(permit('WORK_ORDER_CREATE'))->post('/api/work-orders/{id}/schedule
     $dueDays = (int) ($body['due_days'] ?? 7);
     $dueMiles = (int) ($body['due_miles'] ?? 75);
     scheduleRetorque($woId, $dueDays, $dueMiles);
+    auditLog('work_orders', $woId, 'UPDATE', 'retorque_due_date', '', 'scheduled', Middleware::userId());
     return ['message' => 'Re-torque scheduled.', 'work_order_id' => $woId];
 });
 
@@ -1151,6 +1152,7 @@ $router->with(permit('USER_MANAGE'))->get('/api/website-config', function () {
 
 $router->with(permit('USER_MANAGE'))->patch('/api/website-config', function (array $params, array $body) {
     $changed = bulkUpdateWebsiteConfig($body);
+    auditLog('website_config', null, 'UPDATE', null, '', json_encode(array_keys($body)), Middleware::userId());
     return ['message' => 'Website config updated.', 'changed' => $changed];
 });
 
@@ -1168,11 +1170,13 @@ $router->with(permit('USER_MANAGE'))->get('/api/warranty-policies/{id}', functio
 
 $router->with(permit('USER_MANAGE'))->post('/api/warranty-policies', function (array $params, array $body) {
     $id = createWarrantyPolicy($body);
+    auditLog('warranty_policies', $id, 'INSERT', null, null, null, Middleware::userId());
     return ['message' => 'Policy created.', 'policy_id' => $id];
 });
 
 $router->with(permit('USER_MANAGE'))->patch('/api/warranty-policies/{id}', function (array $params, array $body) {
     $result = updateWarrantyPolicy((int) $params['id'], $body);
+    auditLog('warranty_policies', (int) $params['id'], 'UPDATE', null, null, null, Middleware::userId());
     return ['message' => 'Policy updated.', 'changed' => $result['changed']];
 });
 
@@ -1242,21 +1246,25 @@ $router->with(permit('INVENTORY_ADD', 'INVENTORY_EDIT'))->get('/api/wheels/{id}'
 
 $router->with(permit('INVENTORY_ADD'))->post('/api/wheels', function (array $params, array $body) {
     $id = createWheel($body);
+    auditLog('wheels', $id, 'INSERT', null, null, null, Middleware::userId());
     return ['message' => 'Wheel created.', 'wheel_id' => $id];
 });
 
 $router->with(permit('INVENTORY_EDIT'))->patch('/api/wheels/{id}', function (array $params, array $body) {
     $result = updateWheel((int) $params['id'], $body);
+    auditLog('wheels', (int) $params['id'], 'UPDATE', null, null, null, Middleware::userId());
     return ['message' => 'Wheel updated.', 'changed' => $result['changed']];
 });
 
 $router->with(permit('INVENTORY_EDIT'))->post('/api/wheels/{id}/fitments', function (array $params, array $body) {
     $id = addWheelFitment((int) $params['id'], $body);
+    auditLog('wheel_fitments', $id, 'INSERT', null, null, null, Middleware::userId());
     return ['message' => 'Fitment added.', 'fitment_id' => $id];
 });
 
 $router->with(permit('INVENTORY_EDIT'))->delete('/api/wheels/fitments/{id}', function (array $params) {
     removeWheelFitment((int) $params['id']);
+    auditLog('wheel_fitments', (int) $params['id'], 'DELETE', null, null, null, Middleware::userId());
     return ['message' => 'Fitment removed.'];
 });
 
@@ -1290,11 +1298,13 @@ $router->with(permit('USER_MANAGE'))->get('/api/custom-fields', function () {
 
 $router->with(permit('USER_MANAGE'))->post('/api/custom-fields', function (array $params, array $body) {
     $id = createCustomField($body);
+    auditLog('custom_fields', $id, 'INSERT', null, null, null, Middleware::userId());
     return ['message' => 'Custom field created.', 'field_id' => $id];
 });
 
 $router->with(permit('USER_MANAGE'))->patch('/api/custom-fields/{id}', function (array $params, array $body) {
     $result = updateCustomField((int) $params['id'], $body);
+    auditLog('custom_fields', (int) $params['id'], 'UPDATE', null, null, null, Middleware::userId());
     return ['message' => 'Custom field updated.', 'changed' => $result['changed']];
 });
 
@@ -1320,6 +1330,7 @@ $router->with($auth)->patch('/api/custom-field-values/{entityType}/{entityId}', 
         Router::sendError('FORBIDDEN', 'You do not have permission to edit ' . $type . ' custom fields.', 403);
     }
     $changed = setCustomFieldValues((int) $params['entityId'], $body['values'] ?? []);
+    auditLog('custom_field_values', (int) $params['entityId'], 'UPDATE', $type, null, null, Middleware::userId());
     return ['message' => 'Custom field values saved.', 'changed' => $changed];
 });
 
@@ -1335,6 +1346,7 @@ $router->with(permit('USER_MANAGE'))->post('/api/api-keys', function (array $par
 
 $router->with(permit('USER_MANAGE'))->delete('/api/api-keys/{id}', function (array $params) {
     revokeApiKey((int) $params['id']);
+    auditLog('api_keys', (int) $params['id'], 'UPDATE', 'is_active', '1', '0', Middleware::userId());
     return ['message' => 'API key revoked.'];
 });
 
@@ -1383,7 +1395,7 @@ $router->with($auth)->get('/api/notifications/pending', function () {
     return ['notifications' => listPendingNotifications($type)];
 });
 
-$router->with($auth)->post('/api/notifications', function (array $params, array $body) {
+$router->with(permit('CUSTOMER_MANAGE'))->post('/api/notifications', function (array $params, array $body) {
     $id = logNotification(
         (int) $body['customer_id'], $body['channel'] ?? 'internal',
         $body['notification_type'] ?? 'custom',
@@ -1399,7 +1411,7 @@ $router->with($auth)->post('/api/notifications/{id}/sent', function (array $para
 });
 
 $router->with($auth)->post('/api/notifications/{id}/failed', function (array $params, array $body) {
-    markNotificationFailed((int) $params['id'], $body['error'] ?? 'Unknown error');
+    markNotificationFailed((int) $params['id'], $body['reason'] ?? $body['error'] ?? 'Unknown error');
     return ['message' => 'Marked failed.'];
 });
 
@@ -1434,6 +1446,7 @@ $router->with(permit('USER_MANAGE'))->post('/api/integrations/{name}/credentials
 $router->with(permit('USER_MANAGE'))->delete('/api/integrations/{name}/credentials/{key}', function (array $params) {
     $env = Router::query('environment', 'production');
     removeIntegrationCredential($params['name'], $params['key'], $env);
+    auditLog('integration_credentials', null, 'DELETE', $params['name'] . '.' . $params['key'], '', '', Middleware::userId());
     return ['message' => 'Credential removed.'];
 });
 
@@ -1466,7 +1479,9 @@ $router->with(permit('INVENTORY_EDIT'))->patch('/api/marketplace/listings/{id}',
             Router::sendError('INVALID_STATUS', 'Listing status must be one of: ' . implode(', ', $allowed), 400);
         }
     }
-    return updateListing((int) $params['id'], $body);
+    $result = updateListing((int) $params['id'], $body);
+    auditLog('marketplace_listings', (int) $params['id'], 'UPDATE', null, null, null, Middleware::userId());
+    return $result;
 });
 
 $router->with($auth)->get('/api/marketplace/generate-content/{tireId}', function (array $params) {
@@ -1491,6 +1506,7 @@ $router->with($auth)->get('/api/marketplace/orders/{id}', function (array $param
 
 $router->with(permit('INVENTORY_EDIT'))->post('/api/marketplace/orders', function (array $params, array $body) {
     $id = importMarketplaceOrder($body);
+    auditLog('marketplace_orders', $id, 'INSERT', null, null, null, Middleware::userId());
     return ['message' => 'Order imported.', 'order_id' => $id];
 });
 
@@ -1501,6 +1517,7 @@ $router->with(permit('INVENTORY_EDIT'))->patch('/api/marketplace/orders/{id}/sta
         Router::sendError('INVALID_STATUS', 'Status must be one of: ' . implode(', ', $allowed), 400);
     }
     updateMarketplaceOrderStatus((int) $params['id'], $status);
+    auditLog('marketplace_orders', (int) $params['id'], 'UPDATE', 'status', '', $status, Middleware::userId());
     return ['message' => 'Order status updated.'];
 });
 
@@ -1523,11 +1540,13 @@ $router->with($auth)->get('/api/b2b/inventory', function () {
 
 $router->with(permit('INVENTORY_EDIT'))->post('/api/b2b/inventory', function (array $params, array $body) {
     $id = addToB2bNetwork($body);
+    auditLog('b2b_inventory', $id, 'INSERT', null, null, null, Middleware::userId());
     return ['message' => 'Added to B2B network.', 'b2b_id' => $id];
 });
 
 $router->with(permit('INVENTORY_EDIT'))->delete('/api/b2b/inventory/{id}', function (array $params) {
     removeFromB2bNetwork((int) $params['id']);
+    auditLog('b2b_inventory', (int) $params['id'], 'DELETE', null, null, null, Middleware::userId());
     return ['message' => 'Removed from B2B network.'];
 });
 
@@ -1538,11 +1557,13 @@ $router->with(permit('USER_MANAGE'))->get('/api/directory-listings', function ()
 
 $router->with(permit('USER_MANAGE'))->post('/api/directory-listings', function (array $params, array $body) {
     $id = createDirectoryListing($body);
+    auditLog('directory_listings', $id, 'INSERT', null, null, null, Middleware::userId());
     return ['message' => 'Directory listing created.', 'directory_id' => $id];
 });
 
 $router->with(permit('USER_MANAGE'))->patch('/api/directory-listings/{id}', function (array $params, array $body) {
     updateDirectoryListing((int) $params['id'], $body);
+    auditLog('directory_listings', (int) $params['id'], 'UPDATE', null, null, null, Middleware::userId());
     return ['message' => 'Directory listing updated.'];
 });
 

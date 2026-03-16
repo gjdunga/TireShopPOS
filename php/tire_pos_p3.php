@@ -63,6 +63,7 @@ function updateSetting(string $key, string $value, int $userId): bool {
         "UPDATE shop_settings SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE setting_key = ?"
     );
     $stmt->execute([$value, $userId, $key]);
+    if ($stmt->rowCount() > 0) auditLog('shop_settings', null, 'UPDATE', $key, '', $value, $userId);
     return $stmt->rowCount() > 0;
 }
 
@@ -194,7 +195,9 @@ function fileWarrantyClaim(array $data, int $createdBy): int {
         $data['claim_amount'],
         $data['notes'] ?? null,
     ]);
-    return (int) getDB()->lastInsertId();
+    $newId = (int) getDB()->lastInsertId();
+    auditLog('warranty_claims', $newId, 'INSERT', null, null, null, $createdBy);
+    return $newId;
 }
 
 function listWarrantyClaims(string $status = '', int $limit = 50, int $offset = 0): array {
@@ -244,11 +247,13 @@ function reviewWarrantyClaim(int $claimId, string $action, int $reviewedBy, ?str
             "UPDATE warranty_claims SET status = 'approved', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP,
              claim_amount = COALESCE(?, claim_amount) WHERE claim_id = ? AND status IN ('filed','reviewing')"
         )->execute([$reviewedBy, $amount, $claimId]);
+        auditLog('warranty_claims', $claimId, 'UPDATE', 'status', 'filed', 'approved', $reviewedBy);
     } elseif ($action === 'deny') {
         getDB()->prepare(
             "UPDATE warranty_claims SET status = 'denied', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP,
              denial_reason = ? WHERE claim_id = ? AND status IN ('filed','reviewing')"
         )->execute([$reviewedBy, $reason, $claimId]);
+        auditLog('warranty_claims', $claimId, 'UPDATE', 'status', 'filed', 'denied', $reviewedBy);
     }
 }
 
@@ -257,6 +262,7 @@ function payWarrantyClaim(int $claimId, string $amount, int $paidBy): void {
         "UPDATE warranty_claims SET status = 'paid', paid_amount = ?, paid_at = CURRENT_TIMESTAMP,
          paid_by = ? WHERE claim_id = ? AND status = 'approved'"
     )->execute([$amount, $paidBy, $claimId]);
+    auditLog('warranty_claims', $claimId, 'UPDATE', 'status', 'approved', 'paid', $paidBy);
 }
 
 
@@ -548,9 +554,11 @@ function createApiKey(string $label, int $createdBy, ?int $rateLimit = null): ar
             VALUES (?, ?, ?, ?, ?)";
     $stmt = getDB()->prepare($sql);
     $stmt->execute([$hash, $prefix, $label, $rateLimit ?? 1000, $createdBy]);
+    $newId = (int) getDB()->lastInsertId();
+    auditLog('api_keys', $newId, 'INSERT', null, null, null, $createdBy);
 
     return [
-        'key_id' => (int) getDB()->lastInsertId(),
+        'key_id' => $newId,
         'api_key' => $raw,  // Only returned once at creation
         'prefix' => $prefix,
         'label' => $label,

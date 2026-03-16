@@ -31,7 +31,7 @@ php -S localhost:8080 -t public public/index.php
 | Layer | Technology |
 |-------|-----------|
 | Backend | PHP 8.1+ (procedural + PSR-4 autoloader), no framework |
-| Database | MySQL 8.x / MariaDB 10.11+, 70 tables, 14 views |
+| Database | MySQL 8.x / MariaDB 10.11+, 66 tables, 9 views |
 | Frontend | React 19, Vite 7, 27 page components |
 | Server | Ubuntu 24.04 LTS, Apache 2.4, PHP 8.3-FPM |
 | Hosting | Virtualmin 8.x Professional |

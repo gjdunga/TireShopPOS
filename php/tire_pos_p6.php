@@ -48,6 +48,7 @@ function setIntegrationCredential(string $integration, string $key, string $valu
             ON DUPLICATE KEY UPDATE credential_value = VALUES(credential_value), expires_at = VALUES(expires_at),
             updated_by = VALUES(updated_by), is_active = 1";
     getDB()->prepare($sql)->execute([$integration, $key, $value, $env, $expires, $userId]);
+    auditLog('integration_credentials', null, 'UPDATE', $integration . '.' . $key, '', '(set)', $userId);
 }
 
 function listIntegrations(): array {
@@ -111,7 +112,9 @@ function createListing(array $data, int $createdBy): int {
         $data['title'], $data['description'] ?? null, $data['price'],
         $data['status'] ?? 'draft', $createdBy,
     ]);
-    return (int) getDB()->lastInsertId();
+    $newId = (int) getDB()->lastInsertId();
+    auditLog('marketplace_listings', $newId, 'INSERT', null, null, null, $createdBy);
+    return $newId;
 }
 
 function listListings(string $platform = '', string $status = '', int $limit = 50, int $offset = 0): array {

@@ -453,6 +453,7 @@ function completeRetorque(int $workOrderId, int $completedBy): void {
             WHERE work_order_id = ?";
     $stmt = getDB()->prepare($sql);
     $stmt->execute([$completedBy, $workOrderId]);
+    auditLog('work_orders', $workOrderId, 'UPDATE', 'retorque_completed', '0', '1', $completedBy);
 }
 
 
