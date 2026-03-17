@@ -298,7 +298,7 @@ function payWarrantyClaim(int $claimId, string $amount, int $paidBy): void {
 function createWheel(array $data): int {
     InputValidator::check('wheels', $data);
     $sql = "INSERT INTO wheels
-            (brand, model, diameter, width, bolt_pattern, offset_mm, center_bore,
+            (brand, model, diameter, width, bolt_pattern, offset_mm, center_bore_mm,
              material, finish, `condition`, retail_price, cost, quantity,
              bin_location, notes)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -307,7 +307,7 @@ function createWheel(array $data): int {
         $data['brand'] ?? null, $data['model'] ?? null,
         $data['diameter'], $data['width'] ?? null,
         $data['bolt_pattern'] ?? null, isset($data['offset_mm']) ? (int) $data['offset_mm'] : null,
-        $data['center_bore'] ?? null,
+        $data['center_bore_mm'] ?? null,
         $data['material'] ?? 'unknown', $data['finish'] ?? null,
         $data['condition'] ?? 'used',
         $data['retail_price'] ?? null, $data['cost'] ?? null,
@@ -329,7 +329,7 @@ function getWheel(int $wheelId): ?array {
 function updateWheel(int $wheelId, array $data): array {
     InputValidator::check('wheels', $data);
     $editable = ['brand', 'model', 'diameter', 'width', 'bolt_pattern', 'offset_mm',
-                 'center_bore', 'material', 'finish', 'condition', 'retail_price',
+                 'center_bore_mm', 'material', 'finish', 'condition', 'retail_price',
                  'cost', 'quantity', 'bin_location', 'notes', 'is_active'];
     $sets = [];
     $params = [];

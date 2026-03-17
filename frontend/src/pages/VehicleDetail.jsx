@@ -198,7 +198,7 @@ export default function VehicleDetail() {
                     {history.slice(0, 15).map((h, i) => (
                       <tr key={i}>
                         <td className="mono">{h.service_date?.slice(0, 10) || h.created_at?.slice(0, 10) || '\u2014'}</td>
-                        <td className="mono">{h.work_order_number || '\u2014'}</td>
+                        <td className="mono">{h.wo_number || '\u2014'}</td>
                         <td>{h.description || h.service_type || '\u2014'}</td>
                       </tr>
                     ))}

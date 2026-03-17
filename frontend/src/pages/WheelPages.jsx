@@ -81,7 +81,7 @@ export function WheelDetail() {
   const [wheel, setWheel] = useState(null);
   const [form, setForm] = useState({
     brand: '', model: '', diameter: '', width: '', bolt_pattern: '', offset_mm: '',
-    center_bore: '', material: 'unknown', finish: '', condition: 'used',
+    center_bore_mm: '', material: 'unknown', finish: '', condition: 'used',
     retail_price: '', cost: '', quantity: '0', bin_location: '', notes: '',
   });
   const [loading, setLoading] = useState(!isNew);
@@ -96,7 +96,7 @@ export function WheelDetail() {
       .then((w) => { setWheel(w); setForm({
         brand: w.brand || '', model: w.model || '', diameter: w.diameter || '',
         width: w.width || '', bolt_pattern: w.bolt_pattern || '',
-        offset_mm: w.offset_mm ?? '', center_bore: w.center_bore ?? '',
+        offset_mm: w.offset_mm ?? '', center_bore_mm: w.center_bore_mm ?? '',
         material: w.material || 'unknown', finish: w.finish || '',
         condition: w.condition || 'used', retail_price: w.retail_price ?? '',
         cost: w.cost ?? '', quantity: w.quantity ?? '0',
@@ -142,7 +142,7 @@ export function WheelDetail() {
           <div className="form-field"><label className="label">Width (in)</label><input type="number" step="0.5" value={form.width} onChange={ch('width')} /></div>
           <div className="form-field"><label className="label">Bolt Pattern</label><input type="text" value={form.bolt_pattern} onChange={ch('bolt_pattern')} placeholder="e.g. 5x114.3" /></div>
           <div className="form-field"><label className="label">Offset (mm)</label><input type="number" value={form.offset_mm} onChange={ch('offset_mm')} /></div>
-          <div className="form-field"><label className="label">Center Bore (mm)</label><input type="number" step="0.01" value={form.center_bore} onChange={ch('center_bore')} /></div>
+          <div className="form-field"><label className="label">Center Bore (mm)</label><input type="number" step="0.01" value={form.center_bore_mm} onChange={ch('center_bore_mm')} /></div>
           <div className="form-field"><label className="label">Material</label>
             <select value={form.material} onChange={ch('material')}>
               {['steel', 'alloy', 'forged', 'carbon', 'unknown'].map((m) => <option key={m} value={m}>{m}</option>)}

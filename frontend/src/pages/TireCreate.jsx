@@ -27,7 +27,7 @@ export default function TireCreate() {
     condition: 'new',
     tread_depth_32nds: '',
     retail_price: '',
-    acquisition_cost: '',
+    cost: '',
     bin_location: '',
     dot_tin: '',
     notes: '',
@@ -65,9 +65,9 @@ export default function TireCreate() {
     const payload = { ...form };
     // Merge parsed size fields if available
     if (parsedSize) {
-      payload.section_width = parsedSize.width_mm;
+      payload.width_mm = parsedSize.width_mm;
       payload.aspect_ratio = parsedSize.aspect_ratio;
-      payload.rim_diameter = parsedSize.wheel_diameter;
+      payload.wheel_diameter = parsedSize.wheel_diameter;
     }
     // Convert numeric fields
     if (payload.tread_depth_32nds) payload.tread_depth_32nds = Number(payload.tread_depth_32nds);
@@ -156,8 +156,8 @@ export default function TireCreate() {
 
             <div className="form-field">
               <label className="label">Acquisition Cost</label>
-              <input type="number" min="0" step="0.01" value={form.acquisition_cost}
-                onChange={handleChange('acquisition_cost')} />
+              <input type="number" min="0" step="0.01" value={form.cost}
+                onChange={handleChange('cost')} />
             </div>
 
             <div className="form-field">

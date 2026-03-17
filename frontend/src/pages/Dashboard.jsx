@@ -104,7 +104,7 @@ function WorkOrdersCard() {
           <tbody>
             {data.work_orders.slice(0, 8).map((wo) => (
               <tr key={wo.work_order_id}>
-                <td className="mono">{wo.work_order_number}</td>
+                <td className="mono">{wo.wo_number}</td>
                 <td>{wo.vehicle_year ? `${wo.vehicle_year} ${wo.vehicle_make} ${wo.vehicle_model}` : 'N/A'}</td>
                 <td><StatusBadge status={wo.status} /></td>
                 <td>{wo.assigned_tech_name || 'Unassigned'}</td>
@@ -161,7 +161,7 @@ function RetorqueCard() {
           {data.due_list.slice(0, 5).map((item, i) => (
             <li key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <span className="mono">{item.work_order_number || `WO #${item.work_order_id}`}</span>
+                <span className="mono">{item.wo_number || `WO #${item.work_order_id}`}</span>
                 {item.due_date && <span className="text-muted"> by {item.due_date}</span>}
               </div>
               <RetorqueCompleteBtn id={item.work_order_id} onDone={() => window.location.reload()} />

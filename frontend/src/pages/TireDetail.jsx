@@ -175,7 +175,7 @@ function TireEditForm({ tire, onSaved }) {
         </div>
         <Field label="Tread Depth (32nds)" value={form.tread_depth_32nds} onChange={handleChange('tread_depth_32nds')} type="number" />
         <Field label="Retail Price" value={form.retail_price} onChange={handleChange('retail_price')} type="number" step="0.01" />
-        <Field label="Cost" value={form.acquisition_cost} onChange={handleChange('acquisition_cost')} type="number" step="0.01" />
+        <Field label="Cost" value={form.cost} onChange={handleChange('cost')} type="number" step="0.01" />
         <Field label="BIN Location" value={form.bin_location} onChange={handleChange('bin_location')} placeholder="e.g. R-A1-03" />
         <Field label="DOT/TIN" value={form.dot_tin} onChange={handleChange('dot_tin')} />
         <div className="form-field">
@@ -215,7 +215,7 @@ function TireReadOnly({ tire }) {
       <ReadField label="Condition" value={tire.condition} />
       <ReadField label="Tread" value={tire.tread_depth_32nds != null ? `${tire.tread_depth_32nds}/32` : null} />
       <ReadField label="Price" value={tire.retail_price ? `$${Number(tire.retail_price).toFixed(2)}` : null} />
-      <ReadField label="Cost" value={tire.acquisition_cost ? `$${Number(tire.acquisition_cost).toFixed(2)}` : null} />
+      <ReadField label="Cost" value={tire.cost ? `$${Number(tire.cost).toFixed(2)}` : null} />
       <ReadField label="BIN" value={tire.bin_location} />
       <ReadField label="DOT/TIN" value={tire.dot_tin} />
       <ReadField label="Status" value={tire.status} />

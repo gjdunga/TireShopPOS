@@ -266,8 +266,8 @@ export default function TireSearch() {
 // ---- Helpers ----
 
 function formatSize(t) {
-  if (t.section_width && t.aspect_ratio && t.rim_diameter) {
-    return `${t.section_width}/${t.aspect_ratio}R${t.rim_diameter}`;
+  if (t.width_mm && t.aspect_ratio && t.wheel_diameter) {
+    return `${t.width_mm}/${t.aspect_ratio}R${t.wheel_diameter}`;
   }
   return '\u2014';
 }
