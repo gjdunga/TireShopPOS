@@ -10,9 +10,16 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import './Storefront.css';
 
-const API = '/api/index.php?_=/public';
+const API_PUB = '/api/index.php';
 async function pubGet(path) {
-  const res = await fetch(API + encodeURIComponent(path));
+  const qPos = path.indexOf('?');
+  let url;
+  if (qPos === -1) {
+    url = `${API_PUB}?_=${encodeURIComponent('/public' + path)}`;
+  } else {
+    url = `${API_PUB}?_=${encodeURIComponent('/public' + path.substring(0, qPos))}&${path.substring(qPos + 1)}`;
+  }
+  const res = await fetch(url);
   if (!res.ok) throw new Error('Request failed');
   const json = await res.json();
   return json.data ?? json;

@@ -10,7 +10,14 @@ import api, { getToken } from '../api/client.js';
 // CSV download helper: fetches with auth token, triggers browser download
 function downloadCsv(path) {
   const token = getToken();
-  fetch('/api/index.php?_=' + encodeURIComponent(path) + '&format=csv', {
+  const qPos = path.indexOf('?');
+  let csvUrl;
+  if (qPos === -1) {
+    csvUrl = '/api/index.php?_=' + encodeURIComponent(path) + '&format=csv';
+  } else {
+    csvUrl = '/api/index.php?_=' + encodeURIComponent(path.substring(0, qPos)) + '&' + path.substring(qPos + 1) + '&format=csv';
+  }
+  fetch(csvUrl, {
     headers: token ? { 'Authorization': 'Bearer ' + token } : {},
   })
     .then((r) => {

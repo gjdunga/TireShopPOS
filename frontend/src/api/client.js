@@ -14,10 +14,15 @@
 const API_BASE = '/api/index.php';
 
 // Build URL: /api/index.php?_=/auth/login&other=params
-// The query string bypasses all Apache rewrite/FPM proxy issues.
+// Splits path at ? so query params become real $_GET keys in PHP.
 function buildUrl(path) {
-  const route = encodeURIComponent(path);
-  return `${API_BASE}?_=${route}`;
+  const qPos = path.indexOf('?');
+  if (qPos === -1) {
+    return `${API_BASE}?_=${encodeURIComponent(path)}`;
+  }
+  const route = path.substring(0, qPos);
+  const qs = path.substring(qPos + 1);
+  return `${API_BASE}?_=${encodeURIComponent(route)}&${qs}`;
 }
 
 // Session token is stored in memory only (not localStorage).
