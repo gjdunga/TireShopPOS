@@ -950,6 +950,36 @@ $router->with(permit('WORK_ORDER_CREATE'))->patch('/api/work-orders/positions/{i
     return ['message' => 'Position updated.', 'position_id' => (int) $params['id'], 'changed' => $result['changed']];
 });
 
+// ---- Work Order Line Items (labor, parts, fees, warranties, disposal) ----
+
+$router->with(permit('WORK_ORDER_CREATE'))->post('/api/work-orders/{id}/line-items', function (array $params, array $body) {
+    $lineId = addWorkOrderLineItem((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Line item added.', 'line_id' => $lineId];
+});
+
+$router->with(permit('WORK_ORDER_CREATE'))->patch('/api/work-orders/line-items/{id}', function (array $params, array $body) {
+    $result = updateWorkOrderLineItem((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Line item updated.', 'line_id' => (int) $params['id'], 'changed' => $result['changed']];
+});
+
+$router->with(permit('WORK_ORDER_CREATE'))->delete('/api/work-orders/line-items/{id}', function (array $params) {
+    deleteWorkOrderLineItem((int) $params['id'], Middleware::userId());
+    return ['message' => 'Line item deleted.'];
+});
+
+$router->with(permit('WORK_ORDER_CREATE'))->post('/api/work-orders/{id}/recalculate', function (array $params) {
+    recalcWorkOrderTotals((int) $params['id'], Middleware::userId());
+    $wo = getWorkOrder((int) $params['id']);
+    return [
+        'message' => 'Totals recalculated.',
+        'subtotal_materials' => $wo['subtotal_materials'],
+        'subtotal_labor' => $wo['subtotal_labor'],
+        'subtotal_fees' => $wo['subtotal_fees'],
+        'tax_amount' => $wo['tax_amount'],
+        'total_estimate' => $wo['total_estimate'],
+    ];
+});
+
 $router->with(permit('WORK_ORDER_CREATE'))->post('/api/work-orders/{id}/complete', function (array $params) {
     $result = completeWorkOrder((int) $params['id'], Middleware::userId());
     return ['message' => 'Work order completed.', 'work_order_id' => (int) $params['id'], 'details' => $result];

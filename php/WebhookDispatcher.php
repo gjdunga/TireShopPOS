@@ -29,6 +29,7 @@ class WebhookDispatcher
     /** All supported outbound event types. */
     public const EVENTS = [
         'WO_CREATE', 'WO_COMPLETE', 'WO_ASSIGN',
+        'WO_LINE_ADD', 'WO_LINE_DELETE',
         'CUSTOMER_CREATE', 'VEHICLE_CREATE', 'APPT_CREATE',
         'TIRE_ADD', 'TIRE_WRITE_OFF',
         'PO_CREATE', 'PO_RECEIVE',

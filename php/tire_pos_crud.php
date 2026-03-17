@@ -454,6 +454,15 @@ function getWorkOrder(int $woId): ?array {
              ORDER BY FIELD(wop.position_code, 'LF','RF','LR','RR','SPARE','LRI','RRI','LFI','RFI')",
             [$woId]
         );
+        $wo['line_items'] = Database::query(
+            "SELECT woli.*, sc.service_name, fc.fee_label
+             FROM work_order_line_items woli
+             LEFT JOIN service_catalog sc ON woli.service_id = sc.service_id
+             LEFT JOIN fee_configuration fc ON woli.fee_config_id = fc.fee_id
+             WHERE woli.work_order_id = ?
+             ORDER BY woli.display_order, woli.line_id",
+            [$woId]
+        );
     }
     return $wo;
 }
@@ -625,6 +634,161 @@ function updateWorkOrderPosition(int $posId, array $data, int $updatedBy): array
     }
 
     return ['changed' => array_keys($changes)];
+}
+
+
+// ---- Work Order Line Items (labor, parts, fees, warranties, disposal) ----
+
+/**
+ * Add a line item to a work order. Recalculates WO subtotals.
+ *
+ * @param int   $woId      Work order ID
+ * @param array $data      line_type, description, quantity, unit_price, is_taxable,
+ *                         service_id, fee_config_id, tire_id, warranty_policy_id,
+ *                         warranty_expires_at, warranty_terms, display_order
+ * @param int   $createdBy User ID
+ * @return int  New line_id
+ */
+function addWorkOrderLineItem(int $woId, array $data, int $createdBy): int {
+    $wo = Database::queryOne("SELECT work_order_id FROM work_orders WHERE work_order_id = ?", [$woId]);
+    if (!$wo) throw new \RuntimeException('Work order not found.');
+
+    InputValidator::check('work_order_line_items', $data, ['line_type', 'description']);
+
+    $lineType = $data['line_type'];
+    $qty = (float) ($data['quantity'] ?? 1);
+    $price = (float) ($data['unit_price'] ?? 0);
+    $total = round($qty * $price, 2);
+
+    // Default is_taxable based on line type (CO: materials taxable, labor/fees not)
+    $taxable = (int) ($data['is_taxable'] ?? (in_array($lineType, ['part', 'warranty'], true) ? 1 : 0));
+
+    Database::execute(
+        "INSERT INTO work_order_line_items
+         (work_order_id, line_type, description, quantity, unit_price, line_total,
+          is_taxable, service_id, fee_config_id, tire_id,
+          warranty_policy_id, warranty_expires_at, warranty_terms, display_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            $woId, $lineType, trim($data['description']),
+            $qty, $price, $total, $taxable,
+            $data['service_id'] ?? null,
+            $data['fee_config_id'] ?? null,
+            $data['tire_id'] ?? null,
+            $data['warranty_policy_id'] ?? null,
+            $data['warranty_expires_at'] ?? null,
+            $data['warranty_terms'] ?? null,
+            (int) ($data['display_order'] ?? 0),
+        ]
+    );
+
+    $lineId = Database::lastInsertId();
+    auditLog('work_order_line_items', $lineId, 'INSERT', null, null, null, $createdBy);
+    logActivity($createdBy, 'WO_LINE_ADD', 'work_order_line_items', $lineId,
+        "Added {$lineType}: {$data['description']} (\${$total}) to WO #{$woId}");
+
+    recalcWorkOrderTotals($woId, $createdBy);
+    return $lineId;
+}
+
+/**
+ * Update a line item. Recalculates WO subtotals.
+ */
+function updateWorkOrderLineItem(int $lineId, array $data, int $updatedBy): array {
+    $line = Database::queryOne("SELECT * FROM work_order_line_items WHERE line_id = ?", [$lineId]);
+    if (!$line) throw new \RuntimeException('Line item not found.');
+
+    InputValidator::check('work_order_line_items', $data);
+
+    $editable = ['line_type', 'description', 'quantity', 'unit_price',
+                 'is_taxable', 'service_id', 'fee_config_id', 'tire_id',
+                 'warranty_policy_id', 'warranty_expires_at', 'warranty_terms', 'display_order'];
+    $sets = [];
+    $binds = [];
+    $changes = [];
+
+    foreach ($editable as $f) {
+        if (array_key_exists($f, $data) && (string) ($data[$f] ?? '') !== (string) ($line[$f] ?? '')) {
+            $sets[] = "{$f} = ?";
+            $binds[] = $data[$f];
+            $changes[$f] = ['old' => $line[$f], 'new' => $data[$f]];
+        }
+    }
+
+    // Recalculate line_total if qty or price changed
+    $qty = (float) ($data['quantity'] ?? $line['quantity']);
+    $price = (float) ($data['unit_price'] ?? $line['unit_price']);
+    $newTotal = round($qty * $price, 2);
+    if ((string) $newTotal !== (string) $line['line_total']) {
+        $sets[] = "line_total = ?";
+        $binds[] = $newTotal;
+        $changes['line_total'] = ['old' => $line['line_total'], 'new' => $newTotal];
+    }
+
+    if (empty($sets)) return ['changed' => []];
+
+    $binds[] = $lineId;
+    Database::execute("UPDATE work_order_line_items SET " . implode(', ', $sets) . " WHERE line_id = ?", $binds);
+
+    foreach ($changes as $field => $vals) {
+        auditLog('work_order_line_items', $lineId, 'UPDATE', $field,
+            (string) ($vals['old'] ?? ''), (string) ($vals['new'] ?? ''), $updatedBy);
+    }
+
+    recalcWorkOrderTotals((int) $line['work_order_id'], $updatedBy);
+    return ['changed' => array_keys($changes)];
+}
+
+/**
+ * Delete a line item. Recalculates WO subtotals.
+ */
+function deleteWorkOrderLineItem(int $lineId, int $deletedBy): void {
+    $line = Database::queryOne("SELECT * FROM work_order_line_items WHERE line_id = ?", [$lineId]);
+    if (!$line) throw new \RuntimeException('Line item not found.');
+
+    auditLog('work_order_line_items', $lineId, 'DELETE', null, null, null, $deletedBy);
+    Database::execute("DELETE FROM work_order_line_items WHERE line_id = ?", [$lineId]);
+
+    logActivity($deletedBy, 'WO_LINE_DELETE', 'work_order_line_items', $lineId,
+        "Removed {$line['line_type']}: {$line['description']} from WO #{$line['work_order_id']}");
+
+    recalcWorkOrderTotals((int) $line['work_order_id'], $deletedBy);
+}
+
+/**
+ * Recalculate WO subtotals from line items.
+ * materials = SUM(line_total) WHERE is_taxable = 1
+ * labor     = SUM(line_total) WHERE line_type IN ('labor')
+ * fees      = SUM(line_total) WHERE line_type IN ('fee','disposal')
+ * tax       = materials * tax_rate
+ * total     = materials + labor + fees + tax
+ */
+function recalcWorkOrderTotals(int $woId, int $updatedBy): void {
+    $wo = Database::queryOne("SELECT tax_rate FROM work_orders WHERE work_order_id = ?", [$woId]);
+    if (!$wo) return;
+
+    $sums = Database::queryOne(
+        "SELECT
+            COALESCE(SUM(CASE WHEN is_taxable = 1 THEN line_total ELSE 0 END), 0) AS materials,
+            COALESCE(SUM(CASE WHEN line_type = 'labor' THEN line_total ELSE 0 END), 0) AS labor,
+            COALESCE(SUM(CASE WHEN line_type IN ('fee','disposal') THEN line_total ELSE 0 END), 0) AS fees
+         FROM work_order_line_items WHERE work_order_id = ?",
+        [$woId]
+    );
+
+    $materials = (float) $sums['materials'];
+    $labor = (float) $sums['labor'];
+    $fees = (float) $sums['fees'];
+    $taxRate = (float) $wo['tax_rate'];
+    $taxAmount = round($materials * $taxRate, 2);
+    $total = round($materials + $labor + $fees + $taxAmount, 2);
+
+    Database::execute(
+        "UPDATE work_orders SET subtotal_materials = ?, subtotal_labor = ?,
+         subtotal_fees = ?, tax_amount = ?, total_estimate = ?,
+         updated_at = CURRENT_TIMESTAMP WHERE work_order_id = ?",
+        [$materials, $labor, $fees, $taxAmount, $total, $woId]
+    );
 }
 
 function completeWorkOrder(int $woId, int $completedBy): array {

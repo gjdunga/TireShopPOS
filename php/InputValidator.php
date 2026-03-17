@@ -116,6 +116,9 @@ class InputValidator
         'webhook_endpoints' => [
             'url' => 500, 'secret' => 120, 'label' => 120,
         ],
+        'work_order_line_items' => [
+            'description' => 255, 'warranty_terms' => 65535,
+        ],
         'appointments_public' => [
             'customer_name' => 120, 'customer_phone' => 20, 'service_requested' => 255,
         ],

@@ -39,7 +39,7 @@ php -S localhost:8080 -t public public/index.php
 
 ## Key Numbers
 
-- 188 API routes
+- 192 API routes
 - 70 database tables, 9 views
 - 234 PHP functions across 10 business logic files + provider layer
 - 17 RBAC permissions, 5 roles (owner, manager, tech, sales, readonly)
