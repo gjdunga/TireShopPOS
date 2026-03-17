@@ -107,10 +107,10 @@ async function request(method, path, body = null, options = {}) {
     return envelope.data;
   }
 
-  // Error path
-  const code = envelope.error?.code || 'UNKNOWN';
-  const message = envelope.error?.message || `Request failed (${res.status})`;
-  throw new ApiError(res.status, code, message, envelope.error);
+  // Error path: PHP returns { success: false, error: true, code: '...', message: '...' }
+  const code = envelope.code || 'UNKNOWN';
+  const message = envelope.message || `Request failed (${res.status})`;
+  throw new ApiError(res.status, code, message, envelope);
 }
 
 // ---- Convenience methods ----

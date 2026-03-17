@@ -13,11 +13,6 @@
 
 declare(strict_types=1);
 
-// Guard against rewrite loops: if Apache re-evaluates .htaccess rules and
-// executes this file again within the same process, bail immediately.
-if (defined('TIRE_POS_DISPATCHED')) return;
-define('TIRE_POS_DISPATCHED', true);
-
 // ---- Define base paths ----
 // In production, deploy/api-index.php pre-defines these before including us.
 // In dev (php -S), this file is the entry point so we define them here.
