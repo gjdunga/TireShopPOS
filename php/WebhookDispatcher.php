@@ -270,11 +270,54 @@ class WebhookDispatcher
         return Database::queryOne("SELECT * FROM webhook_endpoints WHERE endpoint_id = ?", [$id]);
     }
 
+    /**
+     * Validate webhook URL: block SSRF (internal/private addresses).
+     */
+    private static function validateWebhookUrl(string $url): void
+    {
+        $parts = parse_url($url);
+        if (!$parts || !isset($parts['scheme'], $parts['host'])) {
+            throw new \InvalidArgumentException('Invalid webhook URL.');
+        }
+        if (!in_array(strtolower($parts['scheme']), ['http', 'https'], true)) {
+            throw new \InvalidArgumentException('Webhook URL must use http or https.');
+        }
+        $host = strtolower($parts['host']);
+
+        // Block obvious internal hostnames
+        $blocked = ['localhost', '127.0.0.1', '::1', '0.0.0.0', 'metadata.google.internal', '169.254.169.254'];
+        if (in_array($host, $blocked, true)) {
+            throw new \InvalidArgumentException('Webhook URL must not target internal addresses.');
+        }
+
+        // Resolve hostname and block RFC1918 / link-local / loopback
+        $ip = gethostbyname($host);
+        if ($ip !== $host) {
+            $long = ip2long($ip);
+            if ($long !== false) {
+                $privateRanges = [
+                    [ip2long('10.0.0.0'),    ip2long('10.255.255.255')],
+                    [ip2long('172.16.0.0'),  ip2long('172.31.255.255')],
+                    [ip2long('192.168.0.0'), ip2long('192.168.255.255')],
+                    [ip2long('127.0.0.0'),   ip2long('127.255.255.255')],
+                    [ip2long('169.254.0.0'), ip2long('169.254.255.255')],
+                    [ip2long('0.0.0.0'),     ip2long('0.255.255.255')],
+                ];
+                foreach ($privateRanges as [$lo, $hi]) {
+                    if ($long >= $lo && $long <= $hi) {
+                        throw new \InvalidArgumentException('Webhook URL must not target internal or private addresses.');
+                    }
+                }
+            }
+        }
+    }
+
     public static function createEndpoint(array $data, int $createdBy): int
     {
         \InputValidator::check('webhook_endpoints', $data, ['url']);
 
         $url = trim($data['url']);
+        self::validateWebhookUrl($url);
         $secret = $data['secret'] ?? bin2hex(random_bytes(32));
         $events = $data['events'] ?? ['*'];
         if (!is_array($events)) $events = ['*'];
@@ -300,6 +343,7 @@ class WebhookDispatcher
         $params = [];
         foreach (['url', 'label', 'secret'] as $f) {
             if (array_key_exists($f, $data)) {
+                if ($f === 'url') self::validateWebhookUrl($data[$f]);
                 $sets[] = "{$f} = ?";
                 $params[] = $data[$f];
             }

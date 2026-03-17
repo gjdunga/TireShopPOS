@@ -663,32 +663,34 @@ function addWorkOrderLineItem(int $woId, array $data, int $createdBy): int {
     // Default is_taxable based on line type (CO: materials taxable, labor/fees not)
     $taxable = (int) ($data['is_taxable'] ?? (in_array($lineType, ['part', 'warranty'], true) ? 1 : 0));
 
-    Database::execute(
-        "INSERT INTO work_order_line_items
-         (work_order_id, line_type, description, quantity, unit_price, line_total,
-          is_taxable, service_id, fee_config_id, tire_id,
-          warranty_policy_id, warranty_expires_at, warranty_terms, display_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [
-            $woId, $lineType, trim($data['description']),
-            $qty, $price, $total, $taxable,
-            $data['service_id'] ?? null,
-            $data['fee_config_id'] ?? null,
-            $data['tire_id'] ?? null,
-            $data['warranty_policy_id'] ?? null,
-            $data['warranty_expires_at'] ?? null,
-            $data['warranty_terms'] ?? null,
-            (int) ($data['display_order'] ?? 0),
-        ]
-    );
+    return Database::transaction(function () use ($woId, $data, $createdBy, $lineType, $qty, $price, $total, $taxable) {
+        Database::execute(
+            "INSERT INTO work_order_line_items
+             (work_order_id, line_type, description, quantity, unit_price, line_total,
+              is_taxable, service_id, fee_config_id, tire_id,
+              warranty_policy_id, warranty_expires_at, warranty_terms, display_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                $woId, $lineType, trim($data['description']),
+                $qty, $price, $total, $taxable,
+                $data['service_id'] ?? null,
+                $data['fee_config_id'] ?? null,
+                $data['tire_id'] ?? null,
+                $data['warranty_policy_id'] ?? null,
+                $data['warranty_expires_at'] ?? null,
+                $data['warranty_terms'] ?? null,
+                (int) ($data['display_order'] ?? 0),
+            ]
+        );
 
-    $lineId = Database::lastInsertId();
-    auditLog('work_order_line_items', $lineId, 'INSERT', null, null, null, $createdBy);
-    logActivity($createdBy, 'WO_LINE_ADD', 'work_order_line_items', $lineId,
-        "Added {$lineType}: {$data['description']} (\${$total}) to WO #{$woId}");
+        $lineId = Database::lastInsertId();
+        auditLog('work_order_line_items', $lineId, 'INSERT', null, null, null, $createdBy);
+        logActivity($createdBy, 'WO_LINE_ADD', 'work_order_line_items', $lineId,
+            "Added {$lineType}: {$data['description']} (\${$total}) to WO #{$woId}");
 
-    recalcWorkOrderTotals($woId, $createdBy);
-    return $lineId;
+        recalcWorkOrderTotals($woId, $createdBy);
+        return $lineId;
+    });
 }
 
 /**
@@ -728,14 +730,19 @@ function updateWorkOrderLineItem(int $lineId, array $data, int $updatedBy): arra
     if (empty($sets)) return ['changed' => []];
 
     $binds[] = $lineId;
-    Database::execute("UPDATE work_order_line_items SET " . implode(', ', $sets) . " WHERE line_id = ?", $binds);
+    $woId = (int) $line['work_order_id'];
 
-    foreach ($changes as $field => $vals) {
-        auditLog('work_order_line_items', $lineId, 'UPDATE', $field,
-            (string) ($vals['old'] ?? ''), (string) ($vals['new'] ?? ''), $updatedBy);
-    }
+    Database::transaction(function () use ($lineId, $sets, $binds, $changes, $updatedBy, $woId) {
+        Database::execute("UPDATE work_order_line_items SET " . implode(', ', $sets) . " WHERE line_id = ?", $binds);
 
-    recalcWorkOrderTotals((int) $line['work_order_id'], $updatedBy);
+        foreach ($changes as $field => $vals) {
+            auditLog('work_order_line_items', $lineId, 'UPDATE', $field,
+                (string) ($vals['old'] ?? ''), (string) ($vals['new'] ?? ''), $updatedBy);
+        }
+
+        recalcWorkOrderTotals($woId, $updatedBy);
+    });
+
     return ['changed' => array_keys($changes)];
 }
 
@@ -746,13 +753,17 @@ function deleteWorkOrderLineItem(int $lineId, int $deletedBy): void {
     $line = Database::queryOne("SELECT * FROM work_order_line_items WHERE line_id = ?", [$lineId]);
     if (!$line) throw new \RuntimeException('Line item not found.');
 
-    auditLog('work_order_line_items', $lineId, 'DELETE', null, null, null, $deletedBy);
-    Database::execute("DELETE FROM work_order_line_items WHERE line_id = ?", [$lineId]);
+    $woId = (int) $line['work_order_id'];
 
-    logActivity($deletedBy, 'WO_LINE_DELETE', 'work_order_line_items', $lineId,
-        "Removed {$line['line_type']}: {$line['description']} from WO #{$line['work_order_id']}");
+    Database::transaction(function () use ($lineId, $line, $deletedBy, $woId) {
+        auditLog('work_order_line_items', $lineId, 'DELETE', null, null, null, $deletedBy);
+        Database::execute("DELETE FROM work_order_line_items WHERE line_id = ?", [$lineId]);
 
-    recalcWorkOrderTotals((int) $line['work_order_id'], $deletedBy);
+        logActivity($deletedBy, 'WO_LINE_DELETE', 'work_order_line_items', $lineId,
+            "Removed {$line['line_type']}: {$line['description']} from WO #{$woId}");
+
+        recalcWorkOrderTotals($woId, $deletedBy);
+    });
 }
 
 /**
@@ -792,6 +803,11 @@ function recalcWorkOrderTotals(int $woId, int $updatedBy): void {
 }
 
 function completeWorkOrder(int $woId, int $completedBy): array {
+    $wo = Database::queryOne("SELECT status FROM work_orders WHERE work_order_id = ?", [$woId]);
+    if (!$wo) throw new \RuntimeException('Work order not found.');
+    if ($wo['status'] === 'complete') throw new \RuntimeException('Work order is already complete.');
+    if ($wo['status'] === 'cancelled') throw new \RuntimeException('Cannot complete a cancelled work order.');
+
     // Torque gate: every position must have torque_verified = 1
     $check = canCompleteWorkOrder($woId);
     if (!$check['can_complete']) {
@@ -803,7 +819,7 @@ function completeWorkOrder(int $woId, int $completedBy): array {
         [$woId]
     );
 
-    auditLog('work_orders', $woId, 'UPDATE', 'status', 'in_progress', 'complete', $completedBy);
+    auditLog('work_orders', $woId, 'UPDATE', 'status', $wo['status'], 'complete', $completedBy);
     logActivity($completedBy, 'WO_COMPLETE', 'work_orders', $woId, 'Completed work order');
 
     return $check;

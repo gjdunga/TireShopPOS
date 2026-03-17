@@ -24,6 +24,12 @@
 
 class NotificationDelivery
 {
+    /** Strip CR/LF from email header values to prevent header injection. */
+    private static function hdr(string $val): string
+    {
+        return str_replace(["\r", "\n", "\0"], '', $val);
+    }
+
     // ========================================================================
     // Queue Processor
     // ========================================================================
@@ -122,15 +128,18 @@ class NotificationDelivery
         }
 
         // Fallback: PHP mail()
+        $safeName = self::hdr($fromName);
+        $safeFrom = self::hdr($from);
+        $safeSubject = self::hdr($subject);
         $headers = [
-            "From: {$fromName} <{$from}>",
-            "Reply-To: {$from}",
+            "From: {$safeName} <{$safeFrom}>",
+            "Reply-To: {$safeFrom}",
             "MIME-Version: 1.0",
             "Content-Type: text/html; charset=UTF-8",
             "X-Mailer: TireShopPOS/1.2.0",
         ];
 
-        $ok = @mail($to, $subject, $htmlBody, implode("\r\n", $headers));
+        $ok = @mail($to, $safeSubject, $htmlBody, implode("\r\n", $headers));
         if ($ok) {
             return ['success' => true];
         }
@@ -183,15 +192,20 @@ class NotificationDelivery
                 self::smtpCmd($conn, base64_encode($pass), 235);
             }
 
-            self::smtpCmd($conn, "MAIL FROM:<{$from}>", 250);
-            self::smtpCmd($conn, "RCPT TO:<{$to}>", 250);
+            $safeFrom = self::hdr($from);
+            $safeTo = self::hdr($to);
+            $safeName = self::hdr($fromName);
+            $safeSubject = self::hdr($subject);
+
+            self::smtpCmd($conn, "MAIL FROM:<{$safeFrom}>", 250);
+            self::smtpCmd($conn, "RCPT TO:<{$safeTo}>", 250);
             self::smtpCmd($conn, "DATA", 354);
 
             // Build message with headers
             $boundary = md5(uniqid((string) time()));
-            $msg  = "From: {$fromName} <{$from}>\r\n";
-            $msg .= "To: {$to}\r\n";
-            $msg .= "Subject: {$subject}\r\n";
+            $msg  = "From: {$safeName} <{$safeFrom}>\r\n";
+            $msg .= "To: {$safeTo}\r\n";
+            $msg .= "Subject: {$safeSubject}\r\n";
             $msg .= "MIME-Version: 1.0\r\n";
             $msg .= "Content-Type: multipart/alternative; boundary=\"{$boundary}\"\r\n";
             $msg .= "X-Mailer: TireShopPOS/1.2.0\r\n";
@@ -424,11 +438,11 @@ HTML;
         }
 
         $headers = [
-            "From: " . $shopName . " <" . ($config['smtp_from'] ?: $to) . ">",
+            "From: " . self::hdr($shopName) . " <" . self::hdr($config['smtp_from'] ?: $to) . ">",
             "MIME-Version: 1.0",
             "Content-Type: text/html; charset=UTF-8",
         ];
-        $ok = @mail($to, $subject, $htmlBody, implode("\r\n", $headers));
+        $ok = @mail($to, self::hdr($subject), $htmlBody, implode("\r\n", $headers));
         return $ok
             ? ['success' => true, 'sent_to' => $to]
             : ['success' => false, 'error' => 'PHP mail() returned false.'];

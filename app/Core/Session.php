@@ -63,7 +63,7 @@ class Session
      */
     public static function validate(string $token): ?array
     {
-        if (self::$current !== null && self::$current['token'] === $token) {
+        if (self::$current !== null && hash_equals(self::$current['token'], $token)) {
             return self::$current;
         }
 
@@ -113,7 +113,7 @@ class Session
     public static function destroy(string $token): void
     {
         Database::execute("DELETE FROM sessions WHERE token = ?", [$token]);
-        if (self::$current !== null && self::$current['token'] === $token) {
+        if (self::$current !== null && hash_equals(self::$current['token'], $token)) {
             self::$current = null;
         }
     }

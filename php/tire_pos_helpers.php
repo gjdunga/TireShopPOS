@@ -342,6 +342,15 @@ function getCustomerVehicles(int $customerId): array {
  * Format examples: INV-000001, WO-000001, PO-000001
  */
 function nextSequence(string $prefix, string $table, string $column): string {
+    // Whitelist: only known table/column pairs (defense against future misuse)
+    $allowed = [
+        'work_orders:wo_number',
+        'purchase_orders:po_number',
+    ];
+    if (!in_array("{$table}:{$column}", $allowed, true)) {
+        throw new \InvalidArgumentException("nextSequence: unknown table/column pair: {$table}:{$column}");
+    }
+
     $db = getDB();
     $sql = "SELECT {$column} FROM {$table} ORDER BY CAST(SUBSTRING({$column}, LENGTH(?) + 1) AS UNSIGNED) DESC LIMIT 1 FOR UPDATE";
     $stmt = $db->prepare($sql);

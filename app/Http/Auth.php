@@ -64,7 +64,9 @@ class Auth
         );
 
         if ($user === null) {
-            // User not found: return generic error (don't reveal which field is wrong)
+            // Constant-time: run bcrypt on dummy hash so response time is
+            // indistinguishable from a real user with wrong password.
+            password_verify($password, '$2y$12$DummyHashToPreventTimingOracleOnUserEnum000000000000000');
             return self::fail(self::ERR_INVALID_CREDS, 'Invalid username or password.', 401);
         }
 
