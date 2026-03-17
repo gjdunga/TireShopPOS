@@ -118,6 +118,10 @@ if [[ "$DB_ONLY" == "false" ]]; then
     mkdir -p "${PUBLIC_HTML}/uploads/photos"
     cp "${APP_DIR}/deploy/uploads-htaccess" "${PUBLIC_HTML}/uploads/.htaccess"
 
+    # Deploy custom error pages
+    mkdir -p "${PUBLIC_HTML}/errors"
+    cp "${APP_DIR}/deploy/errors/"*.html "${PUBLIC_HTML}/errors/"
+
     # Create storage directories
     mkdir -p "${APP_DIR}/storage/logs"
     mkdir -p "${APP_DIR}/storage/photos"
