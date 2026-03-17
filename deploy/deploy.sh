@@ -33,14 +33,65 @@ log()  { echo -e "${GREEN}[DEPLOY]${NC} $1"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 err()  { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 
+usage() {
+    cat << 'EOF'
+TireShopPOS Deploy Script (v1.2.0)
+DunganSoft Technologies
+
+USAGE:
+  ./deploy.sh [OPTIONS]
+
+OPTIONS:
+  (no args)     Pull latest code, build frontend, deploy to public_html.
+                Does NOT touch the database. Safe for routine updates.
+
+  --init        First-time setup. Clones repo, builds frontend, deploys
+                files, creates database, loads schema (68 tables, 9 views),
+                runs baseline migration, seeds lookup data.
+
+  --db-only     Database only. Skips code pull and frontend build.
+                Loads schema + migrations. Use after manual schema edits
+                or to re-initialize the database without redeploying files.
+
+  --help, -h    Show this help message.
+
+EXAMPLES:
+  First install:    ./deploy.sh --init
+  Routine update:   ./deploy.sh
+  DB re-init only:  ./deploy.sh --db-only
+
+POST-DEPLOY CHECKLIST (first time):
+  1. Edit .env:         nano /home/bearlyused/domains/pos.bearlyused.net/app/.env
+  2. Set open_basedir:  Virtualmin > Web Configuration > PHP Options
+                        Set to: /home/bearlyused/:/tmp/
+  3. Restart PHP-FPM:   sudo systemctl restart php8.3-fpm
+  4. Test:              curl https://pos.bearlyused.net/api/health
+  5. Login:             https://pos.bearlyused.net  (admin / admin, forced change)
+  6. Create API key:    Settings > API Keys (for cron notification delivery)
+  7. Set up cron:       crontab -e
+     */5 * * * *  /home/bearlyused/domains/pos.bearlyused.net/app/scripts/cron-runner.sh all-frequent
+     0   2 * * *  /home/bearlyused/domains/pos.bearlyused.net/app/scripts/cron-runner.sh all-daily
+
+PATHS:
+  App code:     /home/bearlyused/domains/pos.bearlyused.net/app/
+  Doc root:     /home/bearlyused/domains/pos.bearlyused.net/public_html/
+  Logs:         app/storage/logs/app.log
+  Backups:      /home/bearlyused/backups/db/
+  .env:         app/.env (chmod 600, never commit)
+
+EOF
+    exit 0
+}
+
 # ---- Parse args ----
 INIT=false
 DB_ONLY=false
 for arg in "$@"; do
     case "$arg" in
+        --help|-h|help) usage ;;
         --init) INIT=true ;;
         --db-only) DB_ONLY=true ;;
-        *) err "Unknown argument: $arg"; exit 1 ;;
+        *) err "Unknown argument: $arg (try --help)"; exit 1 ;;
     esac
 done
 
