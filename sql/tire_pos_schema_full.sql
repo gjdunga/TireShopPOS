@@ -604,7 +604,7 @@ INSERT INTO service_parts (service_id, part_name, default_cost, is_taxable) VALU
 ((SELECT service_id FROM service_catalog WHERE service_code='MNT_ONLY'), 'Valve stem',    2.50, 1),
 ((SELECT service_id FROM service_catalog WHERE service_code='BAL_ONLY'), 'Wheel weights', 3.50, 1),
 ((SELECT service_id FROM service_catalog WHERE service_code='RPR_PLUG'), 'Plug kit',      2.00, 1),
-((SELECT service_id FROM service_catalog WHERE service_code='RPR_PATCH'),'Radial patch',  3.00, 1),
+((SELECT service_id FROM service_catalog WHERE service_code='RPR_PATCH'),'Radial patch',  3.00, 1);
 
 -- ============================================================================
 -- DOMAIN 10: PURCHASE ORDERS (2 tables, created after invoices) [v2.3]
@@ -851,6 +851,7 @@ INSERT INTO fee_configuration (fee_key, fee_label, fee_amount, applies_to, statu
  '2026-01-01'),
 ('WAIVER_REPAIR_LIMIT', 'Repair Limit Acknowledgment', 0.00, 'none',
  'I acknowledge that the tire repair performed is in an area outside the standard repairable zone as defined by USTMA guidelines (shoulder or sidewall area). This repair carries a higher risk of failure than a standard tread area repair. Limited warranty applies.',
+ '2026-01-01');
 
 CREATE TABLE IF NOT EXISTS tire_disposal_log (
     disposal_id     INT AUTO_INCREMENT PRIMARY KEY,

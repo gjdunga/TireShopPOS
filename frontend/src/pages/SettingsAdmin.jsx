@@ -308,7 +308,7 @@ function NotificationsTab({ settings, onSaved, onError }) {
 
       <STitle>SMS (Flowroute)</STitle>
       <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.75rem' }}>
-        Requires a Flowroute account with SMS-enabled DID. API credentials are in the Flowroute portal under Preferences > API Control.
+        Requires a Flowroute account with SMS-enabled DID. API credentials are in the Flowroute portal under Preferences &gt; API Control.
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.5rem' }}>
         {smsKeys.map((k) => (
