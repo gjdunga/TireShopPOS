@@ -113,6 +113,9 @@ class InputValidator
         'service_catalog' => [
             'service_code' => 20, 'service_name' => 80,
         ],
+        'webhook_endpoints' => [
+            'url' => 500, 'secret' => 120, 'label' => 120,
+        ],
         'appointments_public' => [
             'customer_name' => 120, 'customer_phone' => 20, 'service_requested' => 255,
         ],

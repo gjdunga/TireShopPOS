@@ -41,7 +41,7 @@ php -S localhost:8080 -t public public/index.php
 
 - 188 API routes
 - 70 database tables, 9 views
-- 195 PHP functions across 5 business logic files + provider layer
+- 234 PHP functions across 10 business logic files + provider layer
 - 17 RBAC permissions, 5 roles (owner, manager, tech, sales, readonly)
 - 53 tire brands, 410 torque specs seeded
 - 122 integration test assertions (all passing)

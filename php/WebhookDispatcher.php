@@ -269,9 +269,9 @@ class WebhookDispatcher
 
     public static function createEndpoint(array $data, int $createdBy): int
     {
-        $url = trim($data['url'] ?? '');
-        if ($url === '') throw new \InvalidArgumentException('Webhook URL is required.');
+        \InputValidator::check('webhook_endpoints', $data, ['url']);
 
+        $url = trim($data['url']);
         $secret = $data['secret'] ?? bin2hex(random_bytes(32));
         $events = $data['events'] ?? ['*'];
         if (!is_array($events)) $events = ['*'];
@@ -291,6 +291,7 @@ class WebhookDispatcher
     {
         $ep = self::getEndpoint($id);
         if (!$ep) throw new \RuntimeException('Webhook endpoint not found.');
+        \InputValidator::check('webhook_endpoints', $data);
 
         $sets = [];
         $params = [];
