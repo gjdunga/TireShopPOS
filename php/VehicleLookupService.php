@@ -121,17 +121,26 @@ class VehicleLookupService
 
         // Stage 2: Plate provider API (configurable via settings)
         $providerName = $this->plateProvider->getName();
+        $lastError = null;
+        $lastHttpStatus = 0;
         $loggerFn = function (string $provider, string $url, int $httpStatus,
                               bool $success, ?string $error, ?int $ms, int $costCents)
-                    use ($plate, $state, $userId) {
+                    use ($plate, $state, $userId, &$lastError, &$lastHttpStatus) {
+            $lastError = $error;
+            $lastHttpStatus = $httpStatus;
             $this->logApiCall($plate, $state, $provider, $url,
                 $httpStatus, $success, $error, $ms, $userId, $costCents);
         };
 
         $plateResult = $this->plateProvider->lookup($plate, $state, $this->apiKey, $loggerFn);
         if ($plateResult === null) {
-            // API failed; no cache available. Manual entry required.
-            return null;
+            // API failed; return structured error instead of bare null
+            return [
+                'error' => true,
+                'provider' => $providerName,
+                'http_status' => $lastHttpStatus,
+                'message' => $this->describeProviderError($providerName, $lastHttpStatus, $lastError),
+            ];
         }
 
         // Stage 3: NHTSA VPIC enrichment (non-fatal if it fails)
@@ -758,6 +767,23 @@ class VehicleLookupService
     // ========================================================================
     // PRIVATE: API Logging
     // ========================================================================
+
+    /**
+     * Translate a provider HTTP error into a human-readable message.
+     */
+    private function describeProviderError(string $provider, int $httpStatus, ?string $rawError): string
+    {
+        return match (true) {
+            $httpStatus === 0     => "{$provider}: could not connect. Check server internet access.",
+            $httpStatus === 401   => "{$provider}: API key is invalid or expired. Update it in Settings > Vehicle Lookup.",
+            $httpStatus === 402   => "{$provider}: payment required. The plate lookup feature requires a paid plan. Check your {$provider} account.",
+            $httpStatus === 403   => "{$provider}: access forbidden. Your API key may not have plate lookup permissions.",
+            $httpStatus === 404   => "{$provider}: plate not found in their database.",
+            $httpStatus === 429   => "{$provider}: rate limit exceeded. Wait a moment and try again.",
+            $httpStatus >= 500    => "{$provider}: server error (HTTP {$httpStatus}). The service may be down.",
+            default               => "{$provider}: lookup failed (HTTP {$httpStatus}). " . ($rawError ?: ''),
+        };
+    }
 
     /**
      * Log every API call to plate_lookup_log for cost tracking and auditing.

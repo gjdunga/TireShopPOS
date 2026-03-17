@@ -1179,6 +1179,9 @@ $router->with([Middleware::auth(), Middleware::permit('VEHICLE_MANAGE'), Middlew
     if ($result === null) {
         Router::sendError('LOOKUP_FAILED', 'Plate lookup failed. The API may be unavailable or the plate was not found.', 404);
     }
+    if (!empty($result['error'])) {
+        Router::sendError('LOOKUP_FAILED', $result['message'] ?? 'Plate lookup failed.', 400);
+    }
     return $result;
 });
 
