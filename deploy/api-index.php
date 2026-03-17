@@ -17,10 +17,6 @@
 
 declare(strict_types=1);
 
-// Guard against rewrite loops (see deploy/htaccess comment for details)
-if (defined('TIRE_POS_DISPATCHED')) { http_response_code(200); exit; }
-define('TIRE_POS_DISPATCHED', true);
-
 // The repo clone is two levels up from public_html/api/, then into app/
 // public_html/api/index.php -> ../../app
 define('BASE_PATH', dirname(__DIR__, 2) . '/app');

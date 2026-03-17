@@ -170,6 +170,7 @@ if [[ "$DB_ONLY" == "false" ]]; then
     # Deploy API front controller
     mkdir -p "${PUBLIC_HTML}/api"
     cp "${APP_DIR}/deploy/api-index.php" "${PUBLIC_HTML}/api/index.php"
+    cp "${APP_DIR}/deploy/api-htaccess" "${PUBLIC_HTML}/api/.htaccess"
 
     # Deploy .htaccess files
     cp "${APP_DIR}/deploy/htaccess" "${PUBLIC_HTML}/.htaccess"

@@ -1,0 +1,25 @@
+# =====================================================================
+# api/.htaccess
+# Route all API requests to the front controller (index.php).
+#
+# This file lives inside public_html/api/. The rewrite is local to
+# this directory (no cross-directory rewrite), which avoids the
+# per-directory rewrite loop that occurs when the root .htaccess
+# rewrites into a subdirectory on Virtualmin/FPM setups.
+#
+# DunganSoft Technologies, March 2026
+# =====================================================================
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # If the file exists on disk (index.php itself), serve it directly.
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    # Everything else goes to index.php in this directory.
+    RewriteRule ^ index.php [L,QSA]
+</IfModule>
+
+# Block direct access to index.php with no route (optional, cosmetic)
+# DirectoryIndex index.php

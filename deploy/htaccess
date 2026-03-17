@@ -28,20 +28,15 @@ Options -Indexes +SymLinksIfOwnerMatch
     RewriteCond %{HTTPS} off
     RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-    # --- PHP API routing ---
-    # [END] stops ALL rewrite processing (no second pass). Required because
-    # [L] only stops the current pass; Apache re-evaluates in per-directory
-    # context, and this Virtualmin/FPM setup spawns a fresh PHP process on
-    # each pass, causing output concatenation.
-    RewriteCond %{REQUEST_URI} ^/api(/.*)?$
-    RewriteRule ^api(/.*)?$ api/index.php [END,QSA]
-
     # --- Static files: serve directly if they exist ---
     RewriteCond %{REQUEST_FILENAME} -f
     RewriteRule ^ - [L]
 
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
+
+    # --- Skip /api (handled by api/.htaccess) ---
+    RewriteRule ^api(/|$) - [L]
 
     # --- SPA fallback ---
     # Everything else serves index.html (React Router handles it)
