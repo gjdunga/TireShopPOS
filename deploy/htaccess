@@ -29,8 +29,13 @@ Options -Indexes +SymLinksIfOwnerMatch
     RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
     # --- PHP API routing ---
-    # All /api requests go to the PHP front controller
+    # All /api requests go to the PHP front controller.
+    # The second condition prevents a rewrite loop: after the first pass
+    # rewrites /api/foo to api/index.php, Apache re-evaluates rules from
+    # the top. Without this guard, api/index.php matches ^api(/.*)? again
+    # and PHP executes repeatedly, concatenating JSON responses.
     RewriteCond %{REQUEST_URI} ^/api(/.*)?$
+    RewriteCond %{REQUEST_URI} !\.php$
     RewriteRule ^api(/.*)?$ api/index.php [L,QSA]
 
     # --- Static files: serve directly if they exist ---
