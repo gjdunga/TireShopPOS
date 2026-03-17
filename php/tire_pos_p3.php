@@ -1239,3 +1239,53 @@ function getStorageBilling(int $storageId): array {
         [$storageId]
     );
 }
+
+
+// ============================================================================
+// Tire Disposal Log (Colorado environmental compliance)
+// ============================================================================
+
+function listDisposals(?string $startDate = null, ?string $endDate = null): array {
+    $where = [];
+    $params = [];
+    if ($startDate) { $where[] = "d.disposal_date >= ?"; $params[] = $startDate; }
+    if ($endDate) { $where[] = "d.disposal_date <= ?"; $params[] = $endDate; }
+    $whereStr = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+    return Database::query(
+        "SELECT d.*, u.display_name AS logged_by_name
+         FROM tire_disposal_log d
+         LEFT JOIN users u ON d.logged_by = u.user_id
+         {$whereStr} ORDER BY d.disposal_date DESC",
+        $params
+    );
+}
+
+function createDisposal(array $data, int $loggedBy): int {
+    InputValidator::check('tire_disposal_log', $data);
+
+    Database::execute(
+        "INSERT INTO tire_disposal_log (tire_id, work_order_id, disposal_date, quantity,
+         hauler_name, manifest_number, notes, logged_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            $data['tire_id'] ?? null,
+            $data['work_order_id'] ?? null,
+            $data['disposal_date'] ?? date('Y-m-d'),
+            (int) ($data['quantity'] ?? 1),
+            $data['hauler_name'] ?? null,
+            $data['manifest_number'] ?? null,
+            $data['notes'] ?? null,
+            $loggedBy,
+        ]
+    );
+    $id = Database::lastInsertId();
+    auditLog('tire_disposal_log', $id, 'INSERT', null, null, null, $loggedBy);
+    logActivity($loggedBy, 'DISPOSAL_LOG', 'tire_disposal_log', $id,
+        "Disposed {$data['quantity']} tire(s)" . ($data['hauler_name'] ? " via {$data['hauler_name']}" : ''));
+    return $id;
+}
+
+function getDisposal(int $disposalId): ?array {
+    return Database::queryOne("SELECT * FROM tire_disposal_log WHERE disposal_id = ?", [$disposalId]);
+}

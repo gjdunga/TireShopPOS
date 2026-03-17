@@ -1718,6 +1718,26 @@ $router->with(permit('CUSTOMER_MANAGE'))->post('/api/tire-storage/{id}/bill', fu
 });
 
 
+// ---- Tire Disposal Log (Colorado environmental compliance) ----
+
+$router->with(permit('INVENTORY_MANAGE'))->get('/api/disposals', function () {
+    $start = Router::query('start');
+    $end = Router::query('end');
+    return ['disposals' => listDisposals($start, $end)];
+});
+
+$router->with(permit('INVENTORY_MANAGE'))->get('/api/disposals/{id}', function (array $params) {
+    $d = getDisposal((int) $params['id']);
+    if (!$d) Router::sendError('NOT_FOUND', 'Disposal record not found.', 404);
+    return $d;
+});
+
+$router->with(permit('INVENTORY_MANAGE'))->post('/api/disposals', function (array $params, array $body) {
+    $id = createDisposal($body, Middleware::userId());
+    return ['message' => 'Disposal logged.', 'disposal_id' => $id];
+});
+
+
 // ============================================================================
 // Webhooks (outbound endpoint CRUD + inbound receiver)
 // ============================================================================

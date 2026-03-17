@@ -605,149 +605,6 @@ INSERT INTO service_parts (service_id, part_name, default_cost, is_taxable) VALU
 ((SELECT service_id FROM service_catalog WHERE service_code='BAL_ONLY'), 'Wheel weights', 3.50, 1),
 ((SELECT service_id FROM service_catalog WHERE service_code='RPR_PLUG'), 'Plug kit',      2.00, 1),
 ((SELECT service_id FROM service_catalog WHERE service_code='RPR_PATCH'),'Radial patch',  3.00, 1),
-((SELECT service_id FROM service_catalog WHERE service_code='RPR_PATCH'),'Cement',        1.00, 1),
-((SELECT service_id FROM service_catalog WHERE service_code='RPR_COMBO'),'Combo unit',    4.50, 1),
-((SELECT service_id FROM service_catalog WHERE service_code='RPR_COMBO'),'Cement',        1.00, 1),
-((SELECT service_id FROM service_catalog WHERE service_code='BEAD_SEAL'),'Bead sealant',  5.00, 1),
-((SELECT service_id FROM service_catalog WHERE service_code='TPMS_RPL'), 'TPMS sensor',  35.00, 1),
-((SELECT service_id FROM service_catalog WHERE service_code='VALVE_RPL'),'Valve stem',    2.50, 1);
-
--- ============================================================================
--- DOMAIN 8: TRANSACTIONS (4 tables) [DEPRECATED: no API routes or CRUD]
--- Retained for FK/view compatibility. See schema header.
--- ============================================================================
-
-CREATE TABLE IF NOT EXISTS invoices (
-    invoice_id      INT AUTO_INCREMENT PRIMARY KEY,
-    invoice_number  VARCHAR(20) NOT NULL UNIQUE COMMENT 'INV-000001 format',
-    customer_id     INT NOT NULL,
-    work_order_id   INT DEFAULT NULL COMMENT 'v2.3: linked work order',
-
-    subtotal_taxable    DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    subtotal_nontaxable DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    subtotal_fees       DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    tax_rate            DECIMAL(5,4) NOT NULL COMMENT 'Rate at time of sale, e.g., 0.0790',
-    tax_amount          DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    discount_amount     DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    total               DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    amount_paid         DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    balance_due         DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-
-    status              ENUM('open','held','completed','voided') NOT NULL DEFAULT 'open',
-    hold_reason         VARCHAR(120) DEFAULT NULL,
-    hold_expires_at     DATETIME DEFAULT NULL,
-    voided_by           INT DEFAULT NULL,
-    voided_at           DATETIME DEFAULT NULL,
-    void_reason         VARCHAR(255) DEFAULT NULL,
-
-    created_by          INT NOT NULL,
-    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-                            ON UPDATE CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_inv_customer   FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
-    CONSTRAINT fk_inv_created_by FOREIGN KEY (created_by) REFERENCES users(user_id),
-    CONSTRAINT fk_inv_voided_by  FOREIGN KEY (voided_by) REFERENCES users(user_id),
-    -- work_order_id FK added after work_orders creation
-
-    INDEX idx_inv_customer (customer_id),
-    INDEX idx_inv_status (status),
-    INDEX idx_inv_date (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS invoice_line_items (
-    line_id         INT AUTO_INCREMENT PRIMARY KEY,
-    invoice_id      INT NOT NULL,
-    line_type       ENUM('tire','labor','part','fee','warranty','discount','custom') NOT NULL,
-    description     VARCHAR(255) NOT NULL,
-    quantity        DECIMAL(6,2) NOT NULL DEFAULT 1,
-    unit_price      DECIMAL(8,2) NOT NULL,
-    line_total      DECIMAL(10,2) NOT NULL,
-    is_taxable      TINYINT(1) NOT NULL DEFAULT 0,
-    tire_id         INT DEFAULT NULL COMMENT 'Links to inventory tire',
-    service_id      INT DEFAULT NULL COMMENT 'Links to service catalog',
-    fee_config_id   INT DEFAULT NULL COMMENT 'Links to fee_configuration',
-    warranty_expires_at DATE DEFAULT NULL COMMENT 'For road hazard warranties',
-    warranty_terms  TEXT DEFAULT NULL COMMENT 'Warranty terms at time of sale',
-    display_order   SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-
-    CONSTRAINT fk_li_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(invoice_id),
-    CONSTRAINT fk_li_tire    FOREIGN KEY (tire_id) REFERENCES tires(tire_id),
-    CONSTRAINT fk_li_service FOREIGN KEY (service_id) REFERENCES service_catalog(service_id),
-    INDEX idx_li_invoice (invoice_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS payments (
-    payment_id      INT AUTO_INCREMENT PRIMARY KEY,
-    invoice_id      INT NOT NULL,
-    payment_method  ENUM('cash','credit_card','debit_card','check','other') NOT NULL,
-    amount          DECIMAL(10,2) NOT NULL,
-    reference_number VARCHAR(60) DEFAULT NULL COMMENT 'Last 4 digits, check number, etc.',
-    is_deposit      TINYINT(1) NOT NULL DEFAULT 0,
-    processed_by    INT NOT NULL,
-    processed_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    notes           VARCHAR(255) DEFAULT NULL,
-
-    CONSTRAINT fk_pay_invoice  FOREIGN KEY (invoice_id) REFERENCES invoices(invoice_id),
-    CONSTRAINT fk_pay_user     FOREIGN KEY (processed_by) REFERENCES users(user_id),
-    INDEX idx_pay_invoice (invoice_id),
-    INDEX idx_pay_date (processed_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS deposits (
-    deposit_id      INT AUTO_INCREMENT PRIMARY KEY,
-    invoice_id      INT NOT NULL,
-    payment_id      INT NOT NULL COMMENT 'The payment record for this deposit',
-    customer_id     INT NOT NULL,
-    amount          DECIMAL(10,2) NOT NULL,
-    status          ENUM('active','applied','forfeited','refunded') NOT NULL DEFAULT 'active',
-    expires_at      DATETIME NOT NULL,
-    applied_at      DATETIME DEFAULT NULL,
-    forfeited_at    DATETIME DEFAULT NULL,
-    forfeited_by    INT DEFAULT NULL,
-    forfeit_reason  VARCHAR(255) DEFAULT NULL,
-    notes           VARCHAR(255) DEFAULT NULL,
-    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_dep_invoice   FOREIGN KEY (invoice_id) REFERENCES invoices(invoice_id),
-    CONSTRAINT fk_dep_payment   FOREIGN KEY (payment_id) REFERENCES payments(payment_id),
-    CONSTRAINT fk_dep_customer  FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
-    CONSTRAINT fk_dep_forfeited FOREIGN KEY (forfeited_by) REFERENCES users(user_id),
-    INDEX idx_dep_customer (customer_id),
-    INDEX idx_dep_status (status),
-    INDEX idx_dep_expires (expires_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ============================================================================
--- DOMAIN 9: REFUNDS (1 table) [DEPRECATED: no API routes or CRUD]
--- Retained for FK/view compatibility. See schema header.
--- ============================================================================
-
-CREATE TABLE IF NOT EXISTS refunds (
-    refund_id           INT AUTO_INCREMENT PRIMARY KEY,
-    invoice_id          INT NOT NULL,
-    payment_id          INT DEFAULT NULL COMMENT 'Original payment being refunded',
-    amount              DECIMAL(10,2) NOT NULL,
-    reason              VARCHAR(255) NOT NULL,
-    refund_method       ENUM('cash','credit_card','check','store_credit','other') NOT NULL,
-    status              ENUM('pending','approved','processed','denied') NOT NULL DEFAULT 'pending',
-    requested_by        INT NOT NULL,
-    requested_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    authorized_by       INT DEFAULT NULL,
-    authorized_at       DATETIME DEFAULT NULL,
-    processed_by        INT DEFAULT NULL,
-    processed_at        DATETIME DEFAULT NULL,
-    denial_reason       VARCHAR(255) DEFAULT NULL,
-    reference_number    VARCHAR(60) DEFAULT NULL,
-
-    CONSTRAINT fk_ref_invoice    FOREIGN KEY (invoice_id) REFERENCES invoices(invoice_id),
-    CONSTRAINT fk_ref_payment    FOREIGN KEY (payment_id) REFERENCES payments(payment_id),
-    CONSTRAINT fk_ref_requested  FOREIGN KEY (requested_by) REFERENCES users(user_id),
-    CONSTRAINT fk_ref_authorized FOREIGN KEY (authorized_by) REFERENCES users(user_id),
-    CONSTRAINT fk_ref_processed  FOREIGN KEY (processed_by) REFERENCES users(user_id),
-    INDEX idx_ref_invoice (invoice_id),
-    INDEX idx_ref_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
 -- DOMAIN 10: PURCHASE ORDERS (2 tables, created after invoices) [v2.3]
@@ -757,7 +614,6 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     po_id               INT AUTO_INCREMENT PRIMARY KEY,
     po_number           VARCHAR(20) NOT NULL UNIQUE COMMENT 'PO-000001 format',
     vendor_id           INT NOT NULL,
-    invoice_id          INT DEFAULT NULL COMMENT 'Linked held invoice (customer order)',
     order_date          DATE NOT NULL,
     expected_delivery   DATE DEFAULT NULL,
     actual_delivery     DATE DEFAULT NULL,
@@ -773,7 +629,6 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
                             ON UPDATE CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_po_vendor     FOREIGN KEY (vendor_id) REFERENCES vendors(vendor_id),
-    CONSTRAINT fk_po_invoice    FOREIGN KEY (invoice_id) REFERENCES invoices(invoice_id),
     CONSTRAINT fk_po_created_by FOREIGN KEY (created_by) REFERENCES users(user_id),
     INDEX idx_po_vendor (vendor_id),
     INDEX idx_po_status (status)
@@ -808,7 +663,6 @@ CREATE TABLE IF NOT EXISTS work_orders (
     wo_number           VARCHAR(20) NOT NULL UNIQUE COMMENT 'WO-000001 format',
     customer_id         INT NOT NULL,
     vehicle_id          INT DEFAULT NULL,
-    invoice_id          INT DEFAULT NULL COMMENT 'Generated at checkout',
 
     mileage_in          INT UNSIGNED DEFAULT NULL,
     mileage_out         INT UNSIGNED DEFAULT NULL,
@@ -842,7 +696,6 @@ CREATE TABLE IF NOT EXISTS work_orders (
 
     CONSTRAINT fk_wo_customer    FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
     CONSTRAINT fk_wo_vehicle     FOREIGN KEY (vehicle_id) REFERENCES vehicles(vehicle_id),
-    CONSTRAINT fk_wo_invoice     FOREIGN KEY (invoice_id) REFERENCES invoices(invoice_id),
     CONSTRAINT fk_wo_tech        FOREIGN KEY (assigned_tech_id) REFERENCES users(user_id),
     CONSTRAINT fk_wo_torque_by   FOREIGN KEY (torque_verified_by) REFERENCES users(user_id),
     CONSTRAINT fk_wo_retorque_by FOREIGN KEY (retorque_completed_by) REFERENCES users(user_id),
@@ -851,11 +704,6 @@ CREATE TABLE IF NOT EXISTS work_orders (
     INDEX idx_wo_vehicle (vehicle_id),
     INDEX idx_wo_status (status),
     INDEX idx_wo_date (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Add deferred FK from invoices to work_orders
-ALTER TABLE invoices
-    ADD CONSTRAINT fk_inv_work_order FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id);
 
 CREATE TABLE IF NOT EXISTS work_order_positions (
     position_id         INT AUTO_INCREMENT PRIMARY KEY,
@@ -891,7 +739,6 @@ CREATE TABLE IF NOT EXISTS waivers (
     waiver_id       INT AUTO_INCREMENT PRIMARY KEY,
     waiver_type     ENUM('aged_tire','used_tire','repair_limit','custom') NOT NULL,
     work_order_id   INT DEFAULT NULL,
-    invoice_id      INT DEFAULT NULL,
     customer_id     INT NOT NULL,
     tire_id         INT DEFAULT NULL,
     waiver_text     TEXT NOT NULL COMMENT 'Frozen copy of template at creation time',
@@ -902,7 +749,6 @@ CREATE TABLE IF NOT EXISTS waivers (
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_waiver_wo       FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id),
-    CONSTRAINT fk_waiver_invoice  FOREIGN KEY (invoice_id) REFERENCES invoices(invoice_id),
     CONSTRAINT fk_waiver_customer FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
     CONSTRAINT fk_waiver_tire     FOREIGN KEY (tire_id) REFERENCES tires(tire_id),
     CONSTRAINT fk_waiver_witness  FOREIGN KEY (witnessed_by) REFERENCES users(user_id),
@@ -933,45 +779,7 @@ CREATE TABLE IF NOT EXISTS tire_photos (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
--- DOMAIN 14: CASH DRAWER (2 tables) [DEPRECATED: no API routes or CRUD]
--- Retained for FK/view compatibility. See schema header.
--- ============================================================================
 
-CREATE TABLE IF NOT EXISTS cash_drawers (
-    drawer_id       INT AUTO_INCREMENT PRIMARY KEY,
-    drawer_date     DATE NOT NULL UNIQUE,
-    opened_by       INT NOT NULL,
-    opened_at       DATETIME NOT NULL,
-    opening_balance DECIMAL(10,2) NOT NULL COMMENT 'Counted cash at open',
-    closed_by       INT DEFAULT NULL,
-    closed_at       DATETIME DEFAULT NULL,
-    closing_count   DECIMAL(10,2) DEFAULT NULL COMMENT 'Actual cash counted at close',
-    expected_balance DECIMAL(10,2) DEFAULT NULL COMMENT 'Calculated from transactions',
-    variance        DECIMAL(10,2) DEFAULT NULL COMMENT 'closing_count minus expected_balance',
-    variance_notes  TEXT DEFAULT NULL,
-    status          ENUM('open','closed','reconciled') NOT NULL DEFAULT 'open',
-
-    CONSTRAINT fk_cd_opened FOREIGN KEY (opened_by) REFERENCES users(user_id),
-    CONSTRAINT fk_cd_closed FOREIGN KEY (closed_by) REFERENCES users(user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS cash_drawer_transactions (
-    txn_id          INT AUTO_INCREMENT PRIMARY KEY,
-    drawer_id       INT NOT NULL,
-    txn_type        ENUM('sale','refund','payout','drop','adjustment') NOT NULL,
-    amount          DECIMAL(10,2) NOT NULL COMMENT 'Positive=cash in, negative=cash out',
-    payment_id      INT DEFAULT NULL,
-    refund_id       INT DEFAULT NULL,
-    description     VARCHAR(255) DEFAULT NULL,
-    created_by      INT NOT NULL,
-    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_cdt_drawer  FOREIGN KEY (drawer_id) REFERENCES cash_drawers(drawer_id),
-    CONSTRAINT fk_cdt_payment FOREIGN KEY (payment_id) REFERENCES payments(payment_id),
-    CONSTRAINT fk_cdt_refund  FOREIGN KEY (refund_id) REFERENCES refunds(refund_id),
-    CONSTRAINT fk_cdt_user    FOREIGN KEY (created_by) REFERENCES users(user_id),
-    INDEX idx_cdt_drawer (drawer_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
 -- DOMAIN 15: APPOINTMENTS (1 table) [v2.3]
@@ -1043,18 +851,10 @@ INSERT INTO fee_configuration (fee_key, fee_label, fee_amount, applies_to, statu
  '2026-01-01'),
 ('WAIVER_REPAIR_LIMIT', 'Repair Limit Acknowledgment', 0.00, 'none',
  'I acknowledge that the tire repair performed is in an area outside the standard repairable zone as defined by USTMA guidelines (shoulder or sidewall area). This repair carries a higher risk of failure than a standard tread area repair. Limited warranty applies.',
- '2026-01-01');
-
--- Deferred FK: fee_config_id on invoice_line_items
--- (fee_configuration created after invoice_line_items in this file)
-ALTER TABLE invoice_line_items
-    ADD CONSTRAINT fk_li_fee_config FOREIGN KEY (fee_config_id)
-        REFERENCES fee_configuration(fee_id);
 
 CREATE TABLE IF NOT EXISTS tire_disposal_log (
     disposal_id     INT AUTO_INCREMENT PRIMARY KEY,
     tire_id         INT DEFAULT NULL,
-    invoice_id      INT DEFAULT NULL,
     disposal_date   DATE NOT NULL,
     quantity        SMALLINT UNSIGNED NOT NULL DEFAULT 1,
     hauler_name     VARCHAR(120) DEFAULT NULL,
@@ -1064,7 +864,6 @@ CREATE TABLE IF NOT EXISTS tire_disposal_log (
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_disp_tire    FOREIGN KEY (tire_id) REFERENCES tires(tire_id),
-    CONSTRAINT fk_disp_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(invoice_id),
     CONSTRAINT fk_disp_user    FOREIGN KEY (logged_by) REFERENCES users(user_id),
     INDEX idx_disp_date (disposal_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1166,94 +965,27 @@ LEFT JOIN lkp_cosmetic_codes cc       ON t.cosmetic_code_id = cc.cosmetic_id
 LEFT JOIN lkp_load_construction lc    ON t.load_constr_id = lc.load_constr_id
 LEFT JOIN lkp_acquisition_sources aq  ON t.source_id = aq.source_id;
 
--- v2: Deposit dashboard
-CREATE OR REPLACE VIEW v_deposits_active AS
-SELECT
-    d.deposit_id, d.amount, d.status, d.expires_at,
-    DATEDIFF(d.expires_at, NOW()) AS days_remaining,
-    CASE
-        WHEN d.expires_at < NOW() THEN 'EXPIRED'
-        WHEN DATEDIFF(d.expires_at, NOW()) <= 7 THEN 'EXPIRING_SOON'
-        ELSE 'ACTIVE'
-    END AS urgency,
-    c.first_name, c.last_name, c.phone_primary,
-    i.invoice_number, i.total
-FROM deposits d
-JOIN customers c ON d.customer_id = c.customer_id
-JOIN invoices i ON d.invoice_id = i.invoice_id
-WHERE d.status = 'active'
-ORDER BY d.expires_at ASC;
-
--- v3: Invoice summary
-CREATE OR REPLACE VIEW v_invoice_summary AS
-SELECT
-    i.invoice_id, i.invoice_number, i.status,
-    c.first_name, c.last_name, c.phone_primary,
-    i.subtotal_taxable, i.subtotal_nontaxable, i.subtotal_fees,
-    i.tax_amount, i.discount_amount, i.total,
-    i.amount_paid, i.balance_due,
-    i.created_at, u.display_name AS created_by_name
-FROM invoices i
-JOIN customers c ON i.customer_id = c.customer_id
-JOIN users u ON i.created_by = u.user_id;
-
--- v4: Fee reporting (quarterly)
+-- v4: Fee reporting (quarterly, uses work_order_line_items)
 CREATE OR REPLACE VIEW v_quarterly_fee_report AS
-SELECT
-    YEAR(i.created_at) AS sale_year,
-    QUARTER(i.created_at) AS sale_quarter,
-    fc.fee_key,
-    fc.fee_label,
-    COUNT(li.line_id) AS fee_count,
-    SUM(li.line_total) AS total_collected
-FROM invoice_line_items li
-JOIN invoices i ON li.invoice_id = i.invoice_id
-JOIN fee_configuration fc ON li.fee_config_id = fc.fee_id
-WHERE i.status = 'completed'
-  AND li.line_type = 'fee'
-GROUP BY YEAR(i.created_at), QUARTER(i.created_at), fc.fee_key, fc.fee_label;
+SELECT YEAR(wo.created_at) AS sale_year,
+       QUARTER(wo.created_at) AS sale_quarter,
+       fc.fee_key, fc.fee_label,
+       COUNT(woli.line_id) AS fee_count,
+       COALESCE(SUM(woli.line_total), 0) AS fee_total
+FROM work_order_line_items woli
+JOIN fee_configuration fc ON woli.fee_config_id = fc.fee_id
+JOIN work_orders wo ON woli.work_order_id = wo.work_order_id
+WHERE woli.line_type = 'fee'
+GROUP BY sale_year, sale_quarter, fc.fee_key, fc.fee_label;
 
--- v5: Refund summary
-CREATE OR REPLACE VIEW v_refund_summary AS
-SELECT
-    r.refund_id, r.amount, r.reason, r.status, r.refund_method,
-    i.invoice_number,
-    req.display_name AS requested_by_name, r.requested_at,
-    auth.display_name AS authorized_by_name, r.authorized_at,
-    c.first_name, c.last_name
-FROM refunds r
-JOIN invoices i ON r.invoice_id = i.invoice_id
-JOIN customers c ON i.customer_id = c.customer_id
-JOIN users req ON r.requested_by = req.user_id
-LEFT JOIN users auth ON r.authorized_by = auth.user_id;
-
--- v6: Pending refunds awaiting authorization
-CREATE OR REPLACE VIEW v_pending_refunds AS
-SELECT
-    r.refund_id, r.amount, r.reason, r.requested_at,
-    i.invoice_number,
-    req.display_name AS requested_by_name,
-    c.first_name, c.last_name, c.phone_primary
-FROM refunds r
-JOIN invoices i ON r.invoice_id = i.invoice_id
-JOIN customers c ON i.customer_id = c.customer_id
-JOIN users req ON r.requested_by = req.user_id
-WHERE r.status = 'pending'
-ORDER BY r.requested_at ASC;
-
--- v7: Service usage report
+-- v7: Service usage report (uses work_order_line_items)
 CREATE OR REPLACE VIEW v_service_usage AS
-SELECT
-    sc.service_code, sc.service_name,
-    COUNT(li.line_id) AS times_used,
-    SUM(li.line_total) AS total_revenue,
-    AVG(li.unit_price) AS avg_price
-FROM invoice_line_items li
-JOIN service_catalog sc ON li.service_id = sc.service_id
-JOIN invoices i ON li.invoice_id = i.invoice_id
-WHERE i.status = 'completed'
-GROUP BY sc.service_code, sc.service_name
-ORDER BY times_used DESC;
+SELECT sc.service_id, sc.service_code, sc.service_name,
+       COUNT(woli.line_id) AS usage_count,
+       COALESCE(SUM(woli.line_total), 0) AS total_revenue
+FROM service_catalog sc
+LEFT JOIN work_order_line_items woli ON sc.service_id = woli.service_id
+GROUP BY sc.service_id, sc.service_code, sc.service_name;
 
 -- v8: Open work orders [v2.3]
 CREATE OR REPLACE VIEW v_work_orders_open AS
@@ -1292,17 +1024,16 @@ WHERE wo.retorque_due_date IS NOT NULL
   AND wo.retorque_due_date <= CURDATE()
 ORDER BY wo.retorque_due_date ASC;
 
--- v10: Vehicle service history [v2.3]
+-- v10: Vehicle service history
 CREATE OR REPLACE VIEW v_vehicle_history AS
-SELECT
-    v.vehicle_id, v.year, v.make, v.model, v.vin, v.license_plate,
-    wo.wo_number, wo.status AS wo_status, wo.created_at AS wo_date,
-    wo.mileage_in, wo.customer_complaint,
-    i.invoice_number, i.total AS invoice_total, i.status AS inv_status
+SELECT v.vehicle_id, v.vin, v.year, v.make, v.model,
+       wo.work_order_id, wo.wo_number, wo.status AS wo_status,
+       wo.customer_complaint, wo.completed_at, wo.total_estimate,
+       c.customer_id, c.first_name, c.last_name
 FROM vehicles v
 LEFT JOIN work_orders wo ON v.vehicle_id = wo.vehicle_id
-LEFT JOIN invoices i ON wo.invoice_id = i.invoice_id
-ORDER BY v.vehicle_id, wo.created_at DESC;
+LEFT JOIN customers c ON wo.customer_id = c.customer_id
+ORDER BY wo.created_at DESC;
 
 -- v11: Today's appointments [v2.3]
 CREATE OR REPLACE VIEW v_appointments_today AS
@@ -1316,42 +1047,17 @@ SELECT
 FROM appointments a
 LEFT JOIN customers c ON a.customer_id = c.customer_id
 LEFT JOIN vehicles v ON a.vehicle_id = v.vehicle_id
-WHERE a.appointment_date = CURDATE()
-ORDER BY a.appointment_time ASC;
 
--- v12: Cash drawer today [v2.3]
-CREATE OR REPLACE VIEW v_cash_drawer_today AS
-SELECT
-    cd.drawer_id, cd.drawer_date, cd.status,
-    cd.opening_balance,
-    cd.closing_count,
-    cd.expected_balance,
-    cd.variance,
-    COALESCE(SUM(CASE WHEN cdt.amount > 0 THEN cdt.amount ELSE 0 END), 0) AS total_cash_in,
-    COALESCE(SUM(CASE WHEN cdt.amount < 0 THEN cdt.amount ELSE 0 END), 0) AS total_cash_out,
-    cd.opening_balance + COALESCE(SUM(cdt.amount), 0) AS running_balance
-FROM cash_drawers cd
-LEFT JOIN cash_drawer_transactions cdt ON cd.drawer_id = cdt.drawer_id
-WHERE cd.drawer_date = CURDATE()
-GROUP BY cd.drawer_id;
-
--- v13: Open purchase orders [v2.3]
+-- v13: Open purchase orders
 CREATE OR REPLACE VIEW v_purchase_orders_open AS
-SELECT
-    po.po_id, po.po_number, po.status,
-    vn.vendor_name, vn.phone AS vendor_phone,
-    po.order_date, po.expected_delivery,
-    DATEDIFF(CURDATE(), po.expected_delivery) AS days_overdue,
-    po.subtotal, po.shipping_cost,
-    po.vendor_confirmation,
-    i.invoice_number AS customer_invoice,
-    c.first_name, c.last_name, c.phone_primary AS customer_phone
+SELECT po.po_id, po.po_number, po.status,
+       v.vendor_name, v.contact_name,
+       po.order_date, po.expected_delivery,
+       (SELECT COUNT(*) FROM po_line_items pli WHERE pli.po_id = po.po_id) AS line_count,
+       (SELECT COALESCE(SUM(pli.quantity_ordered * pli.unit_cost), 0) FROM po_line_items pli WHERE pli.po_id = po.po_id) AS total_cost
 FROM purchase_orders po
-JOIN vendors vn ON po.vendor_id = vn.vendor_id
-LEFT JOIN invoices i ON po.invoice_id = i.invoice_id
-LEFT JOIN customers c ON i.customer_id = c.customer_id
-WHERE po.status NOT IN ('received', 'cancelled')
-ORDER BY po.expected_delivery ASC;
+JOIN vendors v ON po.vendor_id = v.vendor_id
+WHERE po.status IN ('draft', 'submitted', 'partial');
 
 -- ============================================================================
 -- END OF BASE SCHEMA (v2.3: 41 tables, 13 views)

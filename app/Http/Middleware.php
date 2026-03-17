@@ -122,14 +122,22 @@ class Middleware
                     Router::sendError('NOT_AUTHENTICATED', 'Invalid API key.', 401);
                 }
 
-                // Rate limit check (requests per hour)
+                // Rate limit API key requests using the sliding window (rate_limit_hits table)
                 $limit = (int) ($key['rate_limit'] ?? 1000);
-                $hourCount = (int) Database::scalar(
-                    "SELECT request_count FROM api_keys WHERE key_id = ?", [$key['key_id']]
+                $scopeKey = 'apikey:' . $key['key_id'];
+                $windowSec = 3600; // per hour
+                $count = (int) Database::scalar(
+                    "SELECT COUNT(*) FROM rate_limit_hits WHERE scope_key = ? AND hit_at > DATE_SUB(NOW(), INTERVAL ? SECOND)",
+                    [$scopeKey, $windowSec]
                 );
-                // Simple rate check: if request_count resets are not tracked hourly,
-                // use last_used_at proximity as a soft check
-                // For v1, trust the rate_limit field as advisory
+                if ($count >= $limit) {
+                    Logger::rateLimitHit($scopeKey, $count, $limit);
+                    header('Retry-After: 60');
+                    header('X-RateLimit-Limit: ' . $limit);
+                    header('X-RateLimit-Remaining: 0');
+                    Router::sendError('RATE_LIMITED', 'API key rate limit exceeded (' . $limit . '/hour).', 429);
+                }
+                Database::execute("INSERT INTO rate_limit_hits (scope_key) VALUES (?)", [$scopeKey]);
 
                 // Build synthetic session from creating user
                 $user = Database::queryOne(

@@ -201,20 +201,47 @@ function generateListingContent(int $tireId, string $platform): array {
 
 function importMarketplaceOrder(array $data): int {
     InputValidator::check('marketplace_orders', $data, ['platform']);
-    $sql = "INSERT INTO marketplace_orders
-            (platform, external_order_id, buyer_name, buyer_email, buyer_phone,
-             buyer_address, order_total, platform_fees, shipping_cost, status, ordered_at, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE status = VALUES(status), notes = VALUES(notes)";
-    getDB()->prepare($sql)->execute([
-        $data['platform'], $data['external_order_id'],
-        $data['buyer_name'] ?? null, $data['buyer_email'] ?? null,
-        $data['buyer_phone'] ?? null, $data['buyer_address'] ?? null,
-        $data['order_total'] ?? '0', $data['platform_fees'] ?? '0',
-        $data['shipping_cost'] ?? '0', $data['status'] ?? 'pending',
-        $data['ordered_at'] ?? date('Y-m-d H:i:s'), $data['notes'] ?? null,
-    ]);
-    return (int) getDB()->lastInsertId();
+
+    return Database::transaction(function () use ($data) {
+        $sql = "INSERT INTO marketplace_orders
+                (platform, external_order_id, buyer_name, buyer_email, buyer_phone,
+                 buyer_address, order_total, platform_fees, shipping_cost, status, ordered_at, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE status = VALUES(status), notes = VALUES(notes)";
+        getDB()->prepare($sql)->execute([
+            $data['platform'], $data['external_order_id'],
+            $data['buyer_name'] ?? null, $data['buyer_email'] ?? null,
+            $data['buyer_phone'] ?? null, $data['buyer_address'] ?? null,
+            $data['order_total'] ?? '0', $data['platform_fees'] ?? '0',
+            $data['shipping_cost'] ?? '0', $data['status'] ?? 'pending',
+            $data['ordered_at'] ?? date('Y-m-d H:i:s'), $data['notes'] ?? null,
+        ]);
+        $orderId = (int) getDB()->lastInsertId();
+
+        // Insert order line items if provided
+        $items = $data['items'] ?? [];
+        if (is_array($items) && !empty($items)) {
+            $itemSql = "INSERT INTO marketplace_order_items
+                        (order_id, listing_id, tire_id, wheel_id, description, quantity, unit_price, line_total)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+            $stmt = getDB()->prepare($itemSql);
+            foreach ($items as $item) {
+                $qty = (int) ($item['quantity'] ?? 1);
+                $price = (float) ($item['unit_price'] ?? 0);
+                $stmt->execute([
+                    $orderId,
+                    $item['listing_id'] ?? null,
+                    $item['tire_id'] ?? null,
+                    $item['wheel_id'] ?? null,
+                    $item['description'] ?? 'Item',
+                    $qty, $price,
+                    round($qty * $price, 2),
+                ]);
+            }
+        }
+
+        return $orderId;
+    });
 }
 
 function listMarketplaceOrders(string $platform = '', string $status = '', int $limit = 50, int $offset = 0): array {
