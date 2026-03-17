@@ -1481,3 +1481,64 @@ function getLookupCostReport(?string $start = null, ?string $end = null): array 
         [$start, $end]
     );
 }
+
+
+// ============================================================================
+// Service Parts (consumables per service: valve stems, weights, etc.)
+// ============================================================================
+
+function listServiceParts(int $serviceId): array {
+    return Database::query(
+        "SELECT * FROM service_parts WHERE service_id = ? AND is_active = 1 ORDER BY part_name",
+        [$serviceId]
+    );
+}
+
+function getServicePart(int $partId): ?array {
+    return Database::queryOne("SELECT * FROM service_parts WHERE part_id = ?", [$partId]);
+}
+
+function createServicePart(array $data, int $createdBy): int {
+    $serviceId = (int) ($data['service_id'] ?? 0);
+    $name = trim($data['part_name'] ?? '');
+    if ($serviceId <= 0 || $name === '') {
+        throw new \InvalidArgumentException('service_id and part_name are required.');
+    }
+
+    Database::execute(
+        "INSERT INTO service_parts (service_id, part_name, default_cost, is_taxable, is_active)
+         VALUES (?, ?, ?, ?, ?)",
+        [$serviceId, $name, (float) ($data['default_cost'] ?? 0), (int) ($data['is_taxable'] ?? 1), 1]
+    );
+    $id = Database::lastInsertId();
+    auditLog('service_parts', $id, 'INSERT', null, null, null, $createdBy);
+    return $id;
+}
+
+function updateServicePart(int $partId, array $data, int $updatedBy): array {
+    $part = getServicePart($partId);
+    if (!$part) throw new \RuntimeException('Service part not found.');
+
+    $editable = ['part_name', 'default_cost', 'is_taxable', 'is_active'];
+    $sets = []; $binds = []; $changes = [];
+    foreach ($editable as $f) {
+        if (array_key_exists($f, $data) && (string) ($data[$f] ?? '') !== (string) ($part[$f] ?? '')) {
+            $sets[] = "{$f} = ?"; $binds[] = $data[$f];
+            $changes[$f] = ['old' => $part[$f], 'new' => $data[$f]];
+        }
+    }
+    if (empty($sets)) return ['changed' => []];
+    $binds[] = $partId;
+    Database::execute("UPDATE service_parts SET " . implode(', ', $sets) . " WHERE part_id = ?", $binds);
+    foreach ($changes as $field => $vals) {
+        auditLog('service_parts', $partId, 'UPDATE', $field, (string) ($vals['old'] ?? ''), (string) ($vals['new'] ?? ''), $updatedBy);
+    }
+    return ['changed' => array_keys($changes)];
+}
+
+function deleteServicePart(int $partId, int $deletedBy): void {
+    $part = getServicePart($partId);
+    if (!$part) throw new \RuntimeException('Service part not found.');
+    Database::execute("UPDATE service_parts SET is_active = 0 WHERE part_id = ?", [$partId]);
+    auditLog('service_parts', $partId, 'UPDATE', 'is_active', '1', '0', $deletedBy);
+}

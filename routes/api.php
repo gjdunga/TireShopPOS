@@ -1106,6 +1106,28 @@ $router->with(permit('CONFIG_MANAGE'))->delete('/api/services/{id}', function (a
     return ['message' => 'Service deactivated.'];
 });
 
+// ---- Service Parts (consumables per service) ----
+
+$router->with($auth)->get('/api/services/{id}/parts', function (array $params) {
+    return ['parts' => listServiceParts((int) $params['id'])];
+});
+
+$router->with(permit('CONFIG_MANAGE'))->post('/api/services/{id}/parts', function (array $params, array $body) {
+    $body['service_id'] = (int) $params['id'];
+    $id = createServicePart($body, Middleware::userId());
+    return ['message' => 'Part created.', 'part_id' => $id];
+});
+
+$router->with(permit('CONFIG_MANAGE'))->patch('/api/services/parts/{id}', function (array $params, array $body) {
+    $result = updateServicePart((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Part updated.', 'changed' => $result['changed']];
+});
+
+$router->with(permit('CONFIG_MANAGE'))->delete('/api/services/parts/{id}', function (array $params) {
+    deleteServicePart((int) $params['id'], Middleware::userId());
+    return ['message' => 'Part deactivated.'];
+});
+
 
 // ---- Configuration / Fee Management ----
 // Config key lookup works across fee_configuration and shop_settings.
