@@ -25,8 +25,8 @@ cleanup() {
     mv "$PROJECT_ROOT/.env.testbak" "$PROJECT_ROOT/.env" 2>/dev/null || true
     rm -rf "$MYSQL_DATA" "$MYSQL_SOCK" "$MYSQL_LOG" \
            /tmp/inst_test_* \
-           "$PROJECT_ROOT/sql/migrations/009_test_migration.sql" \
-           "$PROJECT_ROOT/sql/migrations/010_bad_migration.sql"
+           "$PROJECT_ROOT/sql/migrations/002_test_migration.sql" \
+           "$PROJECT_ROOT/sql/migrations/003_bad_migration.sql"
 }
 trap cleanup EXIT
 
@@ -156,7 +156,7 @@ assert "Install: applies 007" "007_estimated" "$OUTPUT"
 assert "Install: completes" "install complete" "$OUTPUT"
 
 TC_AFTER=$(mc "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$TEST_DB' AND TABLE_TYPE='BASE TABLE';")
-assert_eq "Post-install: 70 tables" "70" "$TC_AFTER"
+assert_eq "Post-install: 68 tables" "68" "$TC_AFTER"
 
 VC_AFTER=$(mc "SELECT COUNT(*) FROM information_schema.VIEWS WHERE TABLE_SCHEMA='$TEST_DB';")
 assert_eq "Post-install: 9 views" "9" "$VC_AFTER"
@@ -186,7 +186,7 @@ else
 fi
 
 SV_TOT=$(mc "SELECT total_migrations FROM schema_version WHERE id=1;")
-assert_eq "schema_version: total_migrations" "13" "$SV_TOT"
+assert_eq "schema_version: total_migrations" "1" "$SV_TOT"
 
 SV_USR=$(mc "SELECT installer_user FROM schema_version WHERE id=1;")
 TOTAL=$((TOTAL + 1))
@@ -198,10 +198,10 @@ else
 fi
 
 SM_CT=$(mc "SELECT COUNT(*) FROM schema_migrations;")
-assert_eq "schema_migrations: 13 rows" "13" "$SM_CT"
+assert_eq "schema_migrations: 1 rows" "1" "$SM_CT"
 
 SM_OK=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE success=1;")
-assert_eq "schema_migrations: all successful" "13" "$SM_OK"
+assert_eq "schema_migrations: all successful" "1" "$SM_OK"
 
 SM_FAIL=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE success=0;")
 assert_eq "schema_migrations: 0 failures" "0" "$SM_FAIL"
@@ -209,8 +209,8 @@ assert_eq "schema_migrations: 0 failures" "0" "$SM_FAIL"
 SM_NULLCK=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE checksum IS NULL OR checksum='';")
 assert_eq "schema_migrations: all have checksums" "0" "$SM_NULLCK"
 
-SM_008=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE filename='008_schema_version.sql' AND success=1;")
-assert_eq "schema_migrations: 008 tracked" "1" "$SM_008"
+SM_008=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE filename='001_v1.2.0_baseline.sql' AND success=1;")
+assert_eq "schema_migrations: 001 baseline tracked" "1" "$SM_008"
 
 SM_DUR=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE duration_ms IS NOT NULL AND duration_ms > 0;")
 TOTAL=$((TOTAL + 1))
@@ -228,15 +228,15 @@ OUTPUT=$(inst --upgrade)
 assert "Upgrade no-op: nothing to do" "already applied" "$OUTPUT"
 
 TC_SAME=$(mc "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$TEST_DB' AND TABLE_TYPE='BASE TABLE';")
-assert_eq "Upgrade no-op: 70 tables" "70" "$TC_SAME"
+assert_eq "Upgrade no-op: 68 tables" "68" "$TC_SAME"
 
 SM_SAME=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE success=1 AND skipped=0;")
-assert_eq "Upgrade no-op: 13 migrations" "13" "$SM_SAME"
+assert_eq "Upgrade no-op: 1 migrations" "1" "$SM_SAME"
 
 # ---- Incremental upgrade ----
 echo -e "\n${CYAN}  [Incremental Upgrade]${NC}"
 
-cat > "$PROJECT_ROOT/sql/migrations/009_test_migration.sql" << 'MSQL'
+cat > "$PROJECT_ROOT/sql/migrations/002_test_migration.sql" << 'MSQL'
 CREATE TABLE IF NOT EXISTS _test_upgrade_marker (
     id INT PRIMARY KEY DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -245,17 +245,17 @@ INSERT IGNORE INTO _test_upgrade_marker (id) VALUES (1);
 MSQL
 
 OUTPUT=$(inst --upgrade)
-assert "Incremental: applies 009" "009_test_migration" "$OUTPUT"
+assert "Incremental: applies 002" "002_test_migration" "$OUTPUT"
 assert "Incremental: OK" "OK" "$OUTPUT"
 
 MK=$(mc "SELECT COUNT(*) FROM _test_upgrade_marker;")
 assert_eq "Incremental: marker table" "1" "$MK"
 
-SM_009=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE filename='009_test_migration.sql' AND success=1;")
+SM_009=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE filename='002_test_migration.sql' AND success=1;")
 assert_eq "Incremental: tracked" "1" "$SM_009"
 
 SM_NOW=$(mc "SELECT COUNT(*) FROM schema_migrations WHERE success=1;")
-assert_eq "Incremental: 14 total" "14" "$SM_NOW"
+assert_eq "Incremental: 2 total" "2" "$SM_NOW"
 
 OUTPUT=$(inst --upgrade)
 assert "Incremental re-run: no-op" "already applied" "$OUTPUT"
@@ -263,28 +263,28 @@ assert "Incremental re-run: no-op" "already applied" "$OUTPUT"
 # ---- Checksum change detection ----
 echo -e "\n${CYAN}  [Checksum Detection]${NC}"
 
-ORIG_CK=$(mc "SELECT checksum FROM schema_migrations WHERE filename='009_test_migration.sql';")
-echo "-- modified" >> "$PROJECT_ROOT/sql/migrations/009_test_migration.sql"
+ORIG_CK=$(mc "SELECT checksum FROM schema_migrations WHERE filename='002_test_migration.sql';")
+echo "-- modified" >> "$PROJECT_ROOT/sql/migrations/002_test_migration.sql"
 OUTPUT=$(inst --upgrade)
 assert_re "Checksum: detects change" "CHANGED|changed|WARN" "$OUTPUT"
 
 # ---- Failed migration ----
 echo -e "\n${CYAN}  [Failed Migration]${NC}"
 
-cat > "$PROJECT_ROOT/sql/migrations/010_bad_migration.sql" << 'MSQL'
+cat > "$PROJECT_ROOT/sql/migrations/003_bad_migration.sql" << 'MSQL'
 ALTER TABLE this_table_does_not_exist ADD COLUMN oops INT;
 MSQL
 
 OUTPUT=$(inst --upgrade)
 assert "Bad migration: FAIL" "FAIL" "$OUTPUT"
 
-SM_010=$(mc "SELECT success FROM schema_migrations WHERE filename='010_bad_migration.sql';")
+SM_010=$(mc "SELECT success FROM schema_migrations WHERE filename='003_bad_migration.sql';")
 assert_eq "Bad migration: success=0" "0" "$SM_010"
 
-SM_010_ERR=$(mc "SELECT CASE WHEN error_message IS NOT NULL AND error_message != '' THEN 'has_error' ELSE 'no_error' END FROM schema_migrations WHERE filename='010_bad_migration.sql';")
+SM_010_ERR=$(mc "SELECT CASE WHEN error_message IS NOT NULL AND error_message != '' THEN 'has_error' ELSE 'no_error' END FROM schema_migrations WHERE filename='003_bad_migration.sql';")
 assert_eq "Bad migration: error recorded" "has_error" "$SM_010_ERR"
 
-rm -f "$PROJECT_ROOT/sql/migrations/009_test_migration.sql" "$PROJECT_ROOT/sql/migrations/010_bad_migration.sql"
+rm -f "$PROJECT_ROOT/sql/migrations/002_test_migration.sql" "$PROJECT_ROOT/sql/migrations/003_bad_migration.sql"
 
 # ---- Status display ----
 echo -e "\n${CYAN}  [Status Display]${NC}"
@@ -331,10 +331,10 @@ else
 fi
 
 TC_RESTORED=$(mc "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$TEST_DB' AND TABLE_TYPE='BASE TABLE';")
-assert_eq "Wipe: 70 tables restored" "70" "$TC_RESTORED"
+assert_eq "Wipe: 68 tables restored" "68" "$TC_RESTORED"
 
 SV_RESTORED=$(mc "SELECT total_migrations FROM schema_version WHERE id=1;")
-assert_eq "Wipe: migrations re-tracked" "13" "$SV_RESTORED"
+assert_eq "Wipe: migrations re-tracked" "1" "$SV_RESTORED"
 
 # ---- .env parsing ----
 echo -e "\n${CYAN}  [.env Parsing]${NC}"

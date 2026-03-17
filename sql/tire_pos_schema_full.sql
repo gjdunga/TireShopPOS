@@ -855,6 +855,7 @@ INSERT INTO fee_configuration (fee_key, fee_label, fee_amount, applies_to, statu
 CREATE TABLE IF NOT EXISTS tire_disposal_log (
     disposal_id     INT AUTO_INCREMENT PRIMARY KEY,
     tire_id         INT DEFAULT NULL,
+    work_order_id   INT DEFAULT NULL,
     disposal_date   DATE NOT NULL,
     quantity        SMALLINT UNSIGNED NOT NULL DEFAULT 1,
     hauler_name     VARCHAR(120) DEFAULT NULL,
@@ -864,6 +865,7 @@ CREATE TABLE IF NOT EXISTS tire_disposal_log (
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_disp_tire    FOREIGN KEY (tire_id) REFERENCES tires(tire_id),
+    CONSTRAINT fk_disp_wo      FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id),
     CONSTRAINT fk_disp_user    FOREIGN KEY (logged_by) REFERENCES users(user_id),
     INDEX idx_disp_date (disposal_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -910,6 +912,567 @@ CREATE TABLE IF NOT EXISTS user_activity_log (
 -- ============================================================================
 -- VIEWS (13 total)
 -- ============================================================================
+
+
+-- ============================================================================
+-- DOMAIN: SESSIONS
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS sessions (
+    session_id      INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    token           VARCHAR(64) NOT NULL UNIQUE,
+    ip_address      VARCHAR(45) DEFAULT NULL,
+    user_agent      VARCHAR(255) DEFAULT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at      DATETIME NOT NULL,
+    last_active_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_session_user FOREIGN KEY (user_id) REFERENCES users(user_id),
+    INDEX idx_session_token (token),
+    INDEX idx_session_user (user_id),
+    INDEX idx_session_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================================
+-- DOMAIN: SHOP SETTINGS AND WEBSITE CONFIG
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS shop_settings (
+    setting_id      INT AUTO_INCREMENT PRIMARY KEY,
+    setting_key     VARCHAR(60) NOT NULL UNIQUE,
+    setting_value   TEXT DEFAULT NULL,
+    setting_type    ENUM('text','number','boolean','json','color','url') NOT NULL DEFAULT 'text',
+    category        VARCHAR(40) NOT NULL DEFAULT 'general',
+    label           VARCHAR(120) NOT NULL,
+    description     TEXT DEFAULT NULL,
+    is_public       TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Visible on public storefront',
+    updated_by      INT DEFAULT NULL,
+    updated_at      DATETIME DEFAULT NULL,
+
+    INDEX idx_ss_category (category),
+    INDEX idx_ss_public (is_public)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS website_config (
+    config_id       INT AUTO_INCREMENT PRIMARY KEY,
+    config_key      VARCHAR(60) NOT NULL UNIQUE,
+    config_value    TEXT DEFAULT NULL,
+    config_type     ENUM('text','html','color','image_url','boolean','json') NOT NULL DEFAULT 'text',
+    label           VARCHAR(120) NOT NULL,
+    description     TEXT DEFAULT NULL,
+    updated_at      DATETIME DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================================
+-- DOMAIN: WARRANTIES
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS warranty_policies (
+    policy_id           INT AUTO_INCREMENT PRIMARY KEY,
+    policy_name         VARCHAR(80) NOT NULL,
+    policy_code         VARCHAR(20) NOT NULL UNIQUE,
+    coverage_months     INT UNSIGNED DEFAULT NULL,
+    coverage_miles      INT UNSIGNED DEFAULT NULL,
+    coverage_tread_depth_32nds TINYINT UNSIGNED DEFAULT NULL,
+    pro_rata            TINYINT(1) NOT NULL DEFAULT 0,
+    terms_text          TEXT NOT NULL,
+    is_active           TINYINT(1) NOT NULL DEFAULT 1,
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS warranty_claims (
+    claim_id            INT AUTO_INCREMENT PRIMARY KEY,
+    work_order_id       INT DEFAULT NULL COMMENT 'Original purchase work order',
+    position_id         INT DEFAULT NULL COMMENT 'Position on original WO',
+    customer_id         INT NOT NULL,
+    policy_id           INT NOT NULL,
+    tire_id             INT DEFAULT NULL COMMENT 'The tire that failed',
+    claim_date          DATE NOT NULL,
+    failure_description TEXT NOT NULL,
+    mileage_at_failure  INT UNSIGNED DEFAULT NULL,
+    claim_amount        DECIMAL(10,2) NOT NULL,
+    status              ENUM('filed','reviewing','approved','denied','paid') NOT NULL DEFAULT 'filed',
+    reviewed_by         INT DEFAULT NULL,
+    reviewed_at         DATETIME DEFAULT NULL,
+    denial_reason       VARCHAR(255) DEFAULT NULL,
+    paid_amount         DECIMAL(10,2) DEFAULT NULL,
+    paid_at             DATETIME DEFAULT NULL,
+    paid_by             INT DEFAULT NULL,
+    notes               TEXT DEFAULT NULL,
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_wc_wo       FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id),
+    CONSTRAINT fk_wc_position FOREIGN KEY (position_id) REFERENCES work_order_positions(position_id),
+    CONSTRAINT fk_wc_customer FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+    CONSTRAINT fk_wc_policy   FOREIGN KEY (policy_id) REFERENCES warranty_policies(policy_id),
+    CONSTRAINT fk_wc_tire     FOREIGN KEY (tire_id) REFERENCES tires(tire_id),
+    INDEX idx_wc_wo (work_order_id),
+    INDEX idx_wc_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================================
+-- DOMAIN: WHEELS AND FITMENT
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS wheels (
+    wheel_id        INT AUTO_INCREMENT PRIMARY KEY,
+    brand           VARCHAR(80) DEFAULT NULL,
+    model           VARCHAR(80) DEFAULT NULL,
+    diameter        DECIMAL(4,1) NOT NULL COMMENT 'Inches',
+    width           DECIMAL(4,1) DEFAULT NULL COMMENT 'Inches',
+    bolt_pattern    VARCHAR(20) DEFAULT NULL COMMENT 'e.g. 5x114.3',
+    offset_mm       SMALLINT DEFAULT NULL,
+    center_bore_mm  DECIMAL(5,1) DEFAULT NULL,
+    material        ENUM('alloy','steel','carbon_fiber','forged','other') DEFAULT 'alloy',
+    finish          VARCHAR(40) DEFAULT NULL,
+    `condition`     ENUM('new','like_new','good','fair','poor') NOT NULL DEFAULT 'new',
+    retail_price    DECIMAL(8,2) DEFAULT NULL,
+    cost            DECIMAL(8,2) DEFAULT NULL,
+    quantity        SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    bin_location    VARCHAR(30) DEFAULT NULL,
+    notes           TEXT DEFAULT NULL,
+    is_active       TINYINT(1) NOT NULL DEFAULT 1,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS wheel_fitments (
+    fitment_id      INT AUTO_INCREMENT PRIMARY KEY,
+    wheel_id        INT NOT NULL,
+    year_from       SMALLINT UNSIGNED DEFAULT NULL,
+    year_to         SMALLINT UNSIGNED DEFAULT NULL,
+    make            VARCHAR(40) NOT NULL,
+    model           VARCHAR(40) NOT NULL,
+    trim_level      VARCHAR(40) DEFAULT NULL,
+    notes           VARCHAR(255) DEFAULT NULL,
+
+    CONSTRAINT fk_wf_wheel FOREIGN KEY (wheel_id) REFERENCES wheels(wheel_id),
+    INDEX idx_wf_wheel (wheel_id),
+    INDEX idx_wf_vehicle (make, model)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================================
+-- DOMAIN: CUSTOM FIELDS
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS custom_fields (
+    field_id        INT AUTO_INCREMENT PRIMARY KEY,
+    field_name      VARCHAR(60) NOT NULL UNIQUE,
+    field_label     VARCHAR(80) NOT NULL,
+    field_type      ENUM('text','number','date','boolean','select') NOT NULL DEFAULT 'text',
+    entity_type     VARCHAR(30) NOT NULL COMMENT 'tire, customer, vehicle, work_order',
+    select_options  JSON DEFAULT NULL COMMENT 'For select type: ["opt1","opt2"]',
+    is_required     TINYINT(1) NOT NULL DEFAULT 0,
+    is_active       TINYINT(1) NOT NULL DEFAULT 1,
+    display_order   SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS custom_field_values (
+    value_id        INT AUTO_INCREMENT PRIMARY KEY,
+    field_id        INT NOT NULL,
+    entity_type     VARCHAR(30) NOT NULL,
+    entity_id       INT NOT NULL,
+    field_value     TEXT DEFAULT NULL,
+
+    CONSTRAINT fk_cfv_field FOREIGN KEY (field_id) REFERENCES custom_fields(field_id),
+    UNIQUE INDEX idx_cfv_unique (field_id, entity_type, entity_id),
+    INDEX idx_cfv_entity (entity_type, entity_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================================
+-- DOMAIN: API KEYS
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS api_keys (
+    key_id          INT AUTO_INCREMENT PRIMARY KEY,
+    key_hash        VARCHAR(64) NOT NULL UNIQUE COMMENT 'SHA-256 of the API key',
+    key_prefix      VARCHAR(8) NOT NULL COMMENT 'First 8 chars for identification',
+    label           VARCHAR(120) NOT NULL,
+    permissions     JSON DEFAULT NULL,
+    rate_limit      INT UNSIGNED NOT NULL DEFAULT 1000 COMMENT 'Requests per hour',
+    is_active       TINYINT(1) NOT NULL DEFAULT 1,
+    last_used_at    DATETIME DEFAULT NULL,
+    request_count   BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    created_by      INT NOT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_ak_user FOREIGN KEY (created_by) REFERENCES users(user_id),
+    INDEX idx_ak_hash (key_hash)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================================
+-- DOMAIN: NOTIFICATIONS
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS notification_log (
+    notification_id     INT AUTO_INCREMENT PRIMARY KEY,
+    customer_id         INT DEFAULT NULL,
+    notification_type   VARCHAR(40) NOT NULL COMMENT 'appointment_reminder, wo_complete, etc.',
+    channel             ENUM('email','sms','internal') NOT NULL DEFAULT 'email',
+    recipient           VARCHAR(255) DEFAULT NULL COMMENT 'Email or phone',
+    subject             VARCHAR(255) DEFAULT NULL,
+    body                TEXT NOT NULL,
+    status              ENUM('pending','sent','failed') NOT NULL DEFAULT 'pending',
+    sent_at             DATETIME DEFAULT NULL,
+    error_message       VARCHAR(255) DEFAULT NULL,
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_nl_customer FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+    INDEX idx_nl_status (status),
+    INDEX idx_nl_customer (customer_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================================
+-- DOMAIN: CUSTOMER ENGAGEMENT (Discounts, Coupons, Storage)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS discount_groups (
+    group_id        INT AUTO_INCREMENT PRIMARY KEY,
+    group_name      VARCHAR(80) NOT NULL,
+    group_code      VARCHAR(20) NOT NULL UNIQUE,
+    discount_type   ENUM('percentage','fixed_per_tire','fixed_per_invoice') NOT NULL DEFAULT 'percentage',
+    discount_value  DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+    applies_to      ENUM('tires','labor','parts','all') NOT NULL DEFAULT 'all',
+    auto_apply      TINYINT(1) NOT NULL DEFAULT 1,
+    min_purchase    DECIMAL(10,2) DEFAULT NULL,
+    is_active       TINYINT(1) NOT NULL DEFAULT 1,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS customer_discount_groups (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    customer_id     INT NOT NULL,
+    group_id        INT NOT NULL,
+    added_by        INT NOT NULL,
+    added_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at      DATE DEFAULT NULL,
+
+    CONSTRAINT fk_cdg_customer FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+    CONSTRAINT fk_cdg_group    FOREIGN KEY (group_id) REFERENCES discount_groups(group_id),
+    CONSTRAINT fk_cdg_user     FOREIGN KEY (added_by) REFERENCES users(user_id),
+    UNIQUE INDEX idx_cdg_unique (customer_id, group_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS coupons (
+    coupon_id       INT AUTO_INCREMENT PRIMARY KEY,
+    coupon_code     VARCHAR(30) NOT NULL UNIQUE,
+    coupon_name     VARCHAR(120) NOT NULL,
+    coupon_type     ENUM('store','manufacturer') NOT NULL DEFAULT 'store',
+    discount_type   ENUM('percentage','fixed','buy_x_get_y') NOT NULL DEFAULT 'percentage',
+    discount_value  DECIMAL(8,2) NOT NULL,
+    buy_qty         SMALLINT UNSIGNED DEFAULT NULL,
+    get_qty         SMALLINT UNSIGNED DEFAULT NULL,
+    applies_to      ENUM('tires','labor','parts','all') NOT NULL DEFAULT 'all',
+    min_purchase    DECIMAL(10,2) DEFAULT NULL,
+    max_discount    DECIMAL(10,2) DEFAULT NULL,
+    max_uses        INT UNSIGNED DEFAULT NULL,
+    max_uses_per_customer INT UNSIGNED DEFAULT NULL,
+    valid_from      DATE DEFAULT NULL,
+    valid_until     DATE DEFAULT NULL,
+    is_active       TINYINT(1) NOT NULL DEFAULT 1,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS coupon_usage (
+    usage_id        INT AUTO_INCREMENT PRIMARY KEY,
+    coupon_id       INT NOT NULL,
+    work_order_id   INT NOT NULL,
+    customer_id     INT DEFAULT NULL,
+    discount_applied DECIMAL(10,2) NOT NULL,
+    used_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_cu_coupon   FOREIGN KEY (coupon_id) REFERENCES coupons(coupon_id),
+    CONSTRAINT fk_cu_wo       FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id),
+    CONSTRAINT fk_cu_customer FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+    INDEX idx_cu_coupon (coupon_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS tire_storage (
+    storage_id      INT AUTO_INCREMENT PRIMARY KEY,
+    customer_id     INT NOT NULL,
+    tire_id         INT DEFAULT NULL,
+    description     VARCHAR(255) NOT NULL DEFAULT 'Seasonal tire storage',
+    quantity        TINYINT UNSIGNED NOT NULL DEFAULT 4,
+    location_code   VARCHAR(30) DEFAULT NULL,
+    stored_at       DATE NOT NULL,
+    expected_pickup DATE DEFAULT NULL,
+    picked_up_at    DATE DEFAULT NULL,
+    monthly_rate    DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+    notes           TEXT DEFAULT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_ts_customer FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+    CONSTRAINT fk_ts_tire     FOREIGN KEY (tire_id) REFERENCES tires(tire_id),
+    INDEX idx_ts_customer (customer_id),
+    INDEX idx_ts_active (picked_up_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS storage_billing (
+    billing_id      INT AUTO_INCREMENT PRIMARY KEY,
+    storage_id      INT NOT NULL,
+    billing_month   DATE NOT NULL,
+    amount          DECIMAL(8,2) NOT NULL,
+    work_order_id   INT DEFAULT NULL COMMENT 'Linked to work order when billed',
+    status          ENUM('pending','invoiced','waived') NOT NULL DEFAULT 'pending',
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_sb_storage FOREIGN KEY (storage_id) REFERENCES tire_storage(storage_id),
+    CONSTRAINT fk_sb_wo      FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id),
+    INDEX idx_sb_storage (storage_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================================
+-- DOMAIN: MARKETPLACE AND INTEGRATIONS
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS integration_credentials (
+    cred_id         INT AUTO_INCREMENT PRIMARY KEY,
+    integration     VARCHAR(30) NOT NULL COMMENT 'atd, tire_hub, facebook, etc.',
+    cred_key        VARCHAR(60) NOT NULL,
+    cred_value      TEXT NOT NULL COMMENT 'Encrypted at rest in production',
+    environment     ENUM('sandbox','production') NOT NULL DEFAULT 'sandbox',
+    is_active       TINYINT(1) NOT NULL DEFAULT 1,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE INDEX idx_ic_unique (integration, cred_key, environment)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS integration_sync_log (
+    sync_id         INT AUTO_INCREMENT PRIMARY KEY,
+    integration     VARCHAR(30) NOT NULL,
+    operation       VARCHAR(40) NOT NULL,
+    direction       ENUM('inbound','outbound') NOT NULL,
+    status          ENUM('success','error','partial') NOT NULL,
+    record_count    VARCHAR(60) DEFAULT NULL,
+    http_status     SMALLINT DEFAULT NULL,
+    error_message   TEXT DEFAULT NULL,
+    request_body    TEXT DEFAULT NULL,
+    response_body   TEXT DEFAULT NULL,
+    remote_id       VARCHAR(120) DEFAULT NULL,
+    duration_ms     INT DEFAULT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_isl_integration (integration, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS marketplace_listings (
+    listing_id      INT AUTO_INCREMENT PRIMARY KEY,
+    platform        VARCHAR(30) NOT NULL,
+    tire_id         INT DEFAULT NULL,
+    wheel_id        INT DEFAULT NULL,
+    external_id     VARCHAR(120) DEFAULT NULL,
+    title           VARCHAR(255) NOT NULL,
+    description     TEXT DEFAULT NULL,
+    price           DECIMAL(8,2) DEFAULT NULL,
+    status          ENUM('draft','active','sold','expired','removed') NOT NULL DEFAULT 'draft',
+    listed_at       DATETIME DEFAULT NULL,
+    expires_at      DATETIME DEFAULT NULL,
+    views_count     INT UNSIGNED DEFAULT 0,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_ml_tire  FOREIGN KEY (tire_id) REFERENCES tires(tire_id),
+    INDEX idx_ml_platform (platform, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS marketplace_orders (
+    order_id        INT AUTO_INCREMENT PRIMARY KEY,
+    platform        VARCHAR(30) NOT NULL,
+    external_order_id VARCHAR(120) DEFAULT NULL UNIQUE,
+    buyer_name      VARCHAR(120) DEFAULT NULL,
+    buyer_email     VARCHAR(120) DEFAULT NULL,
+    buyer_phone     VARCHAR(20) DEFAULT NULL,
+    buyer_address   TEXT DEFAULT NULL,
+    order_total     DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    platform_fees   DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+    shipping_cost   DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+    status          ENUM('pending','confirmed','shipped','delivered','cancelled','returned') NOT NULL DEFAULT 'pending',
+    ordered_at      DATETIME DEFAULT NULL,
+    notes           TEXT DEFAULT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_mo_platform (platform, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS marketplace_order_items (
+    item_id         INT AUTO_INCREMENT PRIMARY KEY,
+    order_id        INT NOT NULL,
+    listing_id      INT DEFAULT NULL,
+    tire_id         INT DEFAULT NULL,
+    wheel_id        INT DEFAULT NULL,
+    description     VARCHAR(255) NOT NULL,
+    quantity        SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    unit_price      DECIMAL(8,2) NOT NULL,
+    line_total      DECIMAL(10,2) NOT NULL,
+
+    CONSTRAINT fk_moi_order FOREIGN KEY (order_id) REFERENCES marketplace_orders(order_id),
+    INDEX idx_moi_order (order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS b2b_network_inventory (
+    b2b_id          INT AUTO_INCREMENT PRIMARY KEY,
+    tire_id         INT DEFAULT NULL,
+    wheel_id        INT DEFAULT NULL,
+    price_wholesale DECIMAL(8,2) DEFAULT NULL,
+    min_order_qty   SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    is_active       TINYINT(1) NOT NULL DEFAULT 1,
+    added_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_b2b_tire FOREIGN KEY (tire_id) REFERENCES tires(tire_id),
+    INDEX idx_b2b_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS directory_listings (
+    directory_id    INT AUTO_INCREMENT PRIMARY KEY,
+    directory_name  VARCHAR(80) NOT NULL,
+    listing_url     VARCHAR(500) DEFAULT NULL,
+    status          ENUM('active','pending','inactive') NOT NULL DEFAULT 'pending',
+    last_verified   DATE DEFAULT NULL,
+    notes           TEXT DEFAULT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================================
+-- DOMAIN: SCHEMA VERSION TRACKING
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS schema_version (
+    id              INT PRIMARY KEY DEFAULT 1,
+    version         VARCHAR(20) NOT NULL DEFAULT '1.2.0',
+    installed_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_migration  VARCHAR(60) DEFAULT NULL,
+
+    CONSTRAINT single_row CHECK (id = 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO schema_version (id, version) VALUES (1, '1.2.0')
+ON DUPLICATE KEY UPDATE version = '1.2.0';
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    migration_id    INT AUTO_INCREMENT PRIMARY KEY,
+    filename        VARCHAR(120) NOT NULL UNIQUE,
+    applied_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    checksum        VARCHAR(64) DEFAULT NULL,
+    success         TINYINT(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================================
+-- DOMAIN: WORK ORDER LINE ITEMS
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS work_order_line_items (
+    line_id         INT AUTO_INCREMENT PRIMARY KEY,
+    work_order_id   INT NOT NULL,
+    line_type       ENUM('labor','part','fee','warranty','disposal','other') NOT NULL,
+    description     VARCHAR(255) NOT NULL,
+    quantity        DECIMAL(6,2) NOT NULL DEFAULT 1.00,
+    unit_price      DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+    line_total      DECIMAL(10,2) NOT NULL DEFAULT 0.00
+        COMMENT 'quantity * unit_price',
+    is_taxable      TINYINT(1) NOT NULL DEFAULT 0
+        COMMENT '1 = taxable (materials, parts). 0 = labor, fees (CO rules)',
+    service_id      INT DEFAULT NULL COMMENT 'Links to service_catalog if labor',
+    fee_config_id   INT DEFAULT NULL COMMENT 'Links to fee_configuration if fee',
+    tire_id         INT DEFAULT NULL COMMENT 'Links to tire if part/warranty',
+    warranty_policy_id INT DEFAULT NULL,
+    warranty_expires_at DATE DEFAULT NULL,
+    warranty_terms  TEXT DEFAULT NULL,
+    display_order   SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_woli_wo       FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id),
+    CONSTRAINT fk_woli_service  FOREIGN KEY (service_id) REFERENCES service_catalog(service_id),
+    CONSTRAINT fk_woli_fee      FOREIGN KEY (fee_config_id) REFERENCES fee_configuration(fee_id),
+    CONSTRAINT fk_woli_tire     FOREIGN KEY (tire_id) REFERENCES tires(tire_id),
+    CONSTRAINT fk_woli_policy   FOREIGN KEY (warranty_policy_id) REFERENCES warranty_policies(policy_id),
+    INDEX idx_woli_wo (work_order_id),
+    INDEX idx_woli_type (line_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================================
+-- DOMAIN: RATE LIMITING
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS rate_limit_hits (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    scope_key       VARCHAR(80) NOT NULL COMMENT 'user:123 or ip:1.2.3.4 or apikey:5',
+    hit_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX idx_rlh_scope (scope_key, hit_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Auto-cleanup event (runs if event_scheduler is ON)
+CREATE EVENT IF NOT EXISTS cleanup_rate_limit_hits
+ON SCHEDULE EVERY 1 HOUR
+DO DELETE FROM rate_limit_hits WHERE hit_at < DATE_SUB(NOW(), INTERVAL 2 HOUR);
+
+
+-- ============================================================================
+-- DOMAIN: WEBHOOKS
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS webhook_endpoints (
+    endpoint_id     INT AUTO_INCREMENT PRIMARY KEY,
+    url             VARCHAR(500) NOT NULL,
+    secret          VARCHAR(120) NOT NULL COMMENT 'HMAC-SHA256 signing secret',
+    label           VARCHAR(120) DEFAULT NULL,
+    events          JSON NOT NULL COMMENT '["WO_CREATE","WO_COMPLETE",...] or ["*"]',
+    is_active       TINYINT(1) NOT NULL DEFAULT 1,
+    created_by      INT DEFAULT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_whe_user FOREIGN KEY (created_by) REFERENCES users(user_id),
+    INDEX idx_whe_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS webhook_deliveries (
+    delivery_id     BIGINT AUTO_INCREMENT PRIMARY KEY,
+    endpoint_id     INT NOT NULL,
+    event_type      VARCHAR(40) NOT NULL,
+    payload         JSON NOT NULL,
+    status          ENUM('pending','sent','failed') NOT NULL DEFAULT 'pending',
+    response_code   SMALLINT DEFAULT NULL,
+    response_body   TEXT DEFAULT NULL,
+    attempts        TINYINT NOT NULL DEFAULT 0,
+    max_attempts    TINYINT NOT NULL DEFAULT 3,
+    next_retry_at   DATETIME DEFAULT NULL,
+    error_message   VARCHAR(255) DEFAULT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at    DATETIME DEFAULT NULL,
+
+    CONSTRAINT fk_whd_endpoint FOREIGN KEY (endpoint_id) REFERENCES webhook_endpoints(endpoint_id) ON DELETE CASCADE,
+    INDEX idx_whd_status (status, next_retry_at),
+    INDEX idx_whd_endpoint (endpoint_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS webhook_inbound_log (
+    inbound_id      BIGINT AUTO_INCREMENT PRIMARY KEY,
+    provider        VARCHAR(40) NOT NULL,
+    event_type      VARCHAR(60) DEFAULT NULL,
+    payload         JSON NOT NULL,
+    headers         JSON DEFAULT NULL,
+    signature_valid TINYINT(1) DEFAULT NULL,
+    processed       TINYINT(1) NOT NULL DEFAULT 0,
+    process_result  VARCHAR(255) DEFAULT NULL,
+    remote_ip       VARCHAR(45) DEFAULT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_whi_provider (provider, created_at),
+    INDEX idx_whi_processed (processed)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 -- v1: Full tire inventory with all lookups resolved
 CREATE OR REPLACE VIEW v_tire_inventory AS
@@ -1669,3 +2232,56 @@ SELECT COUNT(*) AS torque_spec_rows FROM lkp_torque_specs;
 -- END OF SCHEMA v2.4
 -- Total: 44 tables, 14 views
 -- ============================================================================
+
+
+-- Shop settings seed data
+INSERT IGNORE INTO shop_settings (setting_key, setting_value, setting_type, category, label, description, is_public) VALUES
+('shop_name',           'Tire Shop',            'text',    'info',      'Shop Name',              'Business name displayed everywhere',           1),
+('shop_phone',          '(719) 555-0100',       'text',    'info',      'Phone Number',           'Primary phone number',                         1),
+('shop_email',          '',                      'text',    'info',      'Email Address',          'Public contact email',                         1),
+('shop_address_line1',  '123 Main Street',       'text',    'info',      'Address Line 1',         NULL,                                           1),
+('shop_address_line2',  '',                      'text',    'info',      'Address Line 2',         NULL,                                           1),
+('shop_city',           'Canon City',            'text',    'info',      'City',                   NULL,                                           1),
+('shop_state',          'CO',                    'text',    'info',      'State',                  NULL,                                           1),
+('shop_zip',            '81212',                 'text',    'info',      'ZIP Code',               NULL,                                           1),
+('shop_lat',            '38.4411',               'text',    'info',      'Latitude',               'For map embed',                                0),
+('shop_lng',            '-105.2422',             'text',    'info',      'Longitude',              'For map embed',                                0),
+('shop_hours_json',     '{"mon":"8:00-17:00","tue":"8:00-17:00","wed":"8:00-17:00","thu":"8:00-17:00","fri":"8:00-17:00","sat":"9:00-14:00","sun":"Closed"}',
+                                                 'json',    'info',      'Business Hours',         'JSON object with day keys',                    1),
+('shop_tagline',        'Quality Tires, Fair Prices', 'text', 'info',   'Tagline',                'Short slogan for storefront header',            1),
+('logo_url',            '',                      'url',     'branding',  'Logo URL',               'Path to logo image',                           1),
+('accent_color',        '#C9202F',               'color',   'branding',  'Accent Color',           'Primary brand color for storefront',            1),
+('tax_rate',            '0.0790',                'number',  'finance',   'Sales Tax Rate',         'Decimal (e.g. 0.0790 = 7.90%)',                0),
+('appointment_slot_min','60',                    'number',  'scheduling','Appointment Slot (min)', 'Default appointment duration in minutes',       0),
+('appointment_max_slot','3',                     'number',  'scheduling','Max Per Slot',           'Maximum simultaneous appointments per time slot',0),
+('website_enabled',     '0',                     'boolean', 'website',   'Enable Public Website',  'Master toggle for public storefront',           0),
+('website_inventory_public','1',                 'boolean', 'website',   'Show Inventory Online',  'Display tire inventory on public site',         0),
+('website_fitment_enabled', '1',                 'boolean', 'website',   'Enable Fitment Search',  'Allow fitment search on public site',           0),
+('website_appointment_enabled','1',              'boolean', 'website',   'Online Appointments',    'Allow appointment booking on public site',      0),
+('website_show_prices', '1',                     'boolean', 'website',   'Show Prices',            'Display prices on public inventory',            0),
+('website_show_tread',  '1',                     'boolean', 'website',   'Show Tread Depth',       'Display tread depth on public inventory',       0);
+
+INSERT IGNORE INTO website_config (config_key, config_value, config_type) VALUES
+('hero_title',           'Your Trusted Tire Shop',                       'text'),
+('hero_subtitle',        'Quality new and used tires at fair prices.',   'text'),
+('hero_image_url',       '',                                             'text'),
+('about_html',           '<p>Locally owned tire shop in Canon City, Colorado. We offer a full range of new and used tires, mounting, balancing, and repair services.</p>', 'html'),
+('footer_html',          '',                                             'html'),
+('meta_title',           'Tire Shop | Canon City, CO',                  'text'),
+('meta_description',     'Quality new and used tires in Canon City, Colorado. Mount, balance, repair, and alignment services.', 'text'),
+('google_analytics_id',  '',                                             'text'),
+('featured_tire_ids',    '[]',                                           'json'),
+('announcement_html',    '',                                             'html'),
+('announcement_active',  '0',                                            'boolean');
+
+-- Notification delivery settings
+INSERT IGNORE INTO shop_settings (setting_key, setting_value, setting_type, category, label, description, is_public) VALUES
+('smtp_host',       '',         'text',   'mail', 'SMTP Host',            'SMTP server hostname (e.g., smtp.gmail.com). Leave blank to use server MTA.', 0),
+('smtp_port',       '587',      'number', 'mail', 'SMTP Port',            '587 for STARTTLS, 465 for SSL, 25 for unencrypted.',                          0),
+('smtp_user',       '',         'text',   'mail', 'SMTP Username',        'SMTP authentication username (usually your email address).',                   0),
+('smtp_pass',       '',         'text',   'mail', 'SMTP Password',        'SMTP authentication password.',                                                0),
+('smtp_encryption', 'tls',      'text',   'mail', 'SMTP Encryption',      'tls (STARTTLS on 587), ssl (implicit on 465), or none.',                      0),
+('smtp_from',       '',         'text',   'mail', 'From Address',         'Email address used as the From header. Falls back to shop_email.',             0),
+('sms_api_key',     '',         'text',   'sms',  'Flowroute API Key',    'Flowroute Tech Prefix (access key). Found in Flowroute portal.',               0),
+('sms_api_secret',  '',         'text',   'sms',  'Flowroute API Secret', 'Flowroute Tech Prefix secret.',                                                0),
+('sms_from_number', '',         'text',   'sms',  'SMS From Number',      'Your Flowroute DID (e.g., 17195550100). Must be on your account.',             0);

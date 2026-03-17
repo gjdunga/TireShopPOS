@@ -153,7 +153,7 @@ if [[ "$INIT" == "true" || "$DB_ONLY" == "true" ]]; then
     mysql $AUTH -e "CREATE DATABASE IF NOT EXISTS \`${DB_DATABASE}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null || true
 
     # Run base schema
-    log "Loading base schema (37 tables, 9 views)..."
+    log "Loading base schema (68 tables, 9 views)..."
     mysql $AUTH --default-character-set=utf8mb4 "${DB_DATABASE}" < "${APP_DIR}/sql/tire_pos_schema_full.sql"
 
     # Run migrations in order (excludes down/ directory)
