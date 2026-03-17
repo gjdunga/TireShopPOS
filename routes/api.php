@@ -1610,6 +1610,115 @@ $router->with(permit('CONFIG_MANAGE'))->post('/api/notifications/test-sms', func
 
 
 // ============================================================================
+// Customer Engagement: Discount Groups, Coupons, Tire Storage
+// ============================================================================
+
+// ---- Discount Groups ----
+$router->with(permit('CONFIG_MANAGE'))->get('/api/discount-groups', function () {
+    $all = Router::query('all', '') === '1';
+    return ['groups' => listDiscountGroups(!$all)];
+});
+
+$router->with(permit('CONFIG_MANAGE'))->get('/api/discount-groups/{id}', function (array $params) {
+    $grp = getDiscountGroup((int) $params['id']);
+    if (!$grp) Router::sendError('NOT_FOUND', 'Discount group not found.', 404);
+    return $grp;
+});
+
+$router->with(permit('CONFIG_MANAGE'))->post('/api/discount-groups', function (array $params, array $body) {
+    $id = createDiscountGroup($body, Middleware::userId());
+    return ['message' => 'Discount group created.', 'group_id' => $id];
+});
+
+$router->with(permit('CONFIG_MANAGE'))->patch('/api/discount-groups/{id}', function (array $params, array $body) {
+    $result = updateDiscountGroup((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Group updated.', 'changed' => $result['changed']];
+});
+
+// Customer <-> Discount Group membership
+$router->with(permit('CUSTOMER_MANAGE'))->get('/api/customers/{id}/discount-groups', function (array $params) {
+    return ['groups' => getCustomerDiscountGroups((int) $params['id'])];
+});
+
+$router->with(permit('CUSTOMER_MANAGE'))->post('/api/customers/{id}/discount-groups', function (array $params, array $body) {
+    $id = addCustomerToDiscountGroup((int) $params['id'], (int) ($body['group_id'] ?? 0), Middleware::userId(), $body['expires_at'] ?? null);
+    return ['message' => 'Customer added to discount group.', 'id' => $id];
+});
+
+$router->with(permit('CUSTOMER_MANAGE'))->delete('/api/customers/{id}/discount-groups/{groupId}', function (array $params) {
+    removeCustomerFromDiscountGroup((int) $params['id'], (int) $params['groupId'], Middleware::userId());
+    return ['message' => 'Customer removed from discount group.'];
+});
+
+// ---- Coupons ----
+$router->with(permit('CONFIG_MANAGE'))->get('/api/coupons', function () {
+    $all = Router::query('all', '') === '1';
+    return ['coupons' => listCoupons(!$all)];
+});
+
+$router->with(permit('CONFIG_MANAGE'))->get('/api/coupons/{id}', function (array $params) {
+    $c = getCoupon((int) $params['id']);
+    if (!$c) Router::sendError('NOT_FOUND', 'Coupon not found.', 404);
+    return $c;
+});
+
+$router->with(permit('CONFIG_MANAGE'))->post('/api/coupons', function (array $params, array $body) {
+    $id = createCoupon($body, Middleware::userId());
+    return ['message' => 'Coupon created.', 'coupon_id' => $id];
+});
+
+$router->with(permit('CONFIG_MANAGE'))->patch('/api/coupons/{id}', function (array $params, array $body) {
+    $result = updateCoupon((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Coupon updated.', 'changed' => $result['changed']];
+});
+
+$router->with($auth)->post('/api/coupons/validate', function (array $params, array $body) {
+    $code = trim($body['code'] ?? '');
+    if ($code === '') Router::sendError('MISSING_PARAM', 'Coupon code required.', 400);
+    $customerId = (int) ($body['customer_id'] ?? 0) ?: null;
+    return validateCoupon($code, $customerId);
+});
+
+$router->with($auth)->post('/api/coupons/redeem', function (array $params, array $body) {
+    $couponId = (int) ($body['coupon_id'] ?? 0);
+    $woId = (int) ($body['work_order_id'] ?? 0);
+    $discount = (float) ($body['discount_applied'] ?? 0);
+    if ($couponId <= 0 || $woId <= 0) Router::sendError('MISSING_PARAM', 'coupon_id and work_order_id required.', 400);
+    $id = recordCouponUsage($couponId, $woId, $body['customer_id'] ?? null, $discount);
+    return ['message' => 'Coupon redeemed.', 'usage_id' => $id];
+});
+
+// ---- Tire Storage ----
+$router->with($auth)->get('/api/tire-storage', function () {
+    $customerId = (int) Router::query('customer_id', '0');
+    return ['storage' => listTireStorage($customerId)];
+});
+
+$router->with($auth)->get('/api/tire-storage/{id}', function (array $params) {
+    $ts = getTireStorage((int) $params['id']);
+    if (!$ts) Router::sendError('NOT_FOUND', 'Storage record not found.', 404);
+    $ts['billing'] = getStorageBilling((int) $params['id']);
+    return $ts;
+});
+
+$router->with(permit('CUSTOMER_MANAGE'))->post('/api/tire-storage', function (array $params, array $body) {
+    $id = createTireStorage($body, Middleware::userId());
+    return ['message' => 'Tire storage created.', 'storage_id' => $id];
+});
+
+$router->with(permit('CUSTOMER_MANAGE'))->patch('/api/tire-storage/{id}', function (array $params, array $body) {
+    $result = updateTireStorage((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Storage updated.', 'changed' => $result['changed']];
+});
+
+$router->with(permit('CUSTOMER_MANAGE'))->post('/api/tire-storage/{id}/bill', function (array $params, array $body) {
+    $month = $body['billing_month'] ?? date('Y-m-01');
+    $id = createStorageBilling((int) $params['id'], $month);
+    return ['message' => 'Billing entry created.', 'billing_id' => $id];
+});
+
+
+// ============================================================================
 // Webhooks (outbound endpoint CRUD + inbound receiver)
 // ============================================================================
 $webhookLoad = function () { require_once BASE_PATH . '/php/WebhookDispatcher.php'; };

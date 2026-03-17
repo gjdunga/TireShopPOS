@@ -974,3 +974,268 @@ function markNotificationSent(int $notifId): void {
 function markNotificationFailed(int $notifId, string $error): void {
     getDB()->prepare("UPDATE notification_log SET status = 'failed', error_message = ? WHERE notification_id = ?")->execute([$error, $notifId]);
 }
+
+
+// ============================================================================
+// Customer Engagement: Discount Groups, Coupons, Tire Storage
+// ============================================================================
+
+// ---- Discount Groups ----
+
+function listDiscountGroups(bool $activeOnly = true): array {
+    $where = $activeOnly ? "WHERE is_active = 1" : "";
+    return Database::query("SELECT * FROM discount_groups {$where} ORDER BY group_name");
+}
+
+function getDiscountGroup(int $groupId): ?array {
+    return Database::queryOne("SELECT * FROM discount_groups WHERE group_id = ?", [$groupId]);
+}
+
+function createDiscountGroup(array $data, int $createdBy): int {
+    InputValidator::check('discount_groups', $data, ['group_name', 'group_code']);
+    Database::execute(
+        "INSERT INTO discount_groups (group_name, group_code, discount_type, discount_value, applies_to, auto_apply, min_purchase, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            trim($data['group_name']), strtoupper(trim($data['group_code'])),
+            $data['discount_type'] ?? 'percentage', (float) ($data['discount_value'] ?? 0),
+            $data['applies_to'] ?? 'all', (int) ($data['auto_apply'] ?? 1),
+            $data['min_purchase'] ?? null, (int) ($data['is_active'] ?? 1),
+        ]
+    );
+    $id = Database::lastInsertId();
+    auditLog('discount_groups', $id, 'INSERT', null, null, null, $createdBy);
+    return $id;
+}
+
+function updateDiscountGroup(int $groupId, array $data, int $updatedBy): array {
+    $grp = getDiscountGroup($groupId);
+    if (!$grp) throw new \RuntimeException('Discount group not found.');
+    InputValidator::check('discount_groups', $data);
+
+    $editable = ['group_name','group_code','discount_type','discount_value','applies_to','auto_apply','min_purchase','is_active'];
+    $sets = []; $binds = []; $changes = [];
+    foreach ($editable as $f) {
+        if (array_key_exists($f, $data) && (string) ($data[$f] ?? '') !== (string) ($grp[$f] ?? '')) {
+            $sets[] = "{$f} = ?"; $binds[] = $data[$f];
+            $changes[$f] = ['old' => $grp[$f], 'new' => $data[$f]];
+        }
+    }
+    if (empty($sets)) return ['changed' => []];
+    $binds[] = $groupId;
+    Database::execute("UPDATE discount_groups SET " . implode(', ', $sets) . " WHERE group_id = ?", $binds);
+    foreach ($changes as $field => $vals) {
+        auditLog('discount_groups', $groupId, 'UPDATE', $field, (string) ($vals['old'] ?? ''), (string) ($vals['new'] ?? ''), $updatedBy);
+    }
+    return ['changed' => array_keys($changes)];
+}
+
+function addCustomerToDiscountGroup(int $customerId, int $groupId, int $addedBy, ?string $expiresAt = null): int {
+    $existing = Database::queryOne(
+        "SELECT id FROM customer_discount_groups WHERE customer_id = ? AND group_id = ?",
+        [$customerId, $groupId]
+    );
+    if ($existing) throw new \RuntimeException('Customer already in this discount group.');
+
+    Database::execute(
+        "INSERT INTO customer_discount_groups (customer_id, group_id, added_by, expires_at) VALUES (?, ?, ?, ?)",
+        [$customerId, $groupId, $addedBy, $expiresAt]
+    );
+    $id = Database::lastInsertId();
+    auditLog('customer_discount_groups', $id, 'INSERT', null, null, null, $addedBy);
+    return $id;
+}
+
+function removeCustomerFromDiscountGroup(int $customerId, int $groupId, int $removedBy): void {
+    $row = Database::queryOne(
+        "SELECT id FROM customer_discount_groups WHERE customer_id = ? AND group_id = ?",
+        [$customerId, $groupId]
+    );
+    if ($row) {
+        auditLog('customer_discount_groups', $row['id'], 'DELETE', null, null, null, $removedBy);
+        Database::execute("DELETE FROM customer_discount_groups WHERE id = ?", [$row['id']]);
+    }
+}
+
+function getCustomerDiscountGroups(int $customerId): array {
+    return Database::query(
+        "SELECT dg.*, cdg.added_at, cdg.expires_at
+         FROM customer_discount_groups cdg
+         JOIN discount_groups dg ON cdg.group_id = dg.group_id
+         WHERE cdg.customer_id = ? AND dg.is_active = 1
+           AND (cdg.expires_at IS NULL OR cdg.expires_at >= CURDATE())
+         ORDER BY dg.group_name",
+        [$customerId]
+    );
+}
+
+// ---- Coupons ----
+
+function listCoupons(bool $activeOnly = true): array {
+    $where = $activeOnly ? "WHERE is_active = 1 AND (valid_until IS NULL OR valid_until >= CURDATE())" : "";
+    return Database::query("SELECT * FROM coupons {$where} ORDER BY coupon_code");
+}
+
+function getCoupon(int $couponId): ?array {
+    return Database::queryOne("SELECT * FROM coupons WHERE coupon_id = ?", [$couponId]);
+}
+
+function getCouponByCode(string $code): ?array {
+    return Database::queryOne("SELECT * FROM coupons WHERE coupon_code = ? AND is_active = 1", [strtoupper(trim($code))]);
+}
+
+function createCoupon(array $data, int $createdBy): int {
+    InputValidator::check('coupons', $data, ['coupon_code', 'coupon_name']);
+    Database::execute(
+        "INSERT INTO coupons (coupon_code, coupon_name, coupon_type, discount_type, discount_value,
+         buy_qty, get_qty, applies_to, min_purchase, max_discount,
+         max_uses, max_uses_per_customer, valid_from, valid_until, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            strtoupper(trim($data['coupon_code'])), trim($data['coupon_name']),
+            $data['coupon_type'] ?? 'store', $data['discount_type'] ?? 'percentage',
+            (float) ($data['discount_value'] ?? 0),
+            $data['buy_qty'] ?? null, $data['get_qty'] ?? null,
+            $data['applies_to'] ?? 'all', $data['min_purchase'] ?? null, $data['max_discount'] ?? null,
+            $data['max_uses'] ?? null, $data['max_uses_per_customer'] ?? null,
+            $data['valid_from'] ?? date('Y-m-d'), $data['valid_until'] ?? null,
+            (int) ($data['is_active'] ?? 1),
+        ]
+    );
+    $id = Database::lastInsertId();
+    auditLog('coupons', $id, 'INSERT', null, null, null, $createdBy);
+    return $id;
+}
+
+function updateCoupon(int $couponId, array $data, int $updatedBy): array {
+    $c = getCoupon($couponId);
+    if (!$c) throw new \RuntimeException('Coupon not found.');
+    InputValidator::check('coupons', $data);
+
+    $editable = ['coupon_code','coupon_name','coupon_type','discount_type','discount_value',
+                 'buy_qty','get_qty','applies_to','min_purchase','max_discount',
+                 'max_uses','max_uses_per_customer','valid_from','valid_until','is_active'];
+    $sets = []; $binds = []; $changes = [];
+    foreach ($editable as $f) {
+        if (array_key_exists($f, $data) && (string) ($data[$f] ?? '') !== (string) ($c[$f] ?? '')) {
+            $sets[] = "{$f} = ?"; $binds[] = $data[$f];
+            $changes[$f] = ['old' => $c[$f], 'new' => $data[$f]];
+        }
+    }
+    if (empty($sets)) return ['changed' => []];
+    $binds[] = $couponId;
+    Database::execute("UPDATE coupons SET " . implode(', ', $sets) . " WHERE coupon_id = ?", $binds);
+    foreach ($changes as $field => $vals) {
+        auditLog('coupons', $couponId, 'UPDATE', $field, (string) ($vals['old'] ?? ''), (string) ($vals['new'] ?? ''), $updatedBy);
+    }
+    return ['changed' => array_keys($changes)];
+}
+
+function recordCouponUsage(int $couponId, int $workOrderId, ?int $customerId, float $discountApplied): int {
+    Database::execute(
+        "INSERT INTO coupon_usage (coupon_id, work_order_id, customer_id, discount_applied) VALUES (?, ?, ?, ?)",
+        [$couponId, $workOrderId, $customerId, $discountApplied]
+    );
+    return Database::lastInsertId();
+}
+
+function validateCoupon(string $code, ?int $customerId = null): array {
+    $c = getCouponByCode($code);
+    if (!$c) return ['valid' => false, 'reason' => 'Coupon code not found.'];
+    if (!$c['is_active']) return ['valid' => false, 'reason' => 'Coupon is inactive.'];
+    if ($c['valid_from'] && $c['valid_from'] > date('Y-m-d')) return ['valid' => false, 'reason' => 'Coupon not yet valid.'];
+    if ($c['valid_until'] && $c['valid_until'] < date('Y-m-d')) return ['valid' => false, 'reason' => 'Coupon has expired.'];
+
+    if ($c['max_uses']) {
+        $used = (int) Database::scalar("SELECT COUNT(*) FROM coupon_usage WHERE coupon_id = ?", [$c['coupon_id']]);
+        if ($used >= (int) $c['max_uses']) return ['valid' => false, 'reason' => 'Coupon usage limit reached.'];
+    }
+    if ($c['max_uses_per_customer'] && $customerId) {
+        $custUsed = (int) Database::scalar(
+            "SELECT COUNT(*) FROM coupon_usage WHERE coupon_id = ? AND customer_id = ?",
+            [$c['coupon_id'], $customerId]
+        );
+        if ($custUsed >= (int) $c['max_uses_per_customer']) return ['valid' => false, 'reason' => 'You have already used this coupon.'];
+    }
+    return ['valid' => true, 'coupon' => $c];
+}
+
+// ---- Tire Storage ----
+
+function listTireStorage(int $customerId = 0): array {
+    $where = $customerId > 0 ? "WHERE ts.customer_id = ?" : "WHERE ts.picked_up_at IS NULL";
+    $params = $customerId > 0 ? [$customerId] : [];
+    return Database::query(
+        "SELECT ts.*, c.first_name, c.last_name
+         FROM tire_storage ts
+         JOIN customers c ON ts.customer_id = c.customer_id
+         {$where} ORDER BY ts.stored_at DESC",
+        $params
+    );
+}
+
+function getTireStorage(int $storageId): ?array {
+    return Database::queryOne("SELECT * FROM tire_storage WHERE storage_id = ?", [$storageId]);
+}
+
+function createTireStorage(array $data, int $createdBy): int {
+    $custId = (int) ($data['customer_id'] ?? 0);
+    if ($custId <= 0) throw new \InvalidArgumentException('Customer ID is required.');
+
+    Database::execute(
+        "INSERT INTO tire_storage (customer_id, tire_id, description, quantity, location_code,
+         stored_at, expected_pickup, monthly_rate)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            $custId, $data['tire_id'] ?? null,
+            trim($data['description'] ?? 'Seasonal tire storage'),
+            (int) ($data['quantity'] ?? 4),
+            $data['location_code'] ?? null,
+            $data['stored_at'] ?? date('Y-m-d'),
+            $data['expected_pickup'] ?? null,
+            (float) ($data['monthly_rate'] ?? 0),
+        ]
+    );
+    $id = Database::lastInsertId();
+    auditLog('tire_storage', $id, 'INSERT', null, null, null, $createdBy);
+    return $id;
+}
+
+function updateTireStorage(int $storageId, array $data, int $updatedBy): array {
+    $ts = getTireStorage($storageId);
+    if (!$ts) throw new \RuntimeException('Storage record not found.');
+
+    $editable = ['description','quantity','location_code','expected_pickup','picked_up_at','monthly_rate'];
+    $sets = []; $binds = []; $changes = [];
+    foreach ($editable as $f) {
+        if (array_key_exists($f, $data) && (string) ($data[$f] ?? '') !== (string) ($ts[$f] ?? '')) {
+            $sets[] = "{$f} = ?"; $binds[] = $data[$f];
+            $changes[$f] = ['old' => $ts[$f], 'new' => $data[$f]];
+        }
+    }
+    if (empty($sets)) return ['changed' => []];
+    $binds[] = $storageId;
+    Database::execute("UPDATE tire_storage SET " . implode(', ', $sets) . " WHERE storage_id = ?", $binds);
+    foreach ($changes as $field => $vals) {
+        auditLog('tire_storage', $storageId, 'UPDATE', $field, (string) ($vals['old'] ?? ''), (string) ($vals['new'] ?? ''), $updatedBy);
+    }
+    return ['changed' => array_keys($changes)];
+}
+
+function createStorageBilling(int $storageId, string $billingMonth): int {
+    $ts = getTireStorage($storageId);
+    if (!$ts) throw new \RuntimeException('Storage record not found.');
+
+    Database::execute(
+        "INSERT INTO storage_billing (storage_id, billing_month, amount, status) VALUES (?, ?, ?, 'pending')",
+        [$storageId, $billingMonth, $ts['monthly_rate']]
+    );
+    return Database::lastInsertId();
+}
+
+function getStorageBilling(int $storageId): array {
+    return Database::query(
+        "SELECT * FROM storage_billing WHERE storage_id = ? ORDER BY billing_month DESC",
+        [$storageId]
+    );
+}
