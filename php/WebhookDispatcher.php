@@ -110,7 +110,7 @@ class WebhookDispatcher
                 'X-Webhook-Signature: sha256=' . $signature,
                 'X-Webhook-Timestamp: ' . $timestamp,
                 'X-Webhook-Id: ' . $deliveryId,
-                'User-Agent: TireShopPOS/1.0.1',
+                'User-Agent: TireShopPOS/1.1.0',
             ],
         ]);
 
@@ -357,7 +357,7 @@ class WebhookDispatcher
                 'X-Webhook-Signature: sha256=' . $signature,
                 'X-Webhook-Timestamp: ' . time(),
                 'X-Webhook-Id: test',
-                'User-Agent: TireShopPOS/1.0.1',
+                'User-Agent: TireShopPOS/1.1.0',
             ],
         ]);
 

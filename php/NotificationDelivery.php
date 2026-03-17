@@ -127,7 +127,7 @@ class NotificationDelivery
             "Reply-To: {$from}",
             "MIME-Version: 1.0",
             "Content-Type: text/html; charset=UTF-8",
-            "X-Mailer: TireShopPOS/1.0.1",
+            "X-Mailer: TireShopPOS/1.1.0",
         ];
 
         $ok = @mail($to, $subject, $htmlBody, implode("\r\n", $headers));
@@ -194,7 +194,7 @@ class NotificationDelivery
             $msg .= "Subject: {$subject}\r\n";
             $msg .= "MIME-Version: 1.0\r\n";
             $msg .= "Content-Type: multipart/alternative; boundary=\"{$boundary}\"\r\n";
-            $msg .= "X-Mailer: TireShopPOS/1.0.1\r\n";
+            $msg .= "X-Mailer: TireShopPOS/1.1.0\r\n";
             $msg .= "\r\n";
             $msg .= "--{$boundary}\r\n";
             $msg .= "Content-Type: text/plain; charset=UTF-8\r\n\r\n";

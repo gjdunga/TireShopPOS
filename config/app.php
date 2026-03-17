@@ -16,7 +16,7 @@ return [
     'name' => Env::get('APP_NAME', 'Tire Shop POS'),
 
     // Schema version (matches tire_pos_schema_full.sql header)
-    'version' => '1.0.1',
+    'version' => '1.1.0',
 
     // Debug mode: true shows detailed errors, false returns generic messages
     // NEVER set true in production
