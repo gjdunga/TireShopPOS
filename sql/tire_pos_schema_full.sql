@@ -452,6 +452,7 @@ CREATE TABLE IF NOT EXISTS tires (
     brand_id            INT NOT NULL,
     tire_type_id        INT NOT NULL,
     model_name          VARCHAR(80) DEFAULT NULL COMMENT 'e.g., Wrangler Duratrac',
+    full_size_string    VARCHAR(40) DEFAULT NULL COMMENT 'Cached display string, e.g. 225/65R17',
 
     -- Size (parsed, never stored as formatted string)
     size_format         ENUM('metric','flotation') NOT NULL DEFAULT 'metric',
@@ -694,6 +695,27 @@ CREATE TABLE IF NOT EXISTS work_orders (
     updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                             ON UPDATE CURRENT_TIMESTAMP,
 
+    estimated_price      DECIMAL(10,2) DEFAULT NULL
+        COMMENT 'Quick estimate before line items are entered',
+
+    -- Financial summary (auto-calculated from work_order_line_items)
+    deposit_amount      DECIMAL(10,2) DEFAULT NULL,
+    deposit_received_at DATETIME DEFAULT NULL,
+    deposit_method      ENUM('cash','credit_card','debit_card','check','other') DEFAULT NULL,
+    deposit_received_by INT DEFAULT NULL,
+    subtotal_materials  DECIMAL(10,2) NOT NULL DEFAULT 0.00
+        COMMENT 'SUM of taxable line items (parts, warranty)',
+    subtotal_labor      DECIMAL(10,2) NOT NULL DEFAULT 0.00
+        COMMENT 'SUM of labor line items',
+    subtotal_fees       DECIMAL(10,2) NOT NULL DEFAULT 0.00
+        COMMENT 'SUM of fee + disposal line items',
+    tax_rate            DECIMAL(5,4) NOT NULL DEFAULT 0.0000
+        COMMENT 'Rate at time of sale, e.g., 0.0790',
+    tax_amount          DECIMAL(10,2) NOT NULL DEFAULT 0.00
+        COMMENT 'Calculated: subtotal_materials * tax_rate',
+    total_estimate      DECIMAL(10,2) NOT NULL DEFAULT 0.00
+        COMMENT 'materials + labor + fees + tax',
+
     CONSTRAINT fk_wo_customer    FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
     CONSTRAINT fk_wo_vehicle     FOREIGN KEY (vehicle_id) REFERENCES vehicles(vehicle_id),
     CONSTRAINT fk_wo_tech        FOREIGN KEY (assigned_tech_id) REFERENCES users(user_id),
@@ -704,6 +726,7 @@ CREATE TABLE IF NOT EXISTS work_orders (
     INDEX idx_wo_vehicle (vehicle_id),
     INDEX idx_wo_status (status),
     INDEX idx_wo_date (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS work_order_positions (
     position_id         INT AUTO_INCREMENT PRIMARY KEY,
@@ -714,6 +737,7 @@ CREATE TABLE IF NOT EXISTS work_order_positions (
     rotate_to_position  ENUM('LF','RF','LR','RR','SPARE','LRI','RRI','LFI','RFI') DEFAULT NULL,
     tire_id_existing    INT DEFAULT NULL COMMENT 'Tire currently on vehicle at this position',
     tire_id_new         INT DEFAULT NULL COMMENT 'Tire from inventory to install',
+    unit_price          DECIMAL(8,2) DEFAULT NULL COMMENT 'Tire retail price at time of WO',
     tread_depth_in      TINYINT UNSIGNED DEFAULT NULL COMMENT '32nds at intake',
     tread_depth_out     TINYINT UNSIGNED DEFAULT NULL COMMENT '32nds at release',
     psi_in              TINYINT UNSIGNED DEFAULT NULL,
@@ -879,7 +903,9 @@ CREATE TABLE IF NOT EXISTS audit_log (
     log_id          BIGINT AUTO_INCREMENT PRIMARY KEY,
     table_name      VARCHAR(60) NOT NULL,
     record_id       INT DEFAULT NULL,
-    action          ENUM('INSERT','UPDATE','DELETE','STATUS_CHANGE','LOGIN','LOGOUT','FAILED_LOGIN')
+    action          ENUM('INSERT','UPDATE','DELETE','STATUS_CHANGE',
+                         'LOGIN','LOGOUT','FAILED_LOGIN',
+                         'PASSWORD_CHANGE','SESSION_CREATE','SESSION_DESTROY')
                         NOT NULL,
     field_changed   VARCHAR(60) DEFAULT NULL,
     old_value       TEXT DEFAULT NULL,
