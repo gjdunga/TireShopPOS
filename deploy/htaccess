@@ -35,11 +35,9 @@ Options -Indexes +SymLinksIfOwnerMatch
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
-    # --- Skip /api (handled by api/.htaccess) ---
-    RewriteRule ^api(/|$) - [L]
-
-    # --- SPA fallback ---
-    # Everything else serves index.html (React Router handles it)
+    # --- SPA fallback (non-API only) ---
+    # /api requests are handled by api/.htaccess FallbackResource.
+    RewriteCond %{REQUEST_URI} !^/api(/|$)
     RewriteRule ^ index.html [L]
 </IfModule>
 
