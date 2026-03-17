@@ -456,6 +456,147 @@ assert_status "Lookup tire-types" "200" "$C" "$(body "$R")"
 R=$(api_auth "$API_BASE/lookups/construction-types"); C=$(code "$R")
 assert_status "Lookup construction" "200" "$C" "$(body "$R")"
 
+# ---- WORK ORDER LINE ITEMS ----
+echo -e "\n${CYAN}  [Work Order Line Items]${NC}"
+R=$(api_auth -X POST -d "{\"line_type\":\"labor\",\"description\":\"Mount and Balance\",\"quantity\":4,\"unit_price\":25.00}" "$API_BASE/work-orders/$WO_ID/line-items"); C=$(code "$R"); B=$(body "$R")
+assert_status "Add line item (labor)" "200" "$C" "$B"
+LINE_ID=$(jval "$B" line_id)
+assert "Line item ID" "$LINE_ID" "$B"
+
+R=$(api_auth -X POST -d "{\"line_type\":\"fee\",\"description\":\"CO Waste Tire Fee\",\"quantity\":4,\"unit_price\":2.00}" "$API_BASE/work-orders/$WO_ID/line-items"); C=$(code "$R"); B=$(body "$R")
+assert_status "Add line item (fee)" "200" "$C" "$B"
+
+R=$(api_auth "$API_BASE/work-orders/$WO_ID"); C=$(code "$R"); B=$(body "$R")
+assert_status "WO detail with line items" "200" "$C" "$B"
+assert "WO has line_items" '"line_items"' "$B"
+
+R=$(api_auth -X PATCH -d '{"unit_price":30.00}' "$API_BASE/work-orders/line-items/$LINE_ID"); C=$(code "$R")
+assert_status "Update line item" "200" "$C" "$(body "$R")"
+
+R=$(api_auth -X POST "$API_BASE/work-orders/$WO_ID/recalculate"); C=$(code "$R"); B=$(body "$R")
+assert_status "Recalculate totals" "200" "$C" "$B"
+assert "Recalc has total" '"total_estimate"' "$B"
+
+R=$(api_auth -X DELETE "$API_BASE/work-orders/line-items/$LINE_ID"); C=$(code "$R")
+assert_status "Delete line item" "200" "$C" "$(body "$R")"
+
+# ---- SERVICES ----
+echo -e "\n${CYAN}  [Service Catalog]${NC}"
+R=$(api_auth "$API_BASE/services"); C=$(code "$R"); B=$(body "$R")
+assert_status "List services" "200" "$C" "$B"
+assert "Services: has list" '"services"' "$B"
+
+R=$(api_auth -X POST -d '{"service_code":"TEST_SVC","service_name":"Test Service","default_labor":15.00}' "$API_BASE/services"); C=$(code "$R"); B=$(body "$R")
+assert_status "Create service" "200" "$C" "$B"
+SVC_ID=$(jval "$B" service_id)
+
+R=$(api_auth -X PATCH -d '{"default_labor":20.00}' "$API_BASE/services/$SVC_ID"); C=$(code "$R")
+assert_status "Update service" "200" "$C" "$(body "$R")"
+
+R=$(api_auth -X DELETE "$API_BASE/services/$SVC_ID"); C=$(code "$R")
+assert_status "Deactivate service" "200" "$C" "$(body "$R")"
+
+# ---- FEE CONFIGURATION ----
+echo -e "\n${CYAN}  [Fee Configuration]${NC}"
+R=$(api_auth "$API_BASE/config"); C=$(code "$R"); B=$(body "$R")
+assert_status "List fees" "200" "$C" "$B"
+
+R=$(api_auth "$API_BASE/config/tax_rate"); C=$(code "$R"); B=$(body "$R")
+assert_status "Get config: tax_rate" "200" "$C" "$B"
+assert "Config: has value" '"value"' "$B"
+
+R=$(api_auth -X POST -d '{"fee_key":"TEST_FEE","fee_label":"Test Fee","fee_amount":1.50,"effective_date":"2026-01-01"}' "$API_BASE/config/fees"); C=$(code "$R"); B=$(body "$R")
+assert_status "Create fee" "200" "$C" "$B"
+FEE_ID=$(jval "$B" fee_id)
+
+R=$(api_auth -X PATCH -d '{"fee_amount":2.00}' "$API_BASE/config/fees/$FEE_ID"); C=$(code "$R")
+assert_status "Update fee" "200" "$C" "$(body "$R")"
+
+R=$(api_auth -X DELETE "$API_BASE/config/fees/$FEE_ID"); C=$(code "$R")
+assert_status "Deactivate fee" "200" "$C" "$(body "$R")"
+
+# ---- DISCOUNT GROUPS ----
+echo -e "\n${CYAN}  [Discount Groups]${NC}"
+R=$(api_auth -X POST -d '{"group_name":"Military","group_code":"MIL","discount_type":"percentage","discount_value":10}' "$API_BASE/discount-groups"); C=$(code "$R"); B=$(body "$R")
+assert_status "Create discount group" "200" "$C" "$B"
+DG_ID=$(jval "$B" group_id)
+
+R=$(api_auth "$API_BASE/discount-groups"); C=$(code "$R"); B=$(body "$R")
+assert_status "List discount groups" "200" "$C" "$B"
+assert "Groups: Military" 'Military' "$B"
+
+R=$(api_auth -X POST -d "{\"group_id\":$DG_ID}" "$API_BASE/customers/$CUST_ID/discount-groups"); C=$(code "$R")
+assert_status "Add customer to group" "200" "$C" "$(body "$R")"
+
+R=$(api_auth "$API_BASE/customers/$CUST_ID/discount-groups"); C=$(code "$R"); B=$(body "$R")
+assert_status "Customer discount groups" "200" "$C" "$B"
+assert "Customer in Military" 'Military' "$B"
+
+R=$(api_auth -X DELETE "$API_BASE/customers/$CUST_ID/discount-groups/$DG_ID"); C=$(code "$R")
+assert_status "Remove from group" "200" "$C" "$(body "$R")"
+
+# ---- COUPONS ----
+echo -e "\n${CYAN}  [Coupons]${NC}"
+R=$(api_auth -X POST -d '{"coupon_code":"SPRING10","coupon_name":"Spring Sale","discount_type":"percentage","discount_value":10}' "$API_BASE/coupons"); C=$(code "$R"); B=$(body "$R")
+assert_status "Create coupon" "200" "$C" "$B"
+COUPON_ID=$(jval "$B" coupon_id)
+
+R=$(api_auth "$API_BASE/coupons"); C=$(code "$R"); B=$(body "$R")
+assert_status "List coupons" "200" "$C" "$B"
+assert "Coupons: SPRING10" 'SPRING10' "$B"
+
+R=$(api_auth -X POST -d '{"code":"SPRING10"}' "$API_BASE/coupons/validate"); C=$(code "$R"); B=$(body "$R")
+assert_status "Validate coupon" "200" "$C" "$B"
+assert "Coupon valid" '"valid":true' "$B"
+
+R=$(api_auth -X POST -d '{"code":"FAKE999"}' "$API_BASE/coupons/validate"); C=$(code "$R"); B=$(body "$R")
+assert_status "Invalid coupon" "200" "$C" "$B"
+assert "Coupon invalid" '"valid":false' "$B"
+
+# ---- TIRE STORAGE ----
+echo -e "\n${CYAN}  [Tire Storage]${NC}"
+R=$(api_auth -X POST -d "{\"customer_id\":$CUST_ID,\"description\":\"Winter tires\",\"quantity\":4,\"location_code\":\"A-3-2\"}" "$API_BASE/tire-storage"); C=$(code "$R"); B=$(body "$R")
+assert_status "Create storage" "200" "$C" "$B"
+STOR_ID=$(jval "$B" storage_id)
+
+R=$(api_auth "$API_BASE/tire-storage"); C=$(code "$R"); B=$(body "$R")
+assert_status "List storage" "200" "$C" "$B"
+assert "Storage: Winter tires" 'Winter tires' "$B"
+
+R=$(api_auth -X PATCH -d '{"picked_up_at":"2026-10-01"}' "$API_BASE/tire-storage/$STOR_ID"); C=$(code "$R")
+assert_status "Mark pickup" "200" "$C" "$(body "$R")"
+
+# ---- DISPOSAL LOG ----
+echo -e "\n${CYAN}  [Disposal Log]${NC}"
+R=$(api_auth -X POST -d '{"disposal_date":"2026-03-16","quantity":12,"hauler_name":"Green Disposal Inc","manifest_number":"GD-2026-0042"}' "$API_BASE/disposals"); C=$(code "$R"); B=$(body "$R")
+assert_status "Log disposal" "200" "$C" "$B"
+DISP_ID=$(jval "$B" disposal_id)
+
+R=$(api_auth "$API_BASE/disposals"); C=$(code "$R"); B=$(body "$R")
+assert_status "List disposals" "200" "$C" "$B"
+assert "Disposal: Green Disposal" 'Green Disposal' "$B"
+
+# ---- WEBHOOKS ----
+echo -e "\n${CYAN}  [Webhooks]${NC}"
+R=$(api_auth -X POST -d '{"url":"https://httpbin.org/post","label":"Test Hook","events":["WO_CREATE"]}' "$API_BASE/webhooks/endpoints"); C=$(code "$R"); B=$(body "$R")
+assert_status "Create webhook endpoint" "200" "$C" "$B"
+WH_ID=$(jval "$B" endpoint_id)
+
+R=$(api_auth "$API_BASE/webhooks/endpoints"); C=$(code "$R"); B=$(body "$R")
+assert_status "List webhook endpoints" "200" "$C" "$B"
+assert "Webhook: Test Hook" 'Test Hook' "$B"
+
+R=$(api_auth "$API_BASE/webhooks/stats"); C=$(code "$R"); B=$(body "$R")
+assert_status "Webhook stats" "200" "$C" "$B"
+assert "Stats: pending" '"pending"' "$B"
+
+R=$(api_auth "$API_BASE/webhooks/events"); C=$(code "$R"); B=$(body "$R")
+assert_status "Webhook events list" "200" "$C" "$B"
+assert "Events: WO_CREATE" 'WO_CREATE' "$B"
+
+R=$(api_auth -X DELETE "$API_BASE/webhooks/endpoints/$WH_ID"); C=$(code "$R")
+assert_status "Delete webhook endpoint" "200" "$C" "$(body "$R")"
+
 # ---- BOUNDARY VALUES ----
 echo -e "\n${CYAN}  [Boundary values]${NC}"
 LONG=$(python3 -c "print('A' * 500)")
