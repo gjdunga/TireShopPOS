@@ -383,13 +383,18 @@ class Router
      */
     private function resolveUri(): string
     {
-        $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
-
-        // Strip front controller from PATH_INFO style URLs.
-        // /api/index.php/auth/login -> /api/auth/login
-        // This allows direct file hits (no mod_rewrite) while keeping
-        // clean route patterns.
-        $uri = str_replace('/index.php', '', $uri);
+        // Query string routing: ?_=/auth/login (bypasses Apache rewrites entirely)
+        if (isset($_GET['_']) && $_GET['_'] !== '') {
+            $uri = urldecode($_GET['_']);
+            // Ensure it starts with /api
+            if (!str_starts_with($uri, '/api')) {
+                $uri = '/api' . $uri;
+            }
+        } else {
+            $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
+            // Strip front controller from PATH_INFO style URLs (fallback)
+            $uri = str_replace('/index.php', '', $uri);
+        }
 
         // Strip trailing slash (except root)
         if ($uri !== '/' && str_ends_with($uri, '/')) {

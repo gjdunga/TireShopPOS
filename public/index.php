@@ -40,8 +40,13 @@ require_once BASE_PATH . '/php/InputValidator.php';
 // Lazy-load: only parse additional files when the URI requires them.
 // Closures in routes/api.php are registered but not executed until dispatch,
 // so the file only needs to be loaded before the matching closure runs.
-$uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
-$uri = str_replace('/index.php', '', $uri); // PATH_INFO style: /api/index.php/foo -> /api/foo
+// Resolve the route for lazy-loading decisions
+if (isset($_GET['_']) && $_GET['_'] !== '') {
+    $uri = urldecode($_GET['_']);
+    if (!str_starts_with($uri, '/api')) $uri = '/api' . $uri;
+} else {
+    $uri = str_replace('/index.php', '', parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH));
+}
 
 // P3 (935 lines): settings, warranties, wheels, fitment, custom fields,
 // API keys, recalls, barcodes, labels, notifications, public storefront.

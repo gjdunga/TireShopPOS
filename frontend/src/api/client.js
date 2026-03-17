@@ -13,6 +13,13 @@
 
 const API_BASE = '/api/index.php';
 
+// Build URL: /api/index.php?_=/auth/login&other=params
+// The query string bypasses all Apache rewrite/FPM proxy issues.
+function buildUrl(path) {
+  const route = encodeURIComponent(path);
+  return `${API_BASE}?_=${route}`;
+}
+
 // Session token is stored in memory only (not localStorage).
 // Survives page navigation via React state but clears on hard refresh.
 // That is intentional: the PHP session has a sliding window;
@@ -51,7 +58,7 @@ export class ApiError extends Error {
 // ---- Core request function ----
 
 async function request(method, path, body = null, options = {}) {
-  const url = `${API_BASE}${path}`;
+  const url = buildUrl(path);
 
   const headers = {
     'Accept': 'application/json',

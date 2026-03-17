@@ -10,9 +10,9 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import './Storefront.css';
 
-const API = '/api/index.php/public';
+const API = '/api/index.php?_=/public';
 async function pubGet(path) {
-  const res = await fetch(API + path);
+  const res = await fetch(API + encodeURIComponent(path));
   if (!res.ok) throw new Error('Request failed');
   const json = await res.json();
   return json.data ?? json;
