@@ -60,7 +60,7 @@ export function WheelSearch() {
                   <td className="mono">{w.bolt_pattern || '\u2014'}</td>
                   <td style={{ textTransform: 'capitalize' }}>{w.material}</td>
                   <td><span className={`badge ${w.condition === 'new' ? 'badge-green' : 'badge-orange'}`}>{w.condition}</span></td>
-                  <td className="mono">{w.quantity_on_hand}</td>
+                  <td className="mono">{w.quantity}</td>
                   <td className="mono">{w.retail_price ? '$' + Number(w.retail_price).toFixed(2) : '\u2014'}</td>
                   <td><Link to={`/wheels/${w.wheel_id}`} className="btn btn-ghost btn-sm">Open</Link></td>
                 </tr>
@@ -82,7 +82,7 @@ export function WheelDetail() {
   const [form, setForm] = useState({
     brand: '', model: '', diameter: '', width: '', bolt_pattern: '', offset_mm: '',
     center_bore: '', material: 'unknown', finish: '', condition: 'used',
-    retail_price: '', cost: '', quantity_on_hand: '0', bin_location: '', notes: '',
+    retail_price: '', cost: '', quantity: '0', bin_location: '', notes: '',
   });
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
@@ -99,7 +99,7 @@ export function WheelDetail() {
         offset_mm: w.offset_mm ?? '', center_bore: w.center_bore ?? '',
         material: w.material || 'unknown', finish: w.finish || '',
         condition: w.condition || 'used', retail_price: w.retail_price ?? '',
-        cost: w.cost ?? '', quantity_on_hand: w.quantity_on_hand ?? '0',
+        cost: w.cost ?? '', quantity: w.quantity ?? '0',
         bin_location: w.bin_location || '', notes: w.notes || '',
       }); })
       .catch((e) => setError(e.message))
@@ -152,7 +152,7 @@ export function WheelDetail() {
             <select value={form.condition} onChange={ch('condition')}><option value="new">New</option><option value="used">Used</option></select></div>
           <div className="form-field"><label className="label">Retail Price</label><input type="number" step="0.01" value={form.retail_price} onChange={ch('retail_price')} /></div>
           <div className="form-field"><label className="label">Cost</label><input type="number" step="0.01" value={form.cost} onChange={ch('cost')} /></div>
-          <div className="form-field"><label className="label">Qty On Hand</label><input type="number" value={form.quantity_on_hand} onChange={ch('quantity_on_hand')} /></div>
+          <div className="form-field"><label className="label">Qty On Hand</label><input type="number" value={form.quantity} onChange={ch('quantity')} /></div>
           <div className="form-field"><label className="label">BIN Location</label><input type="text" value={form.bin_location} onChange={ch('bin_location')} /></div>
           <div className="form-field" style={{ gridColumn: '1 / -1' }}><label className="label">Notes</label>
             <textarea rows={2} value={form.notes} onChange={ch('notes')}

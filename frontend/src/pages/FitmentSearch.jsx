@@ -61,6 +61,12 @@ function VehicleFitment() {
 
       {results && (
         <div style={{ marginTop: '1rem' }}>
+          {results.note && (
+            <div style={{ marginBottom: '0.75rem', padding: '0.6rem 0.75rem', background: '#FFF3CD', borderRadius: '6px', fontSize: '0.8125rem', color: '#856404' }}>
+              {results.note}
+            </div>
+          )}
+
           {(results.specs || []).length > 0 && (
             <div className="card" style={{ marginBottom: '1rem' }}>
               <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '0.875rem', color: 'var(--navy)', marginBottom: '0.5rem' }}>Torque Specs</h3>
@@ -69,8 +75,8 @@ function VehicleFitment() {
                 <tbody>
                   {results.specs.map((s, i) => (
                     <tr key={i}><td>{s.make}</td><td>{s.model}</td><td className="mono">{s.year_start}-{s.year_end}</td>
-                      <td className="mono" style={{ fontWeight: 600 }}>{s.torque_min}{s.torque_max !== s.torque_min ? '-' + s.torque_max : ''}</td>
-                      <td className="mono">{s.lug_nut_size || '\u2014'}</td></tr>
+                      <td className="mono" style={{ fontWeight: 600 }}>{s.torque_ft_lbs_min}{s.torque_ft_lbs_max !== s.torque_ft_lbs_min ? '-' + s.torque_ft_lbs_max : ''}</td>
+                      <td className="mono">{s.lug_size_mm || '\u2014'}</td></tr>
                   ))}
                 </tbody>
               </table>
@@ -105,7 +111,7 @@ function VehicleFitment() {
                     <tr key={w.wheel_id}><td>{[w.brand, w.model].filter(Boolean).join(' ')}</td>
                       <td className="mono">{w.diameter}"</td><td className="mono">{w.bolt_pattern}</td>
                       <td style={{ textTransform: 'capitalize' }}>{w.material}</td>
-                      <td className="mono">{w.quantity_on_hand}</td>
+                      <td className="mono">{w.quantity}</td>
                       <td className="mono">{w.retail_price ? '$' + Number(w.retail_price).toFixed(2) : '\u2014'}</td></tr>
                   ))}
                 </tbody>
@@ -209,7 +215,7 @@ function BoltPatternSearch() {
                 <tbody>{results.wheels.map((w) => (
                   <tr key={w.wheel_id}><td>{[w.brand, w.model].filter(Boolean).join(' ')}</td>
                     <td className="mono">{w.diameter}"</td><td style={{ textTransform: 'capitalize' }}>{w.material}</td>
-                    <td className="mono">{w.quantity_on_hand}</td><td className="mono">{w.retail_price ? '$' + Number(w.retail_price).toFixed(2) : '\u2014'}</td></tr>
+                    <td className="mono">{w.quantity}</td><td className="mono">{w.retail_price ? '$' + Number(w.retail_price).toFixed(2) : '\u2014'}</td></tr>
                 ))}</tbody>
               </table>
             </div>

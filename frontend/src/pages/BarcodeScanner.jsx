@@ -158,7 +158,7 @@ function WheelResult({ wheel, onPrint }) {
       </div>
       <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.75rem', fontSize: '0.875rem', flexWrap: 'wrap' }}>
         <div><strong>Material:</strong> {wheel.material}</div>
-        <div><strong>Qty:</strong> {wheel.quantity_on_hand}</div>
+        <div><strong>Qty:</strong> {wheel.quantity}</div>
         {wheel.bin_location && <div><strong>BIN:</strong> <span className="mono">{wheel.bin_location}</span></div>}
       </div>
       <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>

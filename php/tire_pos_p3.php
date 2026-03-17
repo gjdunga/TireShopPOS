@@ -299,7 +299,7 @@ function createWheel(array $data): int {
     InputValidator::check('wheels', $data);
     $sql = "INSERT INTO wheels
             (brand, model, diameter, width, bolt_pattern, offset_mm, center_bore,
-             material, finish, `condition`, retail_price, cost, quantity_on_hand,
+             material, finish, `condition`, retail_price, cost, quantity,
              bin_location, notes)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     $stmt = getDB()->prepare($sql);
@@ -311,7 +311,7 @@ function createWheel(array $data): int {
         $data['material'] ?? 'unknown', $data['finish'] ?? null,
         $data['condition'] ?? 'used',
         $data['retail_price'] ?? null, $data['cost'] ?? null,
-        (int) ($data['quantity_on_hand'] ?? 0),
+        (int) ($data['quantity'] ?? 0),
         $data['bin_location'] ?? null, $data['notes'] ?? null,
     ]);
     return (int) getDB()->lastInsertId();
@@ -330,7 +330,7 @@ function updateWheel(int $wheelId, array $data): array {
     InputValidator::check('wheels', $data);
     $editable = ['brand', 'model', 'diameter', 'width', 'bolt_pattern', 'offset_mm',
                  'center_bore', 'material', 'finish', 'condition', 'retail_price',
-                 'cost', 'quantity_on_hand', 'bin_location', 'notes', 'is_active'];
+                 'cost', 'quantity', 'bin_location', 'notes', 'is_active'];
     $sets = [];
     $params = [];
     foreach ($editable as $col) {
@@ -409,6 +409,7 @@ function searchFitmentByVehicle(string $make, string $model, ?int $year = null):
     // Find tires by OEM size via torque specs table (has make/model/year ranges)
     $specWhere = 'lts.make = ? AND lts.model LIKE ?';
     $specParams = [$make, '%' . $model . '%'];
+    $yearFallback = false;
     if ($year) {
         $specWhere .= ' AND lts.year_start <= ? AND lts.year_end >= ?';
         $specParams[] = $year;
@@ -419,6 +420,17 @@ function searchFitmentByVehicle(string $make, string $model, ?int $year = null):
         "SELECT DISTINCT lts.* FROM lkp_torque_specs lts WHERE {$specWhere} LIMIT 10",
         $specParams
     );
+
+    // If year-specific search found nothing, retry without year filter.
+    // Torque spec data covers 1995-2021; newer vehicles won't match by year
+    // but the make/model specs are usually still correct.
+    if (empty($specs) && $year) {
+        $specs = Database::query(
+            "SELECT DISTINCT lts.* FROM lkp_torque_specs lts WHERE lts.make = ? AND lts.model LIKE ? LIMIT 10",
+            [$make, '%' . $model . '%']
+        );
+        $yearFallback = !empty($specs);
+    }
 
     // Find available tires matching OEM sizes from vehicles table
     $tires = [];
@@ -448,13 +460,17 @@ function searchFitmentByVehicle(string $make, string $model, ?int $year = null):
     $wheels = Database::query(
         "SELECT DISTINCT w.* FROM wheels w
          JOIN wheel_fitments wf ON w.wheel_id = wf.wheel_id
-         WHERE {$wheelWhere} AND w.is_active = 1 AND w.quantity_on_hand > 0
+         WHERE {$wheelWhere} AND w.is_active = 1 AND w.quantity > 0
          ORDER BY w.diameter, w.brand
          LIMIT 20",
         $wheelParams
     );
 
-    return ['specs' => $specs, 'tires' => $tires, 'wheels' => $wheels];
+    $result = ['specs' => $specs, 'tires' => $tires, 'wheels' => $wheels];
+    if ($yearFallback) {
+        $result['note'] = "Torque spec data covers 1995-2021. Showing specs for {$make} {$model} (all years). Verify torque values for your specific model year.";
+    }
+    return $result;
 }
 
 function searchFitmentReverse(string $size): array {
@@ -483,7 +499,7 @@ function searchFitmentReverse(string $size): array {
 
 function searchByBoltPattern(string $pattern): array {
     $wheels = Database::query(
-        "SELECT * FROM wheels WHERE bolt_pattern = ? AND is_active = 1 AND quantity_on_hand > 0
+        "SELECT * FROM wheels WHERE bolt_pattern = ? AND is_active = 1 AND quantity > 0
          ORDER BY diameter, brand",
         [$pattern]
     );
