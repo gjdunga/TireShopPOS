@@ -1705,7 +1705,7 @@ CREATE TABLE IF NOT EXISTS plate_lookup_cache (
     make            VARCHAR(50)     DEFAULT NULL,
     model           VARCHAR(100)    DEFAULT NULL,
     trim_level      VARCHAR(100)    DEFAULT NULL,
-    body_style      VARCHAR(50)     DEFAULT NULL,
+    body_style      VARCHAR(120)    DEFAULT NULL,
     engine          VARCHAR(100)    DEFAULT NULL,
     drive_type      VARCHAR(20)     DEFAULT NULL,
     color           VARCHAR(30)     DEFAULT NULL,
