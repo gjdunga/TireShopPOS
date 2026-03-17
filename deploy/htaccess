@@ -29,14 +29,12 @@ Options -Indexes +SymLinksIfOwnerMatch
     RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
     # --- PHP API routing ---
-    # All /api requests go to the PHP front controller.
-    # The !-f condition prevents a rewrite loop: on pass 1, /api/auth/login
-    # is not a real file, so the rewrite fires. On pass 2, api/index.php IS
-    # a real file, so the condition fails and Apache serves it directly.
-    # This is the standard pattern used by Laravel, Symfony, and WordPress.
-    RewriteCond %{REQUEST_FILENAME} !-f
+    # [END] stops ALL rewrite processing (no second pass). Required because
+    # [L] only stops the current pass; Apache re-evaluates in per-directory
+    # context, and this Virtualmin/FPM setup spawns a fresh PHP process on
+    # each pass, causing output concatenation.
     RewriteCond %{REQUEST_URI} ^/api(/.*)?$
-    RewriteRule ^api(/.*)?$ api/index.php [L,QSA]
+    RewriteRule ^api(/.*)?$ api/index.php [END,QSA]
 
     # --- Static files: serve directly if they exist ---
     RewriteCond %{REQUEST_FILENAME} -f
