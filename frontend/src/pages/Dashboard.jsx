@@ -68,7 +68,7 @@ function useApiData(path) {
 // ---- KPI Widgets ----
 
 function HealthCard() {
-  const { data, loading, error } = useApiData('/health');
+  const { data, loading, error } = useApiData('/ops/health');
 
   return (
     <DashCard title="System" span={1}>
