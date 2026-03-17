@@ -1636,7 +1636,7 @@ SELECT
     a.work_order_id, a.notes
 FROM appointments a
 LEFT JOIN customers c ON a.customer_id = c.customer_id
-LEFT JOIN vehicles v ON a.vehicle_id = v.vehicle_id
+LEFT JOIN vehicles v ON a.vehicle_id = v.vehicle_id;
 
 -- v13: Open purchase orders
 CREATE OR REPLACE VIEW v_purchase_orders_open AS
