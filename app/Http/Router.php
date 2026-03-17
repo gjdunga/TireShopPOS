@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Http;
 
 use App\Core\Config;
+use App\Core\Logger;
 
 /**
  * HTTP Router.
@@ -145,8 +146,10 @@ class Router
      */
     public function dispatch(): never
     {
-        // Always set JSON and CORS headers
+        Logger::init();
+
         header('Content-Type: application/json; charset=utf-8');
+        header('X-Request-Id: ' . Logger::requestId());
         $this->sendCorsHeaders();
 
         // CORS preflight
@@ -314,6 +317,15 @@ class Router
             header('Content-Type: application/json; charset=utf-8');
         }
         echo json_encode($data, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+
+        $userId = null;
+        try { $userId = Middleware::userId(); } catch (\Throwable $e) {}
+        Logger::request(
+            $_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN',
+            parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/',
+            $status, $userId
+        );
+
         exit;
     }
 
@@ -346,11 +358,7 @@ class Router
             );
         }
 
-        // Log in production
-        if (!$debug) {
-            error_log('[Router] ' . get_class($e) . ': ' . $e->getMessage()
-                . ' in ' . $e->getFile() . ':' . $e->getLine());
-        }
+        Logger::exception($e);
 
         self::send($payload, 500);
     }

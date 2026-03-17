@@ -102,9 +102,13 @@ class Database
      */
     public static function query(string $sql, array $params = []): array
     {
+        $t = microtime(true);
         $stmt = self::connection()->prepare($sql);
         $stmt->execute($params);
-        return $stmt->fetchAll();
+        $result = $stmt->fetchAll();
+        $ms = (microtime(true) - $t) * 1000;
+        if ($ms >= Logger::slowQueryThreshold()) Logger::slowQuery($sql, $ms, $params);
+        return $result;
     }
 
     /**
@@ -116,9 +120,12 @@ class Database
      */
     public static function queryOne(string $sql, array $params = []): ?array
     {
+        $t = microtime(true);
         $stmt = self::connection()->prepare($sql);
         $stmt->execute($params);
         $row = $stmt->fetch();
+        $ms = (microtime(true) - $t) * 1000;
+        if ($ms >= Logger::slowQueryThreshold()) Logger::slowQuery($sql, $ms, $params);
         return $row !== false ? $row : null;
     }
 
@@ -131,9 +138,12 @@ class Database
      */
     public static function scalar(string $sql, array $params = []): mixed
     {
+        $t = microtime(true);
         $stmt = self::connection()->prepare($sql);
         $stmt->execute($params);
         $val = $stmt->fetchColumn();
+        $ms = (microtime(true) - $t) * 1000;
+        if ($ms >= Logger::slowQueryThreshold()) Logger::slowQuery($sql, $ms, $params);
         return $val !== false ? $val : null;
     }
 
@@ -146,9 +156,13 @@ class Database
      */
     public static function execute(string $sql, array $params = []): int
     {
+        $t = microtime(true);
         $stmt = self::connection()->prepare($sql);
         $stmt->execute($params);
-        return $stmt->rowCount();
+        $affected = $stmt->rowCount();
+        $ms = (microtime(true) - $t) * 1000;
+        if ($ms >= Logger::slowQueryThreshold()) Logger::slowQuery($sql, $ms, $params);
+        return $affected;
     }
 
     /**

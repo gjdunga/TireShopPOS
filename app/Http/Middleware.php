@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Http;
 
 use App\Core\Database;
+use App\Core\Logger;
 use App\Core\Session;
 
 /**
@@ -117,6 +118,7 @@ class Middleware
                 require_once BASE_PATH . '/php/tire_pos_p3.php';
                 $key = validateApiKey($apiKey);
                 if ($key === null) {
+                    Logger::authFailure('invalid_api_key');
                     Router::sendError('NOT_AUTHENTICATED', 'Invalid API key.', 401);
                 }
 
@@ -139,6 +141,7 @@ class Middleware
                     [$key['created_by']]
                 );
                 if ($user === null) {
+                    Logger::authFailure('api_key_owner_inactive');
                     Router::sendError('NOT_AUTHENTICATED', 'API key owner account is inactive.', 401);
                 }
 
@@ -157,6 +160,7 @@ class Middleware
                 return;
             }
 
+            Logger::authFailure('no_credentials');
             Router::sendError('NOT_AUTHENTICATED', 'Authentication required. Send Authorization: Bearer <token> or X-API-Key: <key>.', 401);
         };
     }
@@ -252,6 +256,7 @@ class Middleware
             );
 
             if ($count >= $maxHits) {
+                Logger::rateLimitHit($scopeKey, $count, $maxHits);
                 header('Retry-After: ' . $windowSec);
                 header('X-RateLimit-Limit: ' . $maxHits);
                 header('X-RateLimit-Remaining: 0');
