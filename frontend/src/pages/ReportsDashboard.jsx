@@ -10,7 +10,7 @@ import api, { getToken } from '../api/client.js';
 // CSV download helper: fetches with auth token, triggers browser download
 function downloadCsv(path) {
   const token = getToken();
-  fetch('/api' + path + (path.includes('?') ? '&' : '?') + 'format=csv', {
+  fetch('/api/index.php' + path + (path.includes('?') ? '&' : '?') + 'format=csv', {
     headers: token ? { 'Authorization': 'Bearer ' + token } : {},
   })
     .then((r) => {

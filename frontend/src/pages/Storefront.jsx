@@ -10,7 +10,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import './Storefront.css';
 
-const API = '/api/public';
+const API = '/api/index.php/public';
 async function pubGet(path) {
   const res = await fetch(API + path);
   if (!res.ok) throw new Error('Request failed');

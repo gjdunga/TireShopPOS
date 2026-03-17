@@ -41,6 +41,7 @@ require_once BASE_PATH . '/php/InputValidator.php';
 // Closures in routes/api.php are registered but not executed until dispatch,
 // so the file only needs to be loaded before the matching closure runs.
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+$uri = str_replace('/index.php', '', $uri); // PATH_INFO style: /api/index.php/foo -> /api/foo
 
 // P3 (935 lines): settings, warranties, wheels, fitment, custom fields,
 // API keys, recalls, barcodes, labels, notifications, public storefront.

@@ -1,16 +1,12 @@
 # =====================================================================
 # api/.htaccess
-# Route all API requests to the front controller via FallbackResource.
 #
-# FallbackResource is handled by mod_dir, NOT mod_rewrite. It does
-# not trigger per-directory rewrite passes, so the infinite loop
-# that occurs with mod_rewrite on Virtualmin/FPM setups is avoided.
-#
-# How it works: when Apache can't find the requested file on disk
-# (e.g., /api/auth/login), it serves /api/index.php instead.
-# index.php reads REQUEST_URI to determine the route.
+# No routing needed here. The frontend calls /api/index.php/route/path
+# directly (PATH_INFO style). Apache resolves index.php as a real file
+# on disk, sends it to FPM once, no rewrites, no loops.
 #
 # DunganSoft Technologies, March 2026
 # =====================================================================
 
-FallbackResource /api/index.php
+# Ensure PATH_INFO is passed to PHP (default on most setups)
+AcceptPathInfo On

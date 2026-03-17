@@ -11,7 +11,7 @@
 // DunganSoft Technologies, March 2026
 // ================================================================
 
-const API_BASE = '/api';
+const API_BASE = '/api/index.php';
 
 // Session token is stored in memory only (not localStorage).
 // Survives page navigation via React state but clears on hard refresh.

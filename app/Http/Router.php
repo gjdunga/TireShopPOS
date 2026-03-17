@@ -385,6 +385,12 @@ class Router
     {
         $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
 
+        // Strip front controller from PATH_INFO style URLs.
+        // /api/index.php/auth/login -> /api/auth/login
+        // This allows direct file hits (no mod_rewrite) while keeping
+        // clean route patterns.
+        $uri = str_replace('/index.php', '', $uri);
+
         // Strip trailing slash (except root)
         if ($uri !== '/' && str_ends_with($uri, '/')) {
             $uri = rtrim($uri, '/');
