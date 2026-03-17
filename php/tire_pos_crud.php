@@ -1138,9 +1138,10 @@ function createVendor(array $data, int $createdBy): int {
 // Service Catalog
 // ============================================================================
 
-function listServices(): array {
+function listServices(bool $activeOnly = true): array {
+    $where = $activeOnly ? "WHERE is_active = 1" : "";
     return Database::query(
-        "SELECT * FROM service_catalog WHERE is_active = 1 ORDER BY category, service_name"
+        "SELECT * FROM service_catalog {$where} ORDER BY display_order, service_name"
     );
 }
 
@@ -1148,32 +1149,178 @@ function getService(int $serviceId): ?array {
     return Database::queryOne("SELECT * FROM service_catalog WHERE service_id = ?", [$serviceId]);
 }
 
+function createService(array $data, int $createdBy): int {
+    InputValidator::check('service_catalog', $data, ['service_code', 'service_name']);
 
-// ============================================================================
-// Configuration
-// ============================================================================
+    Database::execute(
+        "INSERT INTO service_catalog (service_code, service_name, default_labor, is_per_tire, is_active, display_order)
+         VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            strtoupper(trim($data['service_code'])),
+            trim($data['service_name']),
+            (float) ($data['default_labor'] ?? 0),
+            (int) ($data['is_per_tire'] ?? 1),
+            (int) ($data['is_active'] ?? 1),
+            (int) ($data['display_order'] ?? 0),
+        ]
+    );
 
-function getAllConfig(): array {
-    return Database::query("SELECT * FROM fee_configuration ORDER BY config_key");
+    $id = Database::lastInsertId();
+    auditLog('service_catalog', $id, 'INSERT', null, null, null, $createdBy);
+    logActivity($createdBy, 'SERVICE_CREATE', 'service_catalog', $id, trim($data['service_name']));
+    return $id;
 }
 
-function getConfigValue(string $key): ?array {
-    return Database::queryOne("SELECT * FROM fee_configuration WHERE config_key = ?", [$key]);
-}
+function updateService(int $serviceId, array $data, int $updatedBy): array {
+    $svc = getService($serviceId);
+    if (!$svc) throw new \RuntimeException('Service not found.');
 
-function updateConfig(string $key, string $value, int $updatedBy): void {
-    $current = getConfigValue($key);
-    if ($current === null) {
-        throw new \RuntimeException('Configuration key not found: ' . $key);
+    InputValidator::check('service_catalog', $data);
+
+    $editable = ['service_code', 'service_name', 'default_labor', 'is_per_tire', 'is_active', 'display_order'];
+    $sets = [];
+    $binds = [];
+    $changes = [];
+
+    foreach ($editable as $f) {
+        if (array_key_exists($f, $data) && (string) ($data[$f] ?? '') !== (string) ($svc[$f] ?? '')) {
+            $val = $data[$f];
+            if ($f === 'service_code') $val = strtoupper(trim($val));
+            if ($f === 'service_name') $val = trim($val);
+            $sets[] = "{$f} = ?";
+            $binds[] = $val;
+            $changes[$f] = ['old' => $svc[$f], 'new' => $val];
+        }
     }
 
-    $oldValue = $current['config_value'];
+    if (empty($sets)) return ['changed' => []];
+
+    $binds[] = $serviceId;
+    Database::execute("UPDATE service_catalog SET " . implode(', ', $sets) . " WHERE service_id = ?", $binds);
+
+    foreach ($changes as $field => $vals) {
+        auditLog('service_catalog', $serviceId, 'UPDATE', $field,
+            (string) ($vals['old'] ?? ''), (string) ($vals['new'] ?? ''), $updatedBy);
+    }
+
+    return ['changed' => array_keys($changes)];
+}
+
+function deleteService(int $serviceId, int $deletedBy): void {
+    $svc = getService($serviceId);
+    if (!$svc) throw new \RuntimeException('Service not found.');
+
+    // Soft delete: set is_active = 0 (referenced by work_order_line_items FK)
+    Database::execute("UPDATE service_catalog SET is_active = 0 WHERE service_id = ?", [$serviceId]);
+    auditLog('service_catalog', $serviceId, 'UPDATE', 'is_active', '1', '0', $deletedBy);
+    logActivity($deletedBy, 'SERVICE_DELETE', 'service_catalog', $serviceId, $svc['service_name']);
+}
+
+
+// ============================================================================
+// Fee Configuration (CO tire disposal fees, environmental fees, etc.)
+// ============================================================================
+
+function listFees(bool $activeOnly = true): array {
+    $where = $activeOnly ? "WHERE is_active = 1" : "";
+    return Database::query("SELECT * FROM fee_configuration {$where} ORDER BY fee_key");
+}
+
+function getFee(int $feeId): ?array {
+    return Database::queryOne("SELECT * FROM fee_configuration WHERE fee_id = ?", [$feeId]);
+}
+
+function getFeeByKey(string $key): ?array {
+    return Database::queryOne("SELECT * FROM fee_configuration WHERE fee_key = ?", [$key]);
+}
+
+/**
+ * Get a config value. Checks fee_configuration by fee_key first,
+ * then falls back to shop_settings by setting_key.
+ * Returns {key, value} for backward compatibility with QuoteTool.
+ */
+function getConfigValue(string $key): ?array {
+    // Try fee_configuration first
+    $fee = Database::queryOne("SELECT fee_key, fee_amount FROM fee_configuration WHERE fee_key = ?", [$key]);
+    if ($fee) {
+        return ['key' => $fee['fee_key'], 'value' => $fee['fee_amount']];
+    }
+    // Fall back to shop_settings (for tax_rate, shop_name, etc.)
+    $setting = Database::queryOne("SELECT setting_key, setting_value FROM shop_settings WHERE setting_key = ?", [$key]);
+    if ($setting) {
+        return ['key' => $setting['setting_key'], 'value' => $setting['setting_value']];
+    }
+    return null;
+}
+
+function createFee(array $data, int $createdBy): int {
+    $key = strtoupper(trim($data['fee_key'] ?? ''));
+    $label = trim($data['fee_label'] ?? '');
+    if ($key === '' || $label === '') {
+        throw new \InvalidArgumentException('Fee key and label are required.');
+    }
+
     Database::execute(
-        "UPDATE fee_configuration SET config_value = ?, updated_at = CURRENT_TIMESTAMP WHERE config_key = ?",
-        [$value, $key]
+        "INSERT INTO fee_configuration (fee_key, fee_label, fee_amount, is_per_tire, applies_to,
+         is_taxable, statutory_text, effective_date, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            $key, $label,
+            (float) ($data['fee_amount'] ?? 0),
+            (int) ($data['is_per_tire'] ?? 1),
+            $data['applies_to'] ?? 'new_only',
+            (int) ($data['is_taxable'] ?? 0),
+            $data['statutory_text'] ?? null,
+            $data['effective_date'] ?? date('Y-m-d'),
+            (int) ($data['is_active'] ?? 1),
+        ]
     );
-    auditLog('fee_configuration', null, 'UPDATE', $key, $oldValue, $value, $updatedBy);
-    logActivity($updatedBy, 'CONFIG_UPDATE', 'fee_configuration', null, $key . ': ' . $oldValue . ' -> ' . $value);
+
+    $id = Database::lastInsertId();
+    auditLog('fee_configuration', $id, 'INSERT', null, null, null, $createdBy);
+    logActivity($createdBy, 'FEE_CREATE', 'fee_configuration', $id, "{$key}: {$label}");
+    return $id;
+}
+
+function updateFee(int $feeId, array $data, int $updatedBy): array {
+    $fee = getFee($feeId);
+    if (!$fee) throw new \RuntimeException('Fee not found.');
+
+    $editable = ['fee_key', 'fee_label', 'fee_amount', 'is_per_tire',
+                 'applies_to', 'is_taxable', 'statutory_text', 'effective_date', 'is_active'];
+    $sets = [];
+    $binds = [];
+    $changes = [];
+
+    foreach ($editable as $f) {
+        if (array_key_exists($f, $data) && (string) ($data[$f] ?? '') !== (string) ($fee[$f] ?? '')) {
+            $sets[] = "{$f} = ?";
+            $binds[] = $data[$f];
+            $changes[$f] = ['old' => $fee[$f], 'new' => $data[$f]];
+        }
+    }
+
+    if (empty($sets)) return ['changed' => []];
+
+    $binds[] = $feeId;
+    Database::execute("UPDATE fee_configuration SET " . implode(', ', $sets) . " WHERE fee_id = ?", $binds);
+
+    foreach ($changes as $field => $vals) {
+        auditLog('fee_configuration', $feeId, 'UPDATE', $field,
+            (string) ($vals['old'] ?? ''), (string) ($vals['new'] ?? ''), $updatedBy);
+    }
+
+    return ['changed' => array_keys($changes)];
+}
+
+function deleteFee(int $feeId, int $deletedBy): void {
+    $fee = getFee($feeId);
+    if (!$fee) throw new \RuntimeException('Fee not found.');
+
+    // Soft delete (referenced by work_order_line_items FK)
+    Database::execute("UPDATE fee_configuration SET is_active = 0 WHERE fee_id = ?", [$feeId]);
+    auditLog('fee_configuration', $feeId, 'UPDATE', 'is_active', '1', '0', $deletedBy);
+    logActivity($deletedBy, 'FEE_DELETE', 'fee_configuration', $feeId, $fee['fee_label']);
 }
 
 

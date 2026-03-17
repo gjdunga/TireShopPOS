@@ -1079,7 +1079,8 @@ $router->with(permit('PO_CREATE'))->post('/api/vendors', function (array $params
 // ---- Service Catalog (read-only for techs, config for owner) ----
 
 $router->with($auth)->get('/api/services', function () {
-    return ['services' => listServices()];
+    $all = Router::query('all', '') === '1';
+    return ['services' => listServices(!$all)];
 });
 
 $router->with($auth)->get('/api/services/{id}', function (array $params) {
@@ -1090,13 +1091,29 @@ $router->with($auth)->get('/api/services/{id}', function (array $params) {
     return $service;
 });
 
+$router->with(permit('CONFIG_MANAGE'))->post('/api/services', function (array $params, array $body) {
+    $id = createService($body, Middleware::userId());
+    return ['message' => 'Service created.', 'service_id' => $id];
+});
 
-// ---- Configuration ----
-// Full config dump and writes: owner only. Single-key read: any user
-// (QuoteTool, WorkOrderDetail need tax_rate, shop_name, etc.)
+$router->with(permit('CONFIG_MANAGE'))->patch('/api/services/{id}', function (array $params, array $body) {
+    $result = updateService((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Service updated.', 'service_id' => (int) $params['id'], 'changed' => $result['changed']];
+});
+
+$router->with(permit('CONFIG_MANAGE'))->delete('/api/services/{id}', function (array $params) {
+    deleteService((int) $params['id'], Middleware::userId());
+    return ['message' => 'Service deactivated.'];
+});
+
+
+// ---- Configuration / Fee Management ----
+// Config key lookup works across fee_configuration and shop_settings.
+// Fee CRUD: owner only. Single-key read: any user (QuoteTool needs tax_rate).
 
 $router->with(permit('CONFIG_MANAGE'))->get('/api/config', function () {
-    return ['config' => getAllConfig()];
+    $all = Router::query('all', '') === '1';
+    return ['fees' => listFees(!$all)];
 });
 
 $router->with($auth)->get('/api/config/{key}', function (array $params) {
@@ -1107,10 +1124,25 @@ $router->with($auth)->get('/api/config/{key}', function (array $params) {
     return $config;
 });
 
-$router->with(permit('CONFIG_MANAGE'))->patch('/api/config/{key}', function (array $params, array $body) {
-    $value = $body['value'] ?? '';
-    updateConfig($params['key'], (string) $value, Middleware::userId());
-    return ['message' => 'Configuration updated.', 'key' => $params['key']];
+$router->with(permit('CONFIG_MANAGE'))->post('/api/config/fees', function (array $params, array $body) {
+    $id = createFee($body, Middleware::userId());
+    return ['message' => 'Fee created.', 'fee_id' => $id];
+});
+
+$router->with(permit('CONFIG_MANAGE'))->patch('/api/config/fees/{id}', function (array $params, array $body) {
+    $result = updateFee((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Fee updated.', 'fee_id' => (int) $params['id'], 'changed' => $result['changed']];
+});
+
+$router->with(permit('CONFIG_MANAGE'))->delete('/api/config/fees/{id}', function (array $params) {
+    deleteFee((int) $params['id'], Middleware::userId());
+    return ['message' => 'Fee deactivated.'];
+});
+
+$router->with(permit('CONFIG_MANAGE'))->get('/api/config/fees/{id}', function (array $params) {
+    $fee = getFee((int) $params['id']);
+    if (!$fee) Router::sendError('NOT_FOUND', 'Fee not found.', 404);
+    return $fee;
 });
 
 

@@ -34,6 +34,8 @@ class WebhookDispatcher
         'TIRE_ADD', 'TIRE_WRITE_OFF',
         'PO_CREATE', 'PO_RECEIVE',
         'WAIVER_CREATE', 'CONFIG_UPDATE',
+        'SERVICE_CREATE', 'SERVICE_DELETE',
+        'FEE_CREATE', 'FEE_DELETE',
     ];
 
     // ========================================================================
