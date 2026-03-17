@@ -30,12 +30,12 @@ Options -Indexes +SymLinksIfOwnerMatch
 
     # --- PHP API routing ---
     # All /api requests go to the PHP front controller.
-    # The second condition prevents a rewrite loop: after the first pass
-    # rewrites /api/foo to api/index.php, Apache re-evaluates rules from
-    # the top. Without this guard, api/index.php matches ^api(/.*)? again
-    # and PHP executes repeatedly, concatenating JSON responses.
+    # The !-f condition prevents a rewrite loop: on pass 1, /api/auth/login
+    # is not a real file, so the rewrite fires. On pass 2, api/index.php IS
+    # a real file, so the condition fails and Apache serves it directly.
+    # This is the standard pattern used by Laravel, Symfony, and WordPress.
+    RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_URI} ^/api(/.*)?$
-    RewriteCond %{REQUEST_URI} !\.php$
     RewriteRule ^api(/.*)?$ api/index.php [L,QSA]
 
     # --- Static files: serve directly if they exist ---
