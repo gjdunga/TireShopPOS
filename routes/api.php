@@ -1548,6 +1548,91 @@ $router->with(permit('CONFIG_MANAGE'))->post('/api/notifications/test-sms', func
 
 
 // ============================================================================
+// Webhooks (outbound endpoint CRUD + inbound receiver)
+// ============================================================================
+$webhookLoad = function () { require_once BASE_PATH . '/php/WebhookDispatcher.php'; };
+
+// Endpoint CRUD (admin)
+$router->with(permit('USER_MANAGE'))->get('/api/webhooks/endpoints', function () use ($webhookLoad) {
+    $webhookLoad();
+    return ['endpoints' => WebhookDispatcher::listEndpoints()];
+});
+
+$router->with(permit('USER_MANAGE'))->get('/api/webhooks/endpoints/{id}', function (array $params) use ($webhookLoad) {
+    $webhookLoad();
+    $ep = WebhookDispatcher::getEndpoint((int) $params['id']);
+    if (!$ep) Router::sendError('NOT_FOUND', 'Endpoint not found.', 404);
+    $ep['deliveries'] = WebhookDispatcher::getDeliveries((int) $params['id']);
+    return $ep;
+});
+
+$router->with(permit('USER_MANAGE'))->post('/api/webhooks/endpoints', function (array $params, array $body) use ($webhookLoad) {
+    $webhookLoad();
+    $id = WebhookDispatcher::createEndpoint($body, Middleware::userId());
+    return ['message' => 'Webhook endpoint created.', 'endpoint_id' => $id, 'events' => WebhookDispatcher::EVENTS];
+});
+
+$router->with(permit('USER_MANAGE'))->patch('/api/webhooks/endpoints/{id}', function (array $params, array $body) use ($webhookLoad) {
+    $webhookLoad();
+    $result = WebhookDispatcher::updateEndpoint((int) $params['id'], $body, Middleware::userId());
+    return ['message' => 'Endpoint updated.', 'changed' => $result['changed']];
+});
+
+$router->with(permit('USER_MANAGE'))->delete('/api/webhooks/endpoints/{id}', function (array $params) use ($webhookLoad) {
+    $webhookLoad();
+    WebhookDispatcher::deleteEndpoint((int) $params['id'], Middleware::userId());
+    return ['message' => 'Endpoint deleted.'];
+});
+
+$router->with(permit('USER_MANAGE'))->post('/api/webhooks/endpoints/{id}/test', function (array $params) use ($webhookLoad) {
+    $webhookLoad();
+    return WebhookDispatcher::testEndpoint((int) $params['id']);
+});
+
+// Delivery stats and retry
+$router->with(permit('USER_MANAGE'))->get('/api/webhooks/stats', function () use ($webhookLoad) {
+    $webhookLoad();
+    return WebhookDispatcher::getStats();
+});
+
+$router->with(permit('USER_MANAGE'))->post('/api/webhooks/retry', function () use ($webhookLoad) {
+    $webhookLoad();
+    return WebhookDispatcher::processRetries();
+});
+
+// Inbound webhook receiver (no auth, signature-verified per provider)
+$router->post('/api/webhooks/inbound/{provider}', function (array $params, array $body) use ($webhookLoad) {
+    $webhookLoad();
+    $provider = $params['provider'];
+    $rawBody = file_get_contents('php://input') ?: json_encode($body);
+
+    $headers = [];
+    foreach (['HTTP_X_WEBHOOK_SIGNATURE', 'HTTP_X_FLOWROUTE_SIGNATURE', 'HTTP_X_HUB_SIGNATURE_256'] as $h) {
+        if (isset($_SERVER[$h])) {
+            $headers[str_replace('HTTP_', '', $h)] = $_SERVER[$h];
+        }
+    }
+
+    $inboundId = WebhookDispatcher::logInbound($provider, $rawBody, $headers);
+    return ['message' => 'Webhook received.', 'inbound_id' => $inboundId];
+});
+
+// Inbound log (admin)
+$router->with(permit('USER_MANAGE'))->get('/api/webhooks/inbound-log', function () use ($webhookLoad) {
+    $webhookLoad();
+    $provider = Router::query('provider', '');
+    $limit = (int) Router::query('limit', '50');
+    return ['log' => WebhookDispatcher::getInboundLog($provider, $limit)];
+});
+
+// Available event types
+$router->with(permit('USER_MANAGE'))->get('/api/webhooks/events', function () use ($webhookLoad) {
+    $webhookLoad();
+    return ['events' => WebhookDispatcher::EVENTS];
+});
+
+
+// ============================================================================
 // Phase 6: Marketplace Integration Routes
 // ============================================================================
 

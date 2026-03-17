@@ -687,6 +687,22 @@ function logActivity(int $userId, string $activityType, ?string $entityType = nu
             VALUES (?, ?, ?, ?, ?, ?)";
     $stmt = getDB()->prepare($sql);
     $stmt->execute([$userId, $activityType, $entityType, $entityId, $details, $_SERVER['REMOTE_ADDR'] ?? null]);
+
+    // Fire outbound webhooks for subscribed endpoints
+    try {
+        require_once BASE_PATH . '/php/WebhookDispatcher.php';
+        WebhookDispatcher::fire($activityType, [
+            'entity_type' => $entityType,
+            'entity_id'   => $entityId,
+            'details'     => $details,
+            'user_id'     => $userId,
+        ]);
+    } catch (\Throwable $e) {
+        // Webhook failures must never break the main request
+        \App\Core\Logger::warning('webhook_fire_error', [
+            'event' => $activityType, 'error' => $e->getMessage(),
+        ]);
+    }
 }
 
 
