@@ -318,8 +318,10 @@ class Router
         }
         echo json_encode($data, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 
-        $userId = null;
-        try { $userId = Middleware::userId(); } catch (\Throwable $e) {}
+        // Log the request. Read user_id directly from Middleware's static
+        // field to avoid recursion: Middleware::userId() calls session()
+        // which calls sendError() which calls send() again.
+        $userId = Middleware::sessionUserId();
         Logger::request(
             $_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN',
             parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/',

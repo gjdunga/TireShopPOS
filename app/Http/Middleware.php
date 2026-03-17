@@ -54,6 +54,16 @@ class Middleware
     }
 
     /**
+     * Get user ID without triggering sendError if no session exists.
+     * Used by Router::send() for request logging to avoid infinite
+     * recursion (send -> userId -> session -> sendError -> send -> ...).
+     */
+    public static function sessionUserId(): ?int
+    {
+        return self::$session !== null ? (int) self::$session['user_id'] : null;
+    }
+
+    /**
      * Get the current user's role name.
      */
     public static function role(): string
