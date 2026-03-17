@@ -153,11 +153,12 @@ if [[ "$INIT" == "true" || "$DB_ONLY" == "true" ]]; then
     mysql $AUTH -e "CREATE DATABASE IF NOT EXISTS \`${DB_DATABASE}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null || true
 
     # Run base schema
-    log "Loading base schema (44 tables, 14 views)..."
+    log "Loading base schema (37 tables, 9 views)..."
     mysql $AUTH --default-character-set=utf8mb4 "${DB_DATABASE}" < "${APP_DIR}/sql/tire_pos_schema_full.sql"
 
-    # Run migrations in order
+    # Run migrations in order (excludes down/ directory)
     for migration in "${APP_DIR}/sql/migrations/"*.sql; do
+        [[ "$(basename "$migration")" == "down" ]] && continue
         mname=$(basename "$migration")
         log "Running migration: ${mname}"
         mysql $AUTH --default-character-set=utf8mb4 "${DB_DATABASE}" < "$migration"
@@ -191,11 +192,11 @@ if [[ "$INIT" == "true" ]]; then
     log "     Default: admin / admin (forced password change on first login)"
     log "  4. Set up cron jobs (as bearlyused user):"
     log "     crontab -e"
-    log "     0 2 * * *    ${APP_DIR}/scripts/backup-db.sh"
-    log "     */30 * * * * ${APP_DIR}/scripts/cleanup-sessions.sh"
+    log "     */5 * * * *  ${APP_DIR}/scripts/cron-runner.sh all-frequent >> /dev/null 2>&1"
+    log "     0   2 * * *  ${APP_DIR}/scripts/cron-runner.sh all-daily    >> /dev/null 2>&1"
     log ""
-    log "  5. Expand open_basedir in PHP-FPM pool config:"
-    log "     Edit: /etc/php/8.3/fpm/pool.d/<pos-pool>.conf"
-    log "     Set:  php_admin_value[open_basedir] = /home/bearlyused/:/tmp/"
+    log "  5. Expand open_basedir in Virtualmin:"
+    log "     Virtualmin > pos.bearlyused.net > Web Configuration > PHP Options"
+    log "     Set open_basedir to: /home/bearlyused/:/tmp/"
     log "     Then: sudo systemctl restart php8.3-fpm"
 fi
