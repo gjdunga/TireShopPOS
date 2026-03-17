@@ -35,7 +35,7 @@
  *   - ext-json (response parsing)
  *
  * IMPORTANT: Plate provider and API key are configured via Settings > Vehicle Lookup.
- * Falls back to PLATETOVIN_API_KEY env var if no provider is set in the UI.
+ * No .env fallback. The database (shop_settings) is the single source of truth.
  * IMPORTANT: All monetary tracking uses integer cents (cost_cents column).
  * ============================================================================
  */
@@ -69,8 +69,7 @@ class VehicleLookupService
         require_once __DIR__ . '/PlateProviders/ProviderFactory.php';
         $this->plateProvider = $provider ?? PlateProviderFactory::create();
         $this->apiKey = $apiKey
-            ?? PlateProviderFactory::getConfiguredApiKey()
-            ?: (getenv('PLATETOVIN_API_KEY') ?: '');
+            ?? PlateProviderFactory::getConfiguredApiKey();
     }
 
     // ========================================================================

@@ -115,8 +115,7 @@ class PlateProviderFactory
             );
             return $row ? ($row['setting_value'] ?: '') : '';
         } catch (\Throwable $e) {
-            // Fall back to env var for backward compatibility
-            return getenv('PLATETOVIN_API_KEY') ?: '';
+            return '';
         }
     }
 
