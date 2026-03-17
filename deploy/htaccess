@@ -24,6 +24,10 @@ Options -Indexes +SymLinksIfOwnerMatch
     # --- Let's Encrypt ACME challenge passthrough ---
     RewriteRule ^\.well-known/ - [L]
 
+    # --- Force HTTPS ---
+    RewriteCond %{HTTPS} off
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
     # --- PHP API routing ---
     # All /api requests go to the PHP front controller
     RewriteCond %{REQUEST_URI} ^/api(/.*)?$

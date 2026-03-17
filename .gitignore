@@ -32,3 +32,5 @@ Thumbs.db
 *.sublime-workspace
 # Test artifacts
 tests/.env.test
+frontend/dist/
+frontend/dist

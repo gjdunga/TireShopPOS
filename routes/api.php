@@ -85,11 +85,7 @@ $router->get('/api/health', function () use ($app) {
         'status' => $overall,
         'app' => $app->name(),
         'version' => $app->version(),
-        'debug' => $app->isDebug(),
         'timestamp' => date('c'),
-        'php' => PHP_VERSION,
-        'database' => $dbHealth,
-        'ops' => $opsHealth,
         'expired_sessions_cleaned' => $cleaned,
         'expired_caches_purged' => $cachesPurged,
     ];
@@ -169,7 +165,7 @@ $router->post('/api/auth/logout', function () {
 // Password change: requires a valid session but NOT the force_password_change
 // gate (since this is the endpoint that clears it). No middleware -> Auth
 // handles token validation internally.
-$router->post('/api/auth/password', function (array $params, array $body) {
+$router->with(publicRate(5, 60))->post('/api/auth/password', function (array $params, array $body) {
     return Auth::changePassword(Session::tokenFromRequest(), $body);
 });
 
@@ -1814,7 +1810,7 @@ $router->with(permit('USER_MANAGE'))->post('/api/webhooks/retry', function () us
 });
 
 // Inbound webhook receiver (no auth, signature-verified per provider)
-$router->post('/api/webhooks/inbound/{provider}', function (array $params, array $body) use ($webhookLoad) {
+$router->with(publicRate(30, 60))->post('/api/webhooks/inbound/{provider}', function (array $params, array $body) use ($webhookLoad) {
     $webhookLoad();
     $provider = $params['provider'];
     $rawBody = file_get_contents('php://input') ?: json_encode($body);
