@@ -159,6 +159,7 @@ if [[ "$DB_ONLY" == "false" ]]; then
             --exclude='api/' \
             --exclude='.htaccess' \
             --exclude='uploads/' \
+            --exclude='errors/' \
             "${APP_DIR}/frontend/dist/" "${PUBLIC_HTML}/"
         log "Frontend files synced."
     else
