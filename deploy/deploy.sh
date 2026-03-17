@@ -49,6 +49,11 @@ OPTIONS:
                 files, creates database, loads schema (68 tables, 9 views),
                 runs baseline migration, seeds lookup data.
 
+  --wipe        DESTRUCTIVE. Backs up the database, drops all tables and
+                views, then re-initializes from scratch (same as --init
+                but on an existing database). Requires confirmation.
+                Use when the schema is corrupted or you want a clean slate.
+
   --db-only     Database only. Skips code pull and frontend build.
                 Loads schema + migrations. Use after manual schema edits
                 or to re-initialize the database without redeploying files.
@@ -59,6 +64,7 @@ EXAMPLES:
   First install:    ./deploy.sh --init
   Routine update:   ./deploy.sh
   DB re-init only:  ./deploy.sh --db-only
+  Wipe and rebuild: ./deploy.sh --wipe
 
 POST-DEPLOY CHECKLIST (first time):
   1. Edit .env:         nano /home/bearlyused/domains/pos.bearlyused.net/app/.env
@@ -86,11 +92,13 @@ EOF
 # ---- Parse args ----
 INIT=false
 DB_ONLY=false
+WIPE=false
 for arg in "$@"; do
     case "$arg" in
         --help|-h|help) usage ;;
         --init) INIT=true ;;
         --db-only) DB_ONLY=true ;;
+        --wipe) WIPE=true ;;
         *) err "Unknown argument: $arg (try --help)"; exit 1 ;;
     esac
 done
@@ -187,7 +195,62 @@ if [[ "$DB_ONLY" == "false" ]]; then
     log "Files deployed."
 fi
 
-# ---- Step 5: Database initialization (first time only) ----
+# ---- Step 5: Wipe database (if requested) ----
+if [[ "$WIPE" == "true" ]]; then
+    source <(grep -E '^DB_' "${APP_DIR}/.env" | sed 's/^/export /')
+
+    DB_HOST="${DB_HOST:-localhost}"
+    DB_DATABASE="${DB_DATABASE:-bearlyused_tirepos}"
+    DB_USERNAME="${DB_USERNAME:-bearlyused}"
+    DB_PASSWORD="${DB_PASSWORD:-}"
+
+    AUTH="-h ${DB_HOST} -u ${DB_USERNAME}"
+    if [[ -n "$DB_PASSWORD" ]]; then
+        AUTH="${AUTH} -p${DB_PASSWORD}"
+    fi
+
+    TABLE_COUNT=$(mysql $AUTH -N -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = '${DB_DATABASE}' AND TABLE_TYPE = 'BASE TABLE';" 2>/dev/null || echo "0")
+
+    warn "This will DESTROY all data in ${DB_DATABASE} (${TABLE_COUNT} tables)."
+    warn "A backup will be created first."
+    echo ""
+    read -p "Type 'WIPE' to confirm: " CONFIRM
+    if [[ "$CONFIRM" != "WIPE" ]]; then
+        err "Aborted."
+        exit 1
+    fi
+
+    # Backup first
+    mkdir -p "${BACKUP_DIR}"
+    BACKUP_FILE="${BACKUP_DIR}/${DB_DATABASE}_pre-wipe_$(date +%Y%m%d_%H%M%S).sql.gz"
+    log "Backing up to ${BACKUP_FILE}..."
+    mysqldump $AUTH --default-character-set=utf8mb4 --single-transaction "${DB_DATABASE}" 2>/dev/null | gzip > "${BACKUP_FILE}"
+    if [[ -s "${BACKUP_FILE}" ]]; then
+        log "Backup created: $(du -h "${BACKUP_FILE}" | cut -f1)"
+    else
+        err "Backup failed or empty. Aborting wipe."
+        exit 1
+    fi
+
+    # Drop all views, then all tables (FK-safe order)
+    log "Dropping all views and tables..."
+    DROP_SQL="SET FOREIGN_KEY_CHECKS=0;"
+    while IFS= read -r v; do
+        [[ -z "$v" ]] && continue
+        DROP_SQL="${DROP_SQL} DROP VIEW IF EXISTS \`$v\`;"
+    done < <(mysql $AUTH -N -e "SELECT table_name FROM information_schema.VIEWS WHERE TABLE_SCHEMA='${DB_DATABASE}';" 2>/dev/null)
+    while IFS= read -r t; do
+        [[ -z "$t" ]] && continue
+        DROP_SQL="${DROP_SQL} DROP TABLE IF EXISTS \`$t\`;"
+    done < <(mysql $AUTH -N -e "SELECT table_name FROM information_schema.TABLES WHERE TABLE_SCHEMA='${DB_DATABASE}' AND TABLE_TYPE='BASE TABLE';" 2>/dev/null)
+    DROP_SQL="${DROP_SQL} SET FOREIGN_KEY_CHECKS=1;"
+    echo "${DROP_SQL}" | mysql $AUTH "${DB_DATABASE}" 2>/dev/null
+
+    log "Database wiped. Re-initializing..."
+    INIT=true
+fi
+
+# ---- Step 6: Database initialization (first time or after wipe) ----
 if [[ "$INIT" == "true" || "$DB_ONLY" == "true" ]]; then
     # Source .env for DB credentials
     source <(grep -E '^DB_' "${APP_DIR}/.env" | sed 's/^/export /')
@@ -224,7 +287,7 @@ if [[ "$INIT" == "true" || "$DB_ONLY" == "true" ]]; then
     log "Database initialized: ${TABLE_COUNT} tables."
 fi
 
-# ---- Step 6: Verify deployment ----
+# ---- Step 7: Verify deployment ----
 log ""
 log "=========================================="
 log "  Deployment complete!"
