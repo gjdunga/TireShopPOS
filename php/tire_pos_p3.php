@@ -94,11 +94,31 @@ function getWebsiteConfigValue(string $key): ?string {
 }
 
 function updateWebsiteConfig(string $key, string $value): bool {
+    // Sanitize HTML values server-side (defense in depth; frontend also sanitizes on render)
+    if (str_ends_with($key, '_html') && $value !== '') {
+        $value = sanitizeHtml($value);
+    }
     $stmt = getDB()->prepare(
         "UPDATE website_config SET config_value = ?, updated_at = CURRENT_TIMESTAMP WHERE config_key = ?"
     );
     $stmt->execute([$value, $key]);
     return $stmt->rowCount() > 0;
+}
+
+/**
+ * Strip dangerous HTML: script, iframe, object, embed, event handlers.
+ * Preserves safe formatting tags. For defense in depth alongside
+ * client-side DOMPurify sanitization.
+ */
+function sanitizeHtml(string $html): string {
+    // Remove script, iframe, object, embed, applet, form, base tags entirely
+    $html = preg_replace('/<\s*(script|iframe|object|embed|applet|form|base|link|meta)\b[^>]*>.*?<\/\s*\1\s*>/is', '', $html);
+    $html = preg_replace('/<\s*(script|iframe|object|embed|applet|form|base|link|meta)\b[^>]*\/?>/is', '', $html);
+    // Remove event handlers (on*)
+    $html = preg_replace('/\s+on\w+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $html);
+    // Remove javascript: and data: URIs in href/src
+    $html = preg_replace('/(href|src)\s*=\s*["\']?\s*(javascript|data)\s*:/i', '$1="removed:', $html);
+    return $html;
 }
 
 function bulkUpdateWebsiteConfig(array $configs): int {

@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import './Storefront.css';
 
 const API = '/api/public';
@@ -69,7 +70,11 @@ export function StorefrontHome() {
       {config.about_html && (
         <div className="sf-section">
           <h2>About Us</h2>
-          <div dangerouslySetInnerHTML={{ __html: config.about_html }} />
+          <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(config.about_html, {
+            ALLOWED_TAGS: ['b','i','u','em','strong','a','p','br','ul','ol','li','h1','h2','h3','h4','h5','h6','img','blockquote','span','div','hr','table','thead','tbody','tr','th','td'],
+            ALLOWED_ATTR: ['href','src','alt','title','class','style','target','width','height'],
+            ALLOW_DATA_ATTR: false,
+          }) }} />
         </div>
       )}
       <div className="sf-section">
