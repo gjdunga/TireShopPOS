@@ -14,6 +14,11 @@ const TABS = [
   { key: 'website', label: 'Website' },
   { key: 'appearance', label: 'Appearance' },
   { key: 'notifications', label: 'Notifications' },
+  { key: 'services', label: 'Services' },
+  { key: 'fees', label: 'Fees' },
+  { key: 'discounts', label: 'Discounts' },
+  { key: 'coupons', label: 'Coupons' },
+  { key: 'webhooks', label: 'Webhooks' },
   { key: 'fields', label: 'Custom Fields' },
   { key: 'apikeys', label: 'API Keys' },
   { key: 'lookup', label: 'Vehicle Lookup' },
@@ -70,6 +75,11 @@ export default function SettingsAdmin() {
         {tab === 'website' && <WebsiteTab settings={settings} webConfig={webConfig} onSaved={(m) => { setMsg(m); load(); }} onError={setError} />}
         {tab === 'appearance' && <AppearanceTab webConfig={webConfig} onSaved={(m) => { setMsg(m); load(); }} onError={setError} />}
         {tab === 'notifications' && <NotificationsTab settings={settings} onSaved={(m) => { setMsg(m); load(); }} onError={setError} />}
+        {tab === 'services' && <ServicesTab onSaved={(m) => { setMsg(m); }} onError={setError} />}
+        {tab === 'fees' && <FeesTab onSaved={(m) => { setMsg(m); }} onError={setError} />}
+        {tab === 'discounts' && <DiscountsTab onSaved={(m) => { setMsg(m); }} onError={setError} />}
+        {tab === 'coupons' && <CouponsTab onSaved={(m) => { setMsg(m); }} onError={setError} />}
+        {tab === 'webhooks' && <WebhooksTab onSaved={(m) => { setMsg(m); }} onError={setError} />}
         {tab === 'fields' && <CustomFieldsTab onError={setError} />}
         {tab === 'apikeys' && <ApiKeysTab onError={setError} />}
         {tab === 'lookup' && <VehicleLookupTab onSaved={(m) => { setMsg(m); }} onError={setError} />}
@@ -724,4 +734,338 @@ function VehicleLookupTab({ onSaved, onError }) {
 function STitle({ children }) {
   return <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '0.9375rem', fontWeight: 600,
     color: 'var(--navy)', marginBottom: '0.75rem', letterSpacing: '0.02em' }}>{children}</h2>;
+}
+
+
+// ================================================================
+// Services Tab
+// ================================================================
+function ServicesTab({ onSaved, onError }) {
+  const [items, setItems] = useState([]);
+  const [form, setForm] = useState({ service_code: '', service_name: '', default_labor: '', is_per_tire: 1 });
+  const [editId, setEditId] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = () => { api.get('/services?all=1').then(d => setItems(d.services || [])).catch(e => onError(e.message)).finally(() => setLoading(false)); };
+  useEffect(load, []);
+
+  const save = async () => {
+    try {
+      if (editId) { await api.patch(`/services/${editId}`, form); onSaved('Service updated.'); }
+      else { await api.post('/services', form); onSaved('Service created.'); }
+      setForm({ service_code: '', service_name: '', default_labor: '', is_per_tire: 1 }); setEditId(null); load();
+    } catch (e) { onError(e.message); }
+  };
+
+  const startEdit = (s) => { setEditId(s.service_id); setForm({ service_code: s.service_code, service_name: s.service_name, default_labor: s.default_labor, is_per_tire: s.is_per_tire }); };
+  const handleDeactivate = async (id) => { try { await api.delete(`/services/${id}`); onSaved('Service deactivated.'); load(); } catch (e) { onError(e.message); } };
+
+  if (loading) return <p>Loading...</p>;
+  return (
+    <div>
+      <STitle>Service Catalog</STitle>
+      <table className="entity-table" style={{ fontSize: '0.8125rem', marginBottom: '1rem' }}>
+        <thead><tr><th>Code</th><th>Name</th><th>Labor $</th><th>Per Tire</th><th>Active</th><th></th></tr></thead>
+        <tbody>
+          {items.map(s => (
+            <tr key={s.service_id} style={{ opacity: s.is_active ? 1 : 0.5 }}>
+              <td style={{ fontFamily: 'var(--font-mono)' }}>{s.service_code}</td><td>{s.service_name}</td>
+              <td style={{ fontFamily: 'var(--font-mono)' }}>${Number(s.default_labor).toFixed(2)}</td>
+              <td>{s.is_per_tire ? 'Yes' : 'No'}</td><td>{s.is_active ? 'Yes' : 'No'}</td>
+              <td>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.6875rem' }} onClick={() => startEdit(s)}>Edit</button>
+                {s.is_active ? <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.6875rem', color: 'var(--red)' }} onClick={() => handleDeactivate(s.service_id)}>Deactivate</button> : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div style={{ padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #ddd' }}>
+        <div style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.5rem' }}>{editId ? 'Edit Service' : 'Add Service'}</div>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="form-field" style={{ width: '100px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Code</label>
+            <input value={form.service_code} onChange={e => setForm(p => ({ ...p, service_code: e.target.value }))} style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }} /></div>
+          <div className="form-field" style={{ flex: 1, minWidth: '150px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Name</label>
+            <input value={form.service_name} onChange={e => setForm(p => ({ ...p, service_name: e.target.value }))} style={{ fontSize: '0.8rem' }} /></div>
+          <div className="form-field" style={{ width: '90px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Labor $</label>
+            <input type="number" step="0.01" min="0" value={form.default_labor} onChange={e => setForm(p => ({ ...p, default_labor: e.target.value }))} style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }} /></div>
+          <label style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+            <input type="checkbox" checked={!!form.is_per_tire} onChange={e => setForm(p => ({ ...p, is_per_tire: e.target.checked ? 1 : 0 }))} /> Per tire</label>
+          <button className="btn btn-primary btn-sm" onClick={save}>{editId ? 'Update' : 'Add'}</button>
+          {editId && <button className="btn btn-ghost btn-sm" onClick={() => { setEditId(null); setForm({ service_code: '', service_name: '', default_labor: '', is_per_tire: 1 }); }}>Cancel</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ================================================================
+// Fees Tab
+// ================================================================
+function FeesTab({ onSaved, onError }) {
+  const [items, setItems] = useState([]);
+  const [form, setForm] = useState({ fee_key: '', fee_label: '', fee_amount: '', is_per_tire: 1, applies_to: 'new_only', effective_date: '' });
+  const [editId, setEditId] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = () => { api.get('/config?all=1').then(d => setItems(d.fees || [])).catch(e => onError(e.message)).finally(() => setLoading(false)); };
+  useEffect(load, []);
+
+  const save = async () => {
+    try {
+      if (editId) { await api.patch(`/config/fees/${editId}`, form); onSaved('Fee updated.'); }
+      else { await api.post('/config/fees', form); onSaved('Fee created.'); }
+      setForm({ fee_key: '', fee_label: '', fee_amount: '', is_per_tire: 1, applies_to: 'new_only', effective_date: '' }); setEditId(null); load();
+    } catch (e) { onError(e.message); }
+  };
+
+  const startEdit = (f) => { setEditId(f.fee_id); setForm({ fee_key: f.fee_key, fee_label: f.fee_label, fee_amount: f.fee_amount, is_per_tire: f.is_per_tire, applies_to: f.applies_to, effective_date: f.effective_date }); };
+
+  if (loading) return <p>Loading...</p>;
+  return (
+    <div>
+      <STitle>Fee Configuration (CO Tire Fees)</STitle>
+      <table className="entity-table" style={{ fontSize: '0.8125rem', marginBottom: '1rem' }}>
+        <thead><tr><th>Key</th><th>Label</th><th>Amount</th><th>Per Tire</th><th>Applies To</th><th>Effective</th><th></th></tr></thead>
+        <tbody>
+          {items.map(f => (
+            <tr key={f.fee_id} style={{ opacity: f.is_active ? 1 : 0.5 }}>
+              <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>{f.fee_key}</td><td>{f.fee_label}</td>
+              <td style={{ fontFamily: 'var(--font-mono)' }}>${Number(f.fee_amount).toFixed(2)}</td>
+              <td>{f.is_per_tire ? 'Yes' : 'No'}</td><td>{f.applies_to}</td><td>{f.effective_date}</td>
+              <td><button className="btn btn-ghost btn-sm" style={{ fontSize: '0.6875rem' }} onClick={() => startEdit(f)}>Edit</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div style={{ padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #ddd' }}>
+        <div style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.5rem' }}>{editId ? 'Edit Fee' : 'Add Fee'}</div>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="form-field" style={{ width: '140px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Key</label>
+            <input value={form.fee_key} onChange={e => setForm(p => ({ ...p, fee_key: e.target.value }))} style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }} /></div>
+          <div className="form-field" style={{ flex: 1, minWidth: '150px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Label</label>
+            <input value={form.fee_label} onChange={e => setForm(p => ({ ...p, fee_label: e.target.value }))} style={{ fontSize: '0.8rem' }} /></div>
+          <div className="form-field" style={{ width: '80px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Amount</label>
+            <input type="number" step="0.01" min="0" value={form.fee_amount} onChange={e => setForm(p => ({ ...p, fee_amount: e.target.value }))} style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }} /></div>
+          <div className="form-field" style={{ width: '110px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Applies To</label>
+            <select value={form.applies_to} onChange={e => setForm(p => ({ ...p, applies_to: e.target.value }))} style={{ fontSize: '0.8rem' }}>
+              <option value="new_only">New Only</option><option value="used_only">Used Only</option><option value="all">All</option><option value="none">None</option>
+            </select></div>
+          <div className="form-field" style={{ width: '120px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Effective Date</label>
+            <input type="date" value={form.effective_date} onChange={e => setForm(p => ({ ...p, effective_date: e.target.value }))} style={{ fontSize: '0.8rem' }} /></div>
+          <button className="btn btn-primary btn-sm" onClick={save}>{editId ? 'Update' : 'Add'}</button>
+          {editId && <button className="btn btn-ghost btn-sm" onClick={() => { setEditId(null); setForm({ fee_key: '', fee_label: '', fee_amount: '', is_per_tire: 1, applies_to: 'new_only', effective_date: '' }); }}>Cancel</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ================================================================
+// Discounts Tab
+// ================================================================
+function DiscountsTab({ onSaved, onError }) {
+  const [groups, setGroups] = useState([]);
+  const [form, setForm] = useState({ group_name: '', group_code: '', discount_type: 'percentage', discount_value: '', applies_to: 'all' });
+  const [editId, setEditId] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = () => { api.get('/discount-groups?all=1').then(d => setGroups(d.groups || [])).catch(e => onError(e.message)).finally(() => setLoading(false)); };
+  useEffect(load, []);
+
+  const save = async () => {
+    try {
+      if (editId) { await api.patch(`/discount-groups/${editId}`, form); onSaved('Discount group updated.'); }
+      else { await api.post('/discount-groups', form); onSaved('Discount group created.'); }
+      setForm({ group_name: '', group_code: '', discount_type: 'percentage', discount_value: '', applies_to: 'all' }); setEditId(null); load();
+    } catch (e) { onError(e.message); }
+  };
+
+  const startEdit = (g) => { setEditId(g.group_id); setForm({ group_name: g.group_name, group_code: g.group_code, discount_type: g.discount_type, discount_value: g.discount_value, applies_to: g.applies_to }); };
+
+  if (loading) return <p>Loading...</p>;
+  return (
+    <div>
+      <STitle>Discount Groups</STitle>
+      <p style={{ fontSize: '0.8125rem', color: '#666', marginBottom: '0.75rem' }}>Create discount tiers (fleet, military, employee). Assign customers in Customer Detail.</p>
+      <table className="entity-table" style={{ fontSize: '0.8125rem', marginBottom: '1rem' }}>
+        <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Value</th><th>Applies To</th><th></th></tr></thead>
+        <tbody>
+          {groups.map(g => (
+            <tr key={g.group_id}>
+              <td style={{ fontFamily: 'var(--font-mono)' }}>{g.group_code}</td><td>{g.group_name}</td>
+              <td>{g.discount_type}</td><td style={{ fontFamily: 'var(--font-mono)' }}>{g.discount_type === 'percentage' ? g.discount_value + '%' : '$' + Number(g.discount_value).toFixed(2)}</td>
+              <td>{g.applies_to}</td>
+              <td><button className="btn btn-ghost btn-sm" style={{ fontSize: '0.6875rem' }} onClick={() => startEdit(g)}>Edit</button></td>
+            </tr>
+          ))}
+          {groups.length === 0 && <tr><td colSpan={6} style={{ color: '#999' }}>No discount groups. Create one below.</td></tr>}
+        </tbody>
+      </table>
+      <div style={{ padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #ddd' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="form-field" style={{ width: '90px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Code</label>
+            <input value={form.group_code} onChange={e => setForm(p => ({ ...p, group_code: e.target.value }))} style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }} /></div>
+          <div className="form-field" style={{ flex: 1, minWidth: '120px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Name</label>
+            <input value={form.group_name} onChange={e => setForm(p => ({ ...p, group_name: e.target.value }))} style={{ fontSize: '0.8rem' }} /></div>
+          <div className="form-field" style={{ width: '110px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Type</label>
+            <select value={form.discount_type} onChange={e => setForm(p => ({ ...p, discount_type: e.target.value }))} style={{ fontSize: '0.8rem' }}>
+              <option value="percentage">Percentage</option><option value="fixed_per_tire">$/Tire</option><option value="fixed_per_invoice">$/Order</option>
+            </select></div>
+          <div className="form-field" style={{ width: '80px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Value</label>
+            <input type="number" step="0.01" min="0" value={form.discount_value} onChange={e => setForm(p => ({ ...p, discount_value: e.target.value }))} style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }} /></div>
+          <button className="btn btn-primary btn-sm" onClick={save}>{editId ? 'Update' : 'Add'}</button>
+          {editId && <button className="btn btn-ghost btn-sm" onClick={() => { setEditId(null); setForm({ group_name: '', group_code: '', discount_type: 'percentage', discount_value: '', applies_to: 'all' }); }}>Cancel</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ================================================================
+// Coupons Tab
+// ================================================================
+function CouponsTab({ onSaved, onError }) {
+  const [items, setItems] = useState([]);
+  const [form, setForm] = useState({ coupon_code: '', coupon_name: '', discount_type: 'percentage', discount_value: '', valid_from: '', valid_until: '', max_uses: '' });
+  const [editId, setEditId] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = () => { api.get('/coupons?all=1').then(d => setItems(d.coupons || [])).catch(e => onError(e.message)).finally(() => setLoading(false)); };
+  useEffect(load, []);
+
+  const save = async () => {
+    try {
+      if (editId) { await api.patch(`/coupons/${editId}`, form); onSaved('Coupon updated.'); }
+      else { await api.post('/coupons', form); onSaved('Coupon created.'); }
+      setForm({ coupon_code: '', coupon_name: '', discount_type: 'percentage', discount_value: '', valid_from: '', valid_until: '', max_uses: '' }); setEditId(null); load();
+    } catch (e) { onError(e.message); }
+  };
+
+  const startEdit = (c) => { setEditId(c.coupon_id); setForm({ coupon_code: c.coupon_code, coupon_name: c.coupon_name, discount_type: c.discount_type, discount_value: c.discount_value, valid_from: c.valid_from || '', valid_until: c.valid_until || '', max_uses: c.max_uses || '' }); };
+
+  if (loading) return <p>Loading...</p>;
+  return (
+    <div>
+      <STitle>Coupon Management</STitle>
+      <table className="entity-table" style={{ fontSize: '0.8125rem', marginBottom: '1rem' }}>
+        <thead><tr><th>Code</th><th>Name</th><th>Discount</th><th>Valid From</th><th>Valid Until</th><th>Max Uses</th><th></th></tr></thead>
+        <tbody>
+          {items.map(c => (
+            <tr key={c.coupon_id} style={{ opacity: c.is_active ? 1 : 0.5 }}>
+              <td style={{ fontFamily: 'var(--font-mono)' }}>{c.coupon_code}</td><td>{c.coupon_name}</td>
+              <td style={{ fontFamily: 'var(--font-mono)' }}>{c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + Number(c.discount_value).toFixed(2)}</td>
+              <td>{c.valid_from || 'n/a'}</td><td>{c.valid_until || 'none'}</td>
+              <td>{c.max_uses || '\u221E'}</td>
+              <td><button className="btn btn-ghost btn-sm" style={{ fontSize: '0.6875rem' }} onClick={() => startEdit(c)}>Edit</button></td>
+            </tr>
+          ))}
+          {items.length === 0 && <tr><td colSpan={7} style={{ color: '#999' }}>No coupons. Create one below.</td></tr>}
+        </tbody>
+      </table>
+      <div style={{ padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #ddd' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="form-field" style={{ width: '100px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Code</label>
+            <input value={form.coupon_code} onChange={e => setForm(p => ({ ...p, coupon_code: e.target.value }))} style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }} /></div>
+          <div className="form-field" style={{ flex: 1, minWidth: '130px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Name</label>
+            <input value={form.coupon_name} onChange={e => setForm(p => ({ ...p, coupon_name: e.target.value }))} style={{ fontSize: '0.8rem' }} /></div>
+          <div className="form-field" style={{ width: '110px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Type</label>
+            <select value={form.discount_type} onChange={e => setForm(p => ({ ...p, discount_type: e.target.value }))} style={{ fontSize: '0.8rem' }}>
+              <option value="percentage">Percentage</option><option value="fixed">Fixed $</option>
+            </select></div>
+          <div className="form-field" style={{ width: '70px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Value</label>
+            <input type="number" step="0.01" min="0" value={form.discount_value} onChange={e => setForm(p => ({ ...p, discount_value: e.target.value }))} style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }} /></div>
+          <div className="form-field" style={{ width: '120px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Valid From</label>
+            <input type="date" value={form.valid_from} onChange={e => setForm(p => ({ ...p, valid_from: e.target.value }))} style={{ fontSize: '0.8rem' }} /></div>
+          <div className="form-field" style={{ width: '120px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Valid Until</label>
+            <input type="date" value={form.valid_until} onChange={e => setForm(p => ({ ...p, valid_until: e.target.value }))} style={{ fontSize: '0.8rem' }} /></div>
+          <div className="form-field" style={{ width: '70px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Max Uses</label>
+            <input type="number" min="0" value={form.max_uses} onChange={e => setForm(p => ({ ...p, max_uses: e.target.value }))} style={{ fontSize: '0.8rem' }} placeholder={'\u221E'} /></div>
+          <button className="btn btn-primary btn-sm" onClick={save}>{editId ? 'Update' : 'Add'}</button>
+          {editId && <button className="btn btn-ghost btn-sm" onClick={() => { setEditId(null); setForm({ coupon_code: '', coupon_name: '', discount_type: 'percentage', discount_value: '', valid_from: '', valid_until: '', max_uses: '' }); }}>Cancel</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ================================================================
+// Webhooks Tab
+// ================================================================
+function WebhooksTab({ onSaved, onError }) {
+  const [endpoints, setEndpoints] = useState([]);
+  const [stats, setStats] = useState({});
+  const [form, setForm] = useState({ url: '', label: '', events: '*' });
+  const [editId, setEditId] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = () => {
+    Promise.all([
+      api.get('/webhooks/endpoints').catch(() => ({ endpoints: [] })),
+      api.get('/webhooks/stats').catch(() => ({})),
+    ]).then(([ep, st]) => { setEndpoints(ep.endpoints || []); setStats(st); }).finally(() => setLoading(false));
+  };
+  useEffect(load, []);
+
+  const save = async () => {
+    try {
+      const payload = { ...form, events: form.events === '*' ? ['*'] : form.events.split(',').map(s => s.trim()).filter(Boolean) };
+      if (editId) { await api.patch(`/webhooks/endpoints/${editId}`, payload); onSaved('Endpoint updated.'); }
+      else { await api.post('/webhooks/endpoints', payload); onSaved('Endpoint created.'); }
+      setForm({ url: '', label: '', events: '*' }); setEditId(null); load();
+    } catch (e) { onError(e.message); }
+  };
+
+  const handleTest = async (id) => {
+    try { const r = await api.post(`/webhooks/endpoints/${id}/test`); alert(r.success ? 'Ping OK!' : 'Failed: ' + (r.error || 'Unknown')); }
+    catch (e) { alert('Test failed: ' + e.message); }
+  };
+
+  const handleDelete = async (id) => { if (!confirm('Delete this endpoint?')) return; try { await api.delete(`/webhooks/endpoints/${id}`); onSaved('Endpoint deleted.'); load(); } catch (e) { onError(e.message); } };
+
+  const handleRetry = async () => { try { const r = await api.post('/webhooks/retry'); onSaved(`Retried ${r.retried || 0} deliveries (${r.sent || 0} sent, ${r.failed || 0} failed).`); } catch (e) { onError(e.message); } };
+
+  if (loading) return <p>Loading...</p>;
+  return (
+    <div>
+      <STitle>Webhook Endpoints</STitle>
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', fontSize: '0.8125rem' }}>
+        <span>Pending: <b>{stats.pending || 0}</b></span>
+        <span>Sent today: <b>{stats.sent_today || 0}</b></span>
+        <span>Failed today: <b>{stats.failed_today || 0}</b></span>
+        {(stats.pending || 0) > 0 && <button className="btn btn-sm btn-ghost" style={{ fontSize: '0.75rem' }} onClick={handleRetry}>Retry Pending</button>}
+      </div>
+      <table className="entity-table" style={{ fontSize: '0.8125rem', marginBottom: '1rem' }}>
+        <thead><tr><th>Label</th><th>URL</th><th>Events</th><th>Active</th><th></th></tr></thead>
+        <tbody>
+          {endpoints.map(ep => (
+            <tr key={ep.endpoint_id}>
+              <td>{ep.label || '(unnamed)'}</td>
+              <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', wordBreak: 'break-all' }}>{ep.url}</td>
+              <td style={{ fontSize: '0.75rem' }}>{(() => { try { const e = JSON.parse(ep.events); return Array.isArray(e) ? e.join(', ') : '*'; } catch { return '*'; } })()}</td>
+              <td>{ep.is_active ? 'Yes' : 'No'}</td>
+              <td style={{ whiteSpace: 'nowrap' }}>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.625rem' }} onClick={() => handleTest(ep.endpoint_id)}>Ping</button>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.625rem' }} onClick={() => { setEditId(ep.endpoint_id); setForm({ url: ep.url, label: ep.label || '', events: (() => { try { return JSON.parse(ep.events).join(', '); } catch { return '*'; } })() }); }}>Edit</button>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.625rem', color: 'var(--red)' }} onClick={() => handleDelete(ep.endpoint_id)}>{'\u2716'}</button>
+              </td>
+            </tr>
+          ))}
+          {endpoints.length === 0 && <tr><td colSpan={5} style={{ color: '#999' }}>No webhook endpoints configured.</td></tr>}
+        </tbody>
+      </table>
+      <div style={{ padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #ddd' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="form-field" style={{ width: '100px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Label</label>
+            <input value={form.label} onChange={e => setForm(p => ({ ...p, label: e.target.value }))} style={{ fontSize: '0.8rem' }} /></div>
+          <div className="form-field" style={{ flex: 1, minWidth: '200px' }}><label className="label" style={{ fontSize: '0.7rem' }}>URL</label>
+            <input value={form.url} onChange={e => setForm(p => ({ ...p, url: e.target.value }))} style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }} placeholder="https://example.com/webhook" /></div>
+          <div className="form-field" style={{ width: '180px' }}><label className="label" style={{ fontSize: '0.7rem' }}>Events (comma-sep or *)</label>
+            <input value={form.events} onChange={e => setForm(p => ({ ...p, events: e.target.value }))} style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }} placeholder="* or WO_CREATE,WO_COMPLETE" /></div>
+          <button className="btn btn-primary btn-sm" onClick={save}>{editId ? 'Update' : 'Add'}</button>
+          {editId && <button className="btn btn-ghost btn-sm" onClick={() => { setEditId(null); setForm({ url: '', label: '', events: '*' }); }}>Cancel</button>}
+        </div>
+      </div>
+    </div>
+  );
 }

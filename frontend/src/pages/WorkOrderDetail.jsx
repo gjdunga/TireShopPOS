@@ -49,6 +49,8 @@ export default function WorkOrderDetail() {
   const [wo, setWo] = useState(null);
   const [form, setForm] = useState({ ...EMPTY_WO });
   const [positions, setPositions] = useState([]);
+  const [lineItems, setLineItems] = useState([]);
+  const [services, setServices] = useState([]);
   const [techs, setTechs] = useState([]);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
@@ -73,14 +75,15 @@ export default function WorkOrderDetail() {
   }, []);
 
   const load = useCallback(() => {
-    if (isNew) { loadTechs(); return; }
+    if (isNew) { loadTechs(); api.get('/services').then(d => setServices(d.services || [])).catch(() => {}); return; }
     setLoading(true);
     Promise.all([
       api.get(`/work-orders/${id}`),
       api.get(`/work-orders/${id}/completable`).catch(() => null),
       api.get('/users/techs').catch(() => ({ techs: [] })),
+      api.get('/services').catch(() => ({ services: [] })),
     ])
-      .then(([woData, comp, techData]) => {
+      .then(([woData, comp, techData, svcData]) => {
         setWo(woData);
         setForm({
           customer_id: woData.customer_id || '',
@@ -102,6 +105,8 @@ export default function WorkOrderDetail() {
           status: woData.status || 'intake',
         });
         setPositions(woData.positions || []);
+        setLineItems(woData.line_items || []);
+        setServices(svcData.services || []);
         setTorqueForm({
           torque_spec_used: woData.torque_spec_used || '',
           torque_verified_by: woData.torque_verified_by || '',
@@ -313,33 +318,16 @@ export default function WorkOrderDetail() {
               </div>
             </div>
 
-            {/* Financial breakdown */}
+            {/* Financial breakdown (auto-calculated from line items) */}
+            {!isNew && (
             <div style={{ marginTop: '1rem', padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e0e0e0' }}>
-              <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--navy)' }}>Pricing Breakdown</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.5rem' }}>
-                <div className="form-field"><label className="label" style={{ fontSize: '0.75rem' }}>Materials (taxable)</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><span>$</span>
-                    <input type="number" step="0.01" min="0" value={form.subtotal_materials || ''} onChange={handleChange('subtotal_materials')} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }} />
-                  </div></div>
-                <div className="form-field"><label className="label" style={{ fontSize: '0.75rem' }}>Labor (not taxed)</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><span>$</span>
-                    <input type="number" step="0.01" min="0" value={form.subtotal_labor || ''} onChange={handleChange('subtotal_labor')} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }} />
-                  </div></div>
-                <div className="form-field"><label className="label" style={{ fontSize: '0.75rem' }}>Fees</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><span>$</span>
-                    <input type="number" step="0.01" min="0" value={form.subtotal_fees || ''} onChange={handleChange('subtotal_fees')} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }} />
-                  </div></div>
-                <div className="form-field"><label className="label" style={{ fontSize: '0.75rem' }}>Tax Rate (%)</label>
-                  <input type="number" step="0.01" min="0" max="100" value={form.tax_rate ? (Number(form.tax_rate) * 100).toFixed(2) : ''} onChange={(e) => setForm(p => ({ ...p, tax_rate: e.target.value ? (Number(e.target.value) / 100).toFixed(4) : '' }))} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }} />
-                </div>
-                <div className="form-field"><label className="label" style={{ fontSize: '0.75rem' }}>Tax Amount</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><span>$</span>
-                    <input type="number" step="0.01" min="0" value={form.tax_amount || ''} onChange={handleChange('tax_amount')} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }} />
-                  </div></div>
-                <div className="form-field"><label className="label" style={{ fontSize: '0.75rem' }}>Total Estimate</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}><span style={{ fontWeight: 700 }}>$</span>
-                    <input type="number" step="0.01" min="0" value={form.total_estimate || ''} onChange={handleChange('total_estimate')} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', fontWeight: 600 }} />
-                  </div></div>
+              <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--navy)' }}>Pricing Breakdown <span style={{ fontWeight: 400, fontSize: '0.75rem', color: '#888' }}>(auto-calculated from line items)</span></div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '0.5rem' }}>
+                <div><span style={{ fontSize: '0.7rem', color: '#666' }}>Materials</span><div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}>${Number(wo?.subtotal_materials || 0).toFixed(2)}</div></div>
+                <div><span style={{ fontSize: '0.7rem', color: '#666' }}>Labor</span><div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}>${Number(wo?.subtotal_labor || 0).toFixed(2)}</div></div>
+                <div><span style={{ fontSize: '0.7rem', color: '#666' }}>Fees</span><div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}>${Number(wo?.subtotal_fees || 0).toFixed(2)}</div></div>
+                <div><span style={{ fontSize: '0.7rem', color: '#666' }}>Tax ({(Number(wo?.tax_rate || 0) * 100).toFixed(2)}%)</span><div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}>${Number(wo?.tax_amount || 0).toFixed(2)}</div></div>
+                <div><span style={{ fontSize: '0.7rem', color: '#666', fontWeight: 600 }}>Total</span><div style={{ fontFamily: 'var(--font-mono)', fontSize: '1rem', fontWeight: 700, color: 'var(--navy)' }}>${Number(wo?.total_estimate || 0).toFixed(2)}</div></div>
               </div>
 
               {/* Deposit */}
@@ -362,6 +350,7 @@ export default function WorkOrderDetail() {
                 </div>
               </div>
             </div>
+            )}
 
             <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {isNew ? (
@@ -411,6 +400,20 @@ export default function WorkOrderDetail() {
           </div>
         )}
       </div>
+
+      {/* Line Items (full width below the 2-column grid) */}
+      {!isNew && (
+        <div className="card" style={{ marginTop: '1rem' }}>
+          <SectionTitle>Line Items</SectionTitle>
+          <LineItemsPanel
+            woId={Number(id)}
+            lineItems={lineItems}
+            services={services}
+            onChanged={load}
+            readOnly={wo?.status === 'complete' || wo?.status === 'cancelled'}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -547,6 +550,193 @@ function PositionGrid({ woId, positions, onChanged }) {
               {saving ? <span className="spinner" /> : 'Add'}
             </button>
             <button className="btn btn-ghost btn-sm" onClick={() => setAdding(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ================================================================
+// Line Items Panel (labor, parts, fees, warranties, disposal)
+// ================================================================
+
+const LINE_TYPES = [
+  { value: 'labor', label: 'Labor' },
+  { value: 'part', label: 'Part/Material' },
+  { value: 'fee', label: 'Fee' },
+  { value: 'warranty', label: 'Warranty' },
+  { value: 'disposal', label: 'Disposal' },
+  { value: 'other', label: 'Other' },
+];
+
+function LineItemsPanel({ woId, lineItems, services, onChanged, readOnly }) {
+  const [adding, setAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [form, setForm] = useState({ line_type: 'labor', description: '', quantity: '1', unit_price: '', service_id: '' });
+
+  const resetForm = () => {
+    setForm({ line_type: 'labor', description: '', quantity: '1', unit_price: '', service_id: '' });
+    setAdding(false);
+    setEditId(null);
+  };
+
+  const handleServiceSelect = (serviceId) => {
+    const svc = services.find(s => String(s.service_id) === String(serviceId));
+    if (svc) {
+      setForm(p => ({
+        ...p,
+        service_id: svc.service_id,
+        description: svc.service_name,
+        unit_price: svc.default_labor || '',
+        line_type: 'labor',
+      }));
+    }
+  };
+
+  const handleAdd = async () => {
+    if (!form.description || !form.unit_price) return;
+    setSaving(true);
+    try {
+      await api.post(`/work-orders/${woId}/line-items`, {
+        line_type: form.line_type,
+        description: form.description,
+        quantity: Number(form.quantity) || 1,
+        unit_price: Number(form.unit_price) || 0,
+        service_id: form.service_id || null,
+      });
+      resetForm();
+      onChanged();
+    } catch (e) { alert(e.message); }
+    setSaving(false);
+  };
+
+  const handleUpdate = async () => {
+    if (!form.description || !form.unit_price) return;
+    setSaving(true);
+    try {
+      await api.patch(`/work-orders/line-items/${editId}`, {
+        line_type: form.line_type,
+        description: form.description,
+        quantity: Number(form.quantity) || 1,
+        unit_price: Number(form.unit_price) || 0,
+      });
+      resetForm();
+      onChanged();
+    } catch (e) { alert(e.message); }
+    setSaving(false);
+  };
+
+  const handleDelete = async (lineId) => {
+    if (!confirm('Remove this line item?')) return;
+    try {
+      await api.delete(`/work-orders/line-items/${lineId}`);
+      onChanged();
+    } catch (e) { alert(e.message); }
+  };
+
+  const startEdit = (item) => {
+    setEditId(item.line_id);
+    setForm({
+      line_type: item.line_type,
+      description: item.description,
+      quantity: String(item.quantity),
+      unit_price: String(item.unit_price),
+      service_id: item.service_id || '',
+    });
+    setAdding(true);
+  };
+
+  const typeLabel = (t) => (LINE_TYPES.find(x => x.value === t) || {}).label || t;
+
+  return (
+    <div>
+      {lineItems.length > 0 ? (
+        <table className="entity-table" style={{ fontSize: '0.8125rem', marginBottom: '0.75rem' }}>
+          <thead>
+            <tr>
+              <th style={{ width: '90px' }}>Type</th>
+              <th>Description</th>
+              <th style={{ width: '50px', textAlign: 'right' }}>Qty</th>
+              <th style={{ width: '80px', textAlign: 'right' }}>Price</th>
+              <th style={{ width: '80px', textAlign: 'right' }}>Total</th>
+              <th style={{ width: '40px', textAlign: 'center' }}>Tax</th>
+              {!readOnly && <th style={{ width: '70px' }}></th>}
+            </tr>
+          </thead>
+          <tbody>
+            {lineItems.map(li => (
+              <tr key={li.line_id}>
+                <td><span className="badge" style={{ fontSize: '0.6875rem' }}>{typeLabel(li.line_type)}</span></td>
+                <td>{li.description}{li.service_name ? ` (${li.service_name})` : ''}</td>
+                <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(li.quantity).toFixed(0)}</td>
+                <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>${Number(li.unit_price).toFixed(2)}</td>
+                <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>${Number(li.line_total).toFixed(2)}</td>
+                <td style={{ textAlign: 'center' }}>{li.is_taxable ? '\u2713' : ''}</td>
+                {!readOnly && (
+                  <td style={{ textAlign: 'right' }}>
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.625rem', padding: '0.1rem 0.3rem' }} onClick={() => startEdit(li)}>Edit</button>
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.625rem', padding: '0.1rem 0.3rem', color: 'var(--red)' }} onClick={() => handleDelete(li.line_id)}>\u2716</button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p style={{ color: '#999', fontSize: '0.8125rem', margin: '0.5rem 0' }}>No line items yet. Add labor, parts, or fees below.</p>
+      )}
+
+      {!readOnly && !adding && (
+        <button className="btn btn-sm" style={{ fontSize: '0.75rem' }} onClick={() => setAdding(true)}>+ Add Line Item</button>
+      )}
+
+      {!readOnly && adding && (
+        <div style={{ padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #ddd', marginTop: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div className="form-field" style={{ width: '110px' }}>
+              <label className="label" style={{ fontSize: '0.7rem' }}>Type</label>
+              <select value={form.line_type} onChange={e => setForm(p => ({ ...p, line_type: e.target.value }))} style={{ fontSize: '0.8rem' }}>
+                {LINE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+
+            {form.line_type === 'labor' && services.length > 0 && (
+              <div className="form-field" style={{ width: '180px' }}>
+                <label className="label" style={{ fontSize: '0.7rem' }}>Service</label>
+                <select value={form.service_id} onChange={e => handleServiceSelect(e.target.value)} style={{ fontSize: '0.8rem' }}>
+                  <option value="">Custom</option>
+                  {services.map(s => <option key={s.service_id} value={s.service_id}>{s.service_name} (${Number(s.default_labor).toFixed(2)})</option>)}
+                </select>
+              </div>
+            )}
+
+            <div className="form-field" style={{ flex: 1, minWidth: '140px' }}>
+              <label className="label" style={{ fontSize: '0.7rem' }}>Description</label>
+              <input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} style={{ fontSize: '0.8rem' }} placeholder="Service or item description" />
+            </div>
+
+            <div className="form-field" style={{ width: '60px' }}>
+              <label className="label" style={{ fontSize: '0.7rem' }}>Qty</label>
+              <input type="number" min="1" value={form.quantity} onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }} />
+            </div>
+
+            <div className="form-field" style={{ width: '90px' }}>
+              <label className="label" style={{ fontSize: '0.7rem' }}>Price</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.15rem' }}>
+                <span style={{ fontSize: '0.8rem' }}>$</span>
+                <input type="number" step="0.01" min="0" value={form.unit_price} onChange={e => setForm(p => ({ ...p, unit_price: e.target.value }))} style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.25rem' }}>
+              <button className="btn btn-primary btn-sm" style={{ fontSize: '0.75rem' }} onClick={editId ? handleUpdate : handleAdd} disabled={saving}>
+                {saving ? '...' : editId ? 'Update' : 'Add'}
+              </button>
+              <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.75rem' }} onClick={resetForm}>Cancel</button>
+            </div>
           </div>
         </div>
       )}

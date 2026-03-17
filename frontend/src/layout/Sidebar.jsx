@@ -42,6 +42,8 @@ const NAV = [
       { label: 'Quotes',         path: '/quotes',          icon: '\u2696', need: 'INVENTORY_VIEW' },
       { label: 'Warranties',     path: '/warranties',      icon: '\u2611', need: 'USER_MANAGE' },
       { label: 'Communications', path: '/communications',  icon: '\u2709', need: 'CUSTOMER_MANAGE' },
+      { label: 'Tire Storage',   path: '/storage',          icon: '\u2338', need: 'CUSTOMER_MANAGE' },
+      { label: 'Disposal Log',   path: '/disposals',        icon: '\u2672', need: 'INVENTORY_MANAGE' },
     ],
   },
   {

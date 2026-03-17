@@ -150,6 +150,10 @@ export default function CustomerDetail() {
               <LinkedVehicles customerId={Number(id)} vehicles={vehicles} onChanged={load} />
             </div>
             <CustomFieldValues entityType="customer" entityId={Number(id)} />
+            <div className="card" style={{ marginTop: '1rem' }}>
+              <SectionTitle>Discount Groups</SectionTitle>
+              <DiscountGroupsPanel customerId={Number(id)} />
+            </div>
           </div>
         )}
       </div>
@@ -261,6 +265,63 @@ function LinkedVehicles({ customerId, vehicles, onChanged }) {
     </div>
   );
 }
+
+// ---- Discount Groups Panel ----
+
+function DiscountGroupsPanel({ customerId }) {
+  const [groups, setGroups] = useState([]);
+  const [allGroups, setAllGroups] = useState([]);
+  const [adding, setAdding] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState('');
+
+  const load = () => {
+    api.get(`/customers/${customerId}/discount-groups`).then(d => setGroups(d.groups || [])).catch(() => {});
+    api.get('/discount-groups').then(d => setAllGroups(d.groups || [])).catch(() => {});
+  };
+  useEffect(load, [customerId]);
+
+  const handleAdd = async () => {
+    if (!selectedGroup) return;
+    try { await api.post(`/customers/${customerId}/discount-groups`, { group_id: Number(selectedGroup) }); setAdding(false); load(); }
+    catch (e) { alert(e.message); }
+  };
+
+  const handleRemove = async (groupId) => {
+    try { await api.delete(`/customers/${customerId}/discount-groups/${groupId}`); load(); }
+    catch (e) { alert(e.message); }
+  };
+
+  const assignedIds = groups.map(g => g.group_id);
+  const available = allGroups.filter(g => !assignedIds.includes(g.group_id));
+
+  return (
+    <div>
+      {groups.length > 0 ? (
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+          {groups.map(g => (
+            <span key={g.group_id} className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem' }}>
+              {g.group_name} ({g.discount_type === 'percentage' ? g.discount_value + '%' : '$' + Number(g.discount_value).toFixed(2)})
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', fontSize: '0.75rem', padding: 0 }} onClick={() => handleRemove(g.group_id)}>{'\u2716'}</button>
+            </span>
+          ))}
+        </div>
+      ) : <p style={{ color: '#999', fontSize: '0.8125rem', margin: '0.25rem 0' }}>No discount groups assigned.</p>}
+      {!adding ? (
+        <button className="btn btn-sm btn-ghost" style={{ fontSize: '0.75rem' }} onClick={() => setAdding(true)}>+ Add to Group</button>
+      ) : (
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <select value={selectedGroup} onChange={e => setSelectedGroup(e.target.value)} style={{ fontSize: '0.8rem' }}>
+            <option value="">Select group...</option>
+            {available.map(g => <option key={g.group_id} value={g.group_id}>{g.group_name}</option>)}
+          </select>
+          <button className="btn btn-primary btn-sm" style={{ fontSize: '0.75rem' }} onClick={handleAdd}>Add</button>
+          <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.75rem' }} onClick={() => setAdding(false)}>Cancel</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function SectionTitle({ children }) {
   return (

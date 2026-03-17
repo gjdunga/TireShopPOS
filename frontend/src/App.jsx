@@ -48,6 +48,8 @@ import FitmentSearch from './pages/FitmentSearch.jsx';
 import RecallChecker from './pages/RecallChecker.jsx';
 import BarcodeScanner from './pages/BarcodeScanner.jsx';
 import CustomerComm from './pages/CustomerComm.jsx';
+import TireStorage from './pages/TireStorage.jsx';
+import DisposalLog from './pages/DisposalLog.jsx';
 import { StorefrontShell, StorefrontHome, StorefrontInventory, StorefrontTireDetail,
          StorefrontFitment, StorefrontAppointments, StorefrontWarranty } from './pages/Storefront.jsx';
 import { lazy, Suspense } from 'react';
@@ -105,6 +107,8 @@ export default function App() {
               <Route path="settings" element={<SettingsAdmin />} />
               <Route path="warranties" element={<WarrantyManager />} />
               <Route path="communications" element={<CustomerComm />} />
+              <Route path="storage" element={<TireStorage />} />
+              <Route path="disposals" element={<DisposalLog />} />
               <Route path="marketplace" element={<Suspense fallback={SuspenseFallback}><MarketplaceHub /></Suspense>} />
               <Route path="audit" element={<Suspense fallback={SuspenseFallback}><AuditLog /></Suspense>} />
               <Route path="users" element={<Suspense fallback={SuspenseFallback}><UserManagement /></Suspense>} />
