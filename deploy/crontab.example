@@ -1,0 +1,67 @@
+# ============================================================================
+# TireShopPOS: Crontab Configuration
+# ============================================================================
+#
+# Install with: crontab deploy/crontab.example
+# Or edit:      crontab -e
+#
+# Replace /home/user/domains/pos.example.com/app with your actual app path.
+# All output goes to storage/logs/cron.log via the cron-runner.
+#
+# DunganSoft Technologies, March 2026
+# ============================================================================
+
+# ---- PATHS ----
+# Adjust this to your installation directory.
+APP=/home/user/domains/pos.example.com/app
+
+# ============================================================================
+# Option A: Simple (2 crontab lines)
+# ============================================================================
+# The cron-runner orchestrates all jobs with file locking.
+# "all-frequent" runs every 5 min: notifications, webhooks, sessions (15 min).
+# "all-daily" runs at 2 AM: backups, log rotation, rate limit cleanup.
+
+*/5 * * * *  $APP/scripts/cron-runner.sh all-frequent  >> /dev/null 2>&1
+0   2 * * *  $APP/scripts/cron-runner.sh all-daily     >> /dev/null 2>&1
+
+# ============================================================================
+# Option B: Granular (individual control)
+# ============================================================================
+# Uncomment these instead of Option A for per-job scheduling.
+
+# Session cleanup: every 15 minutes
+# */15 * * * *  $APP/scripts/cron-runner.sh sessions        >> /dev/null 2>&1
+
+# Notification delivery: every 5 minutes
+# */5  * * * *  $APP/scripts/cron-runner.sh notifications   >> /dev/null 2>&1
+
+# Webhook retry: every 5 minutes
+# */5  * * * *  $APP/scripts/cron-runner.sh webhooks        >> /dev/null 2>&1
+
+# Rate limit cleanup: every hour
+# 0    * * * *  $APP/scripts/cron-runner.sh rate-limits     >> /dev/null 2>&1
+
+# Database backup: daily at 2 AM
+# 0    2 * * *  $APP/scripts/cron-runner.sh backup-db       >> /dev/null 2>&1
+
+# Photo backup: daily at 2:30 AM
+# 30   2 * * *  $APP/scripts/cron-runner.sh backup-photos   >> /dev/null 2>&1
+
+# Log rotation: daily at midnight
+# 0    0 * * *  $APP/scripts/cron-runner.sh rotate-logs     >> /dev/null 2>&1
+
+# ============================================================================
+# Monitoring
+# ============================================================================
+# Check cron status:
+#   ./scripts/cron-runner.sh status
+#
+# View cron log:
+#   tail -50 storage/logs/cron.log
+#
+# Test a specific job:
+#   ./scripts/cron-runner.sh notifications
+#
+# Verify crontab installed:
+#   crontab -l
