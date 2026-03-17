@@ -50,7 +50,10 @@ export default function BarcodeScanner() {
       const data = await api.get(`/labels/${type}/${id}`);
       // Open ZPL in new window for raw printing or copy
       const win = window.open('', '_blank', 'width=400,height=300');
-      win.document.write(`<pre style="font-family:monospace;white-space:pre-wrap">${data.zpl}</pre>`);
+      const pre = win.document.createElement('pre');
+      pre.style.cssText = 'font-family:monospace;white-space:pre-wrap';
+      pre.textContent = data.zpl;
+      win.document.body.appendChild(pre);
       win.document.title = `ZPL Label: ${type} #${id}`;
     } catch (e) { setError(e.message); }
   };

@@ -5,11 +5,11 @@
 // ================================================================
 
 import { useState, useEffect, useCallback } from 'react';
-import api from '../api/client.js';
+import api, { getToken } from '../api/client.js';
 
 // CSV download helper: fetches with auth token, triggers browser download
 function downloadCsv(path) {
-  const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+  const token = getToken();
   fetch('/api' + path + (path.includes('?') ? '&' : '?') + 'format=csv', {
     headers: token ? { 'Authorization': 'Bearer ' + token } : {},
   })
