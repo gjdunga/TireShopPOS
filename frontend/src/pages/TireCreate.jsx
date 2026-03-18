@@ -22,26 +22,26 @@ export default function TireCreate() {
     full_size_string: '',
     brand_id: '',
     model_name: '',
-    tire_type: '',
-    construction_type: '',
+    tire_type_id: '',
+    construction_id: '',
     condition: 'new',
     tread_depth_32nds: '',
     retail_price: '',
     cost: '',
-    bin_location: '',
-    dot_tin: '',
+    bin_facility: '',
+    dot_tin_raw: '',
     notes: '',
   });
 
   useEffect(() => {
     Promise.all([
       api.get('/lookups/brands').catch(() => ({ brands: [] })),
-      api.get('/lookups/tire-types').catch(() => ({ types: [] })),
-      api.get('/lookups/construction-types').catch(() => ({ types: [] })),
+      api.get('/lookups/tire-types').catch(() => ({ tire_types: [] })),
+      api.get('/lookups/construction-types').catch(() => ({ construction_types: [] })),
     ]).then(([b, tt, ct]) => {
       setBrands(b.brands || []);
-      setTireTypes(tt.types || []);
-      setConstructionTypes(ct.types || []);
+      setTireTypes(tt.tire_types || []);
+      setConstructionTypes(ct.construction_types || []);
     });
   }, []);
 
@@ -72,6 +72,8 @@ export default function TireCreate() {
     // Convert numeric fields
     if (payload.tread_depth_32nds) payload.tread_depth_32nds = Number(payload.tread_depth_32nds);
     if (payload.brand_id) payload.brand_id = Number(payload.brand_id);
+    if (payload.tire_type_id) payload.tire_type_id = Number(payload.tire_type_id);
+    if (payload.construction_id) payload.construction_id = Number(payload.construction_id);
 
     try {
       const result = await api.post('/tires', payload);
@@ -120,17 +122,17 @@ export default function TireCreate() {
 
             <div className="form-field">
               <label className="label">Tire Type</label>
-              <select value={form.tire_type} onChange={handleChange('tire_type')}>
+              <select value={form.tire_type_id} onChange={handleChange('tire_type_id')}>
                 <option value="">Select...</option>
-                {tireTypes.map((t) => <option key={t.code || t} value={t.code || t}>{t.label || t.code || t}</option>)}
+                {tireTypes.map((t) => <option key={t.type_id} value={t.type_id}>{t.type_label}</option>)}
               </select>
             </div>
 
             <div className="form-field">
               <label className="label">Construction</label>
-              <select value={form.construction_type} onChange={handleChange('construction_type')}>
+              <select value={form.construction_id} onChange={handleChange('construction_id')}>
                 <option value="">Select...</option>
-                {constructionTypes.map((t) => <option key={t.code || t} value={t.code || t}>{t.label || t.code || t}</option>)}
+                {constructionTypes.map((t) => <option key={t.construction_id} value={t.construction_id}>{t.label} ({t.code})</option>)}
               </select>
             </div>
 
@@ -162,14 +164,14 @@ export default function TireCreate() {
 
             <div className="form-field">
               <label className="label">BIN Location</label>
-              <input type="text" placeholder="e.g. R-A1-03" value={form.bin_location}
-                onChange={handleChange('bin_location')} />
+              <input type="text" placeholder="e.g. R-A1-03" value={form.bin_facility}
+                onChange={handleChange('bin_facility')} />
             </div>
 
             <div className="form-field">
               <label className="label">DOT/TIN</label>
-              <input type="text" placeholder="e.g. DOT XXXX XXXX 2324" value={form.dot_tin}
-                onChange={handleChange('dot_tin')} />
+              <input type="text" placeholder="e.g. DOT XXXX XXXX 2324" value={form.dot_tin_raw}
+                onChange={handleChange('dot_tin_raw')} />
             </div>
           </div>
 
