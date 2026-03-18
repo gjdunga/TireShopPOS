@@ -765,17 +765,21 @@ CREATE TABLE IF NOT EXISTS waivers (
     work_order_id   INT DEFAULT NULL,
     customer_id     INT NOT NULL,
     tire_id         INT DEFAULT NULL,
+    vehicle_id      INT DEFAULT NULL,
     waiver_text     TEXT NOT NULL COMMENT 'Frozen copy of template at creation time',
     customer_signature VARCHAR(255) DEFAULT NULL COMMENT 'File path or VERBAL',
     signed_at       DATETIME DEFAULT NULL,
     witnessed_by    INT DEFAULT NULL,
+    created_by      INT DEFAULT NULL,
     notes           TEXT DEFAULT NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_waiver_wo       FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id),
     CONSTRAINT fk_waiver_customer FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
     CONSTRAINT fk_waiver_tire     FOREIGN KEY (tire_id) REFERENCES tires(tire_id),
+    CONSTRAINT fk_waiver_vehicle  FOREIGN KEY (vehicle_id) REFERENCES vehicles(vehicle_id),
     CONSTRAINT fk_waiver_witness  FOREIGN KEY (witnessed_by) REFERENCES users(user_id),
+    CONSTRAINT fk_waiver_created  FOREIGN KEY (created_by) REFERENCES users(user_id),
     INDEX idx_waiver_customer (customer_id),
     INDEX idx_waiver_wo (work_order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1317,9 +1321,11 @@ CREATE TABLE IF NOT EXISTS marketplace_listings (
     listed_at       DATETIME DEFAULT NULL,
     expires_at      DATETIME DEFAULT NULL,
     views_count     INT UNSIGNED DEFAULT 0,
+    created_by      INT DEFAULT NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_ml_tire  FOREIGN KEY (tire_id) REFERENCES tires(tire_id),
+    CONSTRAINT fk_ml_created FOREIGN KEY (created_by) REFERENCES users(user_id),
     INDEX idx_ml_platform (platform, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

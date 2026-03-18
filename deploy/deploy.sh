@@ -272,17 +272,9 @@ if [[ "$INIT" == "true" || "$DB_ONLY" == "true" ]]; then
     # Create database if it doesn't exist
     mysql $AUTH -e "CREATE DATABASE IF NOT EXISTS \`${DB_DATABASE}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null || true
 
-    # Run base schema
+    # Run base schema (single source of truth, no migrations)
     log "Loading base schema (68 tables, 9 views)..."
     mysql $AUTH --default-character-set=utf8mb4 "${DB_DATABASE}" < "${APP_DIR}/sql/tire_pos_schema_full.sql"
-
-    # Run migrations in order (excludes down/ directory)
-    for migration in "${APP_DIR}/sql/migrations/"*.sql; do
-        [[ "$(basename "$migration")" == "down" ]] && continue
-        mname=$(basename "$migration")
-        log "Running migration: ${mname}"
-        mysql $AUTH --default-character-set=utf8mb4 "${DB_DATABASE}" < "$migration"
-    done
 
     # Verify
     TABLE_COUNT=$(mysql $AUTH -N -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = '${DB_DATABASE}' AND TABLE_TYPE = 'BASE TABLE';")

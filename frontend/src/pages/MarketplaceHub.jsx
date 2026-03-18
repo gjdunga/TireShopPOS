@@ -399,8 +399,8 @@ function B2bTab() {
               <tr key={i.b2b_id}>
                 <td style={{ fontWeight: 500 }}>{i.tire_size ? `${i.tire_brand || ''} ${i.tire_size}` : i.description || '\u2014'}</td>
                 <td><span className="badge badge-blue">{i.listing_type}</span></td>
-                <td className="mono" style={{ fontWeight: 600 }}>${Number(i.wholesale_price).toFixed(2)}</td>
-                <td className="mono">{i.min_quantity}</td>
+                <td className="mono" style={{ fontWeight: 600 }}>${Number(i.price_wholesale).toFixed(2)}</td>
+                <td className="mono">{i.min_order_qty}</td>
                 <td>{i.tire_condition ? <span className={`badge ${i.tire_condition === 'new' ? 'badge-green' : 'badge-orange'}`}>{i.tire_condition}</span> : '\u2014'}</td>
                 <td><button className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} onClick={() => handleRemove(i.b2b_id)}>Remove</button></td>
               </tr>
@@ -415,7 +415,7 @@ function B2bTab() {
 }
 
 function AddB2bModal({ onCreated, onCancel, onError }) {
-  const [form, setForm] = useState({ tire_id: '', listing_type: 'sell', wholesale_price: '', min_quantity: '1', description: '' });
+  const [form, setForm] = useState({ tire_id: '', listing_type: 'sell', price_wholesale: '', min_order_qty: '1', description: '' });
   const [saving, setSaving] = useState(false);
   const ch = (f) => (e) => setForm((p) => ({ ...p, [f]: e.target.value }));
   const handleSave = async () => {
@@ -432,8 +432,8 @@ function AddB2bModal({ onCreated, onCancel, onError }) {
             <div className="form-field"><label className="label">Tire ID</label><input type="number" value={form.tire_id} onChange={ch('tire_id')} /></div>
             <div className="form-field"><label className="label">Type</label>
               <select value={form.listing_type} onChange={ch('listing_type')}><option value="sell">Sell</option><option value="buy">Buy</option><option value="both">Both</option></select></div>
-            <div className="form-field"><label className="label">Wholesale Price</label><input type="number" step="0.01" value={form.wholesale_price} onChange={ch('wholesale_price')} /></div>
-            <div className="form-field"><label className="label">Min Quantity</label><input type="number" value={form.min_quantity} onChange={ch('min_quantity')} /></div>
+            <div className="form-field"><label className="label">Wholesale Price</label><input type="number" step="0.01" value={form.price_wholesale} onChange={ch('price_wholesale')} /></div>
+            <div className="form-field"><label className="label">Min Quantity</label><input type="number" value={form.min_order_qty} onChange={ch('min_order_qty')} /></div>
             <div className="form-field" style={{ gridColumn: '1 / -1' }}><label className="label">Description</label>
               <input type="text" value={form.description} onChange={ch('description')} /></div>
           </div>
@@ -480,7 +480,7 @@ function DirectoryTab() {
               <tr key={l.directory_id}>
                 <td style={{ fontWeight: 500 }}>{l.directory_name}</td>
                 <td>{l.listing_url ? <a href={l.listing_url} target="_blank" rel="noopener noreferrer" className="mono" style={{ fontSize: '0.8125rem' }}>{l.listing_url.slice(0, 40)}...</a> : '\u2014'}</td>
-                <td><span className={`badge ${DIR_COLORS[l.listing_status] || ''}`}>{l.listing_status}</span></td>
+                <td><span className={`badge ${DIR_COLORS[l.status] || ''}`}>{l.status}</span></td>
                 <td className="mono">{l.last_verified || 'Never'}</td>
               </tr>
             ))}
@@ -591,7 +591,7 @@ function IntegrationsTab() {
                   <td>{s.direction === 'outbound' ? '\u2192' : '\u2190'}</td>
                   <td><span className={`badge ${SYNC_COLORS[s.status] || ''}`}>{s.status}</span></td>
                   <td className="mono">{s.duration_ms ? s.duration_ms + 'ms' : '\u2014'}</td>
-                  <td style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.response_summary || s.error_message || ''}</td>
+                  <td style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.response_body || s.error_message || ''}</td>
                 </tr>
               ))}
             </tbody>
