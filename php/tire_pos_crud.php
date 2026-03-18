@@ -79,10 +79,22 @@ function createTire(array $data, int $createdBy): int {
 
     $setCols = [];
     $binds = [];
+    // Fields that must be int or null (never empty string)
+    $intFields = ['brand_id', 'tire_type_id', 'construction_id', 'width_mm',
+        'aspect_ratio', 'wheel_diameter', 'speed_rating_id', 'load_index_id',
+        'load_construction_id', 'dot_mfg_week', 'dot_mfg_year', 'tread_depth_32nds',
+        'acquisition_source_id'];
+    $decFields = ['cost', 'retail_price'];
     foreach ($fields as $f) {
         if (array_key_exists($f, $data)) {
+            $val = $data[$f];
+            if (in_array($f, $intFields, true)) {
+                $val = ($val === '' || $val === null) ? null : (int) $val;
+            } elseif (in_array($f, $decFields, true)) {
+                $val = ($val === '' || $val === null) ? null : $val;
+            }
             $setCols[] = $f;
-            $binds[] = $data[$f];
+            $binds[] = $val;
         }
     }
 
@@ -148,12 +160,21 @@ function updateTire(int $tireId, array $data, int $updatedBy): array {
     $sets = [];
     $binds = [];
     $changes = [];
+    $intFields = ['brand_id', 'tire_type_id', 'construction_id',
+        'dot_mfg_week', 'dot_mfg_year', 'tread_depth_32nds'];
+    $decFields = ['cost', 'retail_price'];
 
     foreach ($editable as $f) {
         if (array_key_exists($f, $data) && (string) ($data[$f] ?? '') !== (string) ($tire[$f] ?? '')) {
+            $val = $data[$f];
+            if (in_array($f, $intFields, true)) {
+                $val = ($val === '' || $val === null) ? null : (int) $val;
+            } elseif (in_array($f, $decFields, true)) {
+                $val = ($val === '' || $val === null) ? null : $val;
+            }
             $sets[] = "`{$f}` = ?";
-            $binds[] = $data[$f];
-            $changes[$f] = ['old' => $tire[$f], 'new' => $data[$f]];
+            $binds[] = $val;
+            $changes[$f] = ['old' => $tire[$f], 'new' => $val];
         }
     }
 

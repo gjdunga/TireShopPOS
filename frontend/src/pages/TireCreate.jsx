@@ -25,13 +25,16 @@ export default function TireCreate() {
     tire_type_id: '',
     construction_id: '',
     condition: 'new',
-    tread_depth_32nds: '',
+    tread_depth_32nds: '10',
     retail_price: '',
     cost: '',
     bin_facility: '',
     dot_tin_raw: '',
     notes: '',
   });
+
+  // Default tread depth by condition (new = 10/32, used = 6/32)
+  const TREAD_DEFAULTS = { new: '10', used: '6' };
 
   useEffect(() => {
     Promise.all([
@@ -47,7 +50,14 @@ export default function TireCreate() {
 
   const handleChange = (field) => (e) => {
     const val = e.target.value;
-    setForm((prev) => ({ ...prev, [field]: val }));
+    setForm((prev) => {
+      const next = { ...prev, [field]: val };
+      // When condition changes and tread is still at a default, update it
+      if (field === 'condition' && TREAD_DEFAULTS[prev.condition] === prev.tread_depth_32nds) {
+        next.tread_depth_32nds = TREAD_DEFAULTS[val] || prev.tread_depth_32nds;
+      }
+      return next;
+    });
 
     // Auto-parse tire size
     if (field === 'full_size_string' && val.length >= 7) {
