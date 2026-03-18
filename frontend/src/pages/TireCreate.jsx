@@ -24,8 +24,8 @@ export default function TireCreate() {
     model_name: '',
     tire_type_id: '',
     construction_id: '',
-    condition: 'new',
-    tread_depth_32nds: '10',
+    condition: 'used',
+    tread_depth_32nds: '6',
     retail_price: '',
     cost: '',
     bin_facility: '',
@@ -62,7 +62,24 @@ export default function TireCreate() {
     // Auto-parse tire size
     if (field === 'full_size_string' && val.length >= 7) {
       api.get(`/tires/parse-size?size=${encodeURIComponent(val)}`)
-        .then(setParsedSize)
+        .then((parsed) => {
+          setParsedSize(parsed);
+          // Auto-select tire type from prefix/suffix (AT, LT, ST, MT, HT, MO, P, etc.)
+          if (parsed.tire_type_prefix && tireTypes.length > 0) {
+            const code = parsed.tire_type_prefix === 'P' ? 'PP' : parsed.tire_type_prefix;
+            const match = tireTypes.find((t) => t.type_code === code);
+            if (match) {
+              setForm((prev) => ({ ...prev, tire_type_id: String(match.type_id) }));
+            }
+          }
+          // Auto-select construction type (R, B, D)
+          if (parsed.construction && constructionTypes.length > 0) {
+            const match = constructionTypes.find((t) => t.code === parsed.construction);
+            if (match) {
+              setForm((prev) => ({ ...prev, construction_id: String(match.construction_id) }));
+            }
+          }
+        })
         .catch(() => setParsedSize(null));
     }
   };
@@ -149,8 +166,8 @@ export default function TireCreate() {
             <div className="form-field">
               <label className="label">Condition</label>
               <select value={form.condition} onChange={handleChange('condition')}>
-                <option value="new">New</option>
                 <option value="used">Used</option>
+                <option value="new">New</option>
               </select>
             </div>
 

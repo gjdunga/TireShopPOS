@@ -94,13 +94,22 @@ function getDB(): PDO {
 function parseTireSize(string $raw): ?array {
     $s = strtoupper(trim($raw));
 
+    // Extract suffix type indicators (AT, HT, MT, MO, OT) from the end.
+    // These appear after the core size string, e.g., "265/70R17 AT" or "LT265/70R17AT".
+    $suffix = null;
+    $suffixPattern = '/\s*(A\/T|AT|HT|MT|MO|OT)\s*$/';
+    if (preg_match($suffixPattern, $s, $sm)) {
+        $suffix = str_replace('/', '', $sm[1]); // A/T -> AT
+        $s = trim(preg_replace($suffixPattern, '', $s));
+    }
+
     // Metric pattern: [PREFIX]WIDTH/ASPECT_RATIO[CONSTRUCTION]DIAMETER
     // Examples: LT265/70R17, 225/45R18, ST215/75R14, P265/70R17
     $metricPattern = '/^(LT|ST|P)?(\d{3})\/(\d{2,3})(R|B|D)(\d{2}(?:\.\d)?)$/';
 
     // Flotation pattern: DIAMETERxWIDTH[CONSTRUCTION]RIM
     // Examples: 33x12.5R15, 35x12.50R17, 31x10.5R15
-    $flotationPattern = '/^(\d{2,3})x(\d{1,2}(?:\.\d{1,2})?)(R|B|D)(\d{2}(?:\.\d)?)$/';
+    $flotationPattern = '/^(\d{2,3})[xX](\d{1,2}(?:\.\d{1,2})?)(R|B|D)(\d{2}(?:\.\d)?)$/';
 
     if (preg_match($metricPattern, $s, $m)) {
         $prefix     = $m[1] ?: 'PP'; // Default to Passenger
@@ -114,13 +123,18 @@ function parseTireSize(string $raw): ?array {
         if ($aspect < 20 || $aspect > 100) return null;
         if ($rim < 10 || $rim > 30) return null;
 
+        // Suffix overrides prefix for type classification:
+        // "265/70R17 AT" -> type is AT (All Terrain), not PP (Passenger)
+        // "LT265/70R17 MT" -> type is MT (Mud Terrain), LT is just a load range
+        $typeCode = $suffix ?? $prefix;
+
         return [
             'size_format'      => 'metric',
             'width_mm'         => $width_mm,
             'aspect_ratio'     => $aspect,
             'construction'     => $constr,
             'wheel_diameter'   => $rim,
-            'tire_type_prefix' => $prefix,
+            'tire_type_prefix' => $typeCode,
         ];
     }
 
@@ -135,13 +149,15 @@ function parseTireSize(string $raw): ?array {
         if ($section_width < 5 || $section_width > 20) return null;
         if ($rim < 10 || $rim > 24) return null;
 
+        $typeCode = $suffix ?? 'LT'; // Flotation sizes are always LT unless suffix says otherwise
+
         return [
             'size_format'      => 'flotation',
             'width_mm'         => (int) ($overall_diam * 10), // Store as x10 integer
             'aspect_ratio'     => (int) ($section_width * 10), // Store as x10 integer
             'construction'     => $constr,
             'wheel_diameter'   => $rim,
-            'tire_type_prefix' => 'LT', // Flotation sizes are always LT
+            'tire_type_prefix' => $typeCode,
         ];
     }
 
