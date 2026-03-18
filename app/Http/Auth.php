@@ -67,6 +67,9 @@ class Auth
             // Constant-time: run bcrypt on dummy hash so response time is
             // indistinguishable from a real user with wrong password.
             password_verify($password, '$2y$12$DummyHashToPreventTimingOracleOnUserEnum000000000000000');
+            // Dummy DB write to equalize timing with recordFailedLogin()
+            // on real users (prevents timing-based username enumeration).
+            try { Database::execute("SELECT 1 FROM users WHERE user_id = 0 FOR UPDATE", []); } catch (\Throwable $e) {}
             return self::fail(self::ERR_INVALID_CREDS, 'Invalid username or password.', 401);
         }
 

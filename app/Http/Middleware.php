@@ -255,6 +255,25 @@ class Middleware
      * Tracks hits in the rate_limit_hits table per scope key.
      * Scope: authenticated -> user:{id}, unauthenticated -> ip:{remote_addr}.
      *
+    /**
+     * Get the real client IP, accounting for Cloudflare and reverse proxies.
+     */
+    public static function clientIp(): string
+    {
+        // Cloudflare sets CF-Connecting-IP to the real client IP
+        if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
+            return $_SERVER['HTTP_CF_CONNECTING_IP'];
+        }
+        // Standard proxy header (less trusted, but better than REMOTE_ADDR behind proxy)
+        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            // Take the first (leftmost) IP, which is the original client
+            $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+            return trim($ips[0]);
+        }
+        return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    }
+
+    /**
      * @param int $maxHits   Maximum requests allowed in the window.
      * @param int $windowSec Window size in seconds (default 60).
      * @return callable
@@ -264,7 +283,7 @@ class Middleware
         return function () use ($maxHits, $windowSec) {
             $scopeKey = self::$session
                 ? 'user:' . self::$session['user_id']
-                : 'ip:' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+                : 'ip:' . self::clientIp();
 
             $since = date('Y-m-d H:i:s', time() - $windowSec);
 

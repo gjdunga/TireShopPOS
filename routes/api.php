@@ -83,8 +83,6 @@ $router->get('/api/health', function () use ($app) {
 
     return [
         'status' => $overall,
-        'app' => $app->name(),
-        'version' => $app->version(),
         'timestamp' => date('c'),
         'expired_sessions_cleaned' => $cleaned,
         'expired_caches_purged' => $cachesPurged,

@@ -162,7 +162,7 @@ class Router
         $match = $this->matchRoute();
 
         if ($match === null) {
-            $this->sendError('NOT_FOUND', 'Route not found: ' . $this->method . ' ' . $this->uri, 404);
+            $this->sendError('NOT_FOUND', 'Route not found.', 404);
         }
 
         // Execute handler with error wrapping
