@@ -150,28 +150,24 @@ function getWarrantyPolicy(int $policyId): ?array {
 function createWarrantyPolicy(array $data): int {
     InputValidator::check('warranty_policies', $data, ['policy_name', 'policy_code']);
     $sql = "INSERT INTO warranty_policies
-            (policy_name, policy_code, coverage_months, coverage_miles, price,
-             is_per_tire, terms_text, exclusions_text, max_claim_amount, deductible)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            (policy_name, policy_code, coverage_months, coverage_miles,
+             coverage_tread_depth_32nds, pro_rata, terms_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?)";
     $stmt = getDB()->prepare($sql);
     $stmt->execute([
         $data['policy_name'], $data['policy_code'],
         (int) ($data['coverage_months'] ?? 12),
         isset($data['coverage_miles']) ? (int) $data['coverage_miles'] : null,
-        $data['price'] ?? '0.00',
-        (int) ($data['is_per_tire'] ?? 1),
+        isset($data['coverage_tread_depth_32nds']) ? (int) $data['coverage_tread_depth_32nds'] : null,
+        (int) ($data['pro_rata'] ?? 0),
         $data['terms_text'] ?? '',
-        $data['exclusions_text'] ?? null,
-        isset($data['max_claim_amount']) ? $data['max_claim_amount'] : null,
-        $data['deductible'] ?? '0.00',
     ]);
     return (int) getDB()->lastInsertId();
 }
 
 function updateWarrantyPolicy(int $policyId, array $data): array {
-    $editable = ['policy_name', 'coverage_months', 'coverage_miles', 'price',
-                 'is_per_tire', 'terms_text', 'exclusions_text', 'max_claim_amount',
-                 'deductible', 'is_active'];
+    $editable = ['policy_name', 'coverage_months', 'coverage_miles',
+                 'coverage_tread_depth_32nds', 'pro_rata', 'terms_text', 'is_active'];
     $sets = [];
     $params = [];
     foreach ($editable as $col) {
@@ -525,12 +521,12 @@ function listCustomFields(string $entityType, bool $activeOnly = true): array {
     $where = 'entity_type = ?';
     $params = [$entityType];
     if ($activeOnly) { $where .= ' AND is_active = 1'; }
-    return Database::query("SELECT * FROM custom_fields WHERE {$where} ORDER BY sort_order, field_id", $params);
+    return Database::query("SELECT * FROM custom_fields WHERE {$where} ORDER BY display_order, field_id", $params);
 }
 
 function createCustomField(array $data): int {
     InputValidator::check('custom_fields', $data, ['field_name', 'field_label']);
-    $sql = "INSERT INTO custom_fields (entity_type, field_name, field_label, field_type, select_options, is_required, sort_order)
+    $sql = "INSERT INTO custom_fields (entity_type, field_name, field_label, field_type, select_options, is_required, display_order)
             VALUES (?, ?, ?, ?, ?, ?, ?)";
     $stmt = getDB()->prepare($sql);
     $stmt->execute([
@@ -538,13 +534,13 @@ function createCustomField(array $data): int {
         $data['field_type'] ?? 'text',
         isset($data['select_options']) ? json_encode($data['select_options']) : null,
         (int) ($data['is_required'] ?? 0),
-        (int) ($data['sort_order'] ?? 0),
+        (int) ($data['display_order'] ?? 0),
     ]);
     return (int) getDB()->lastInsertId();
 }
 
 function updateCustomField(int $fieldId, array $data): array {
-    $editable = ['field_label', 'field_type', 'select_options', 'is_required', 'sort_order', 'is_active'];
+    $editable = ['field_label', 'field_type', 'select_options', 'is_required', 'display_order', 'is_active'];
     $sets = [];
     $params = [];
     foreach ($editable as $col) {
@@ -566,7 +562,7 @@ function getCustomFieldValues(string $entityType, int $entityId): array {
          FROM custom_fields cf
          LEFT JOIN custom_field_values cfv ON cf.field_id = cfv.field_id AND cfv.entity_id = ?
          WHERE cf.entity_type = ? AND cf.is_active = 1
-         ORDER BY cf.sort_order, cf.field_id",
+         ORDER BY cf.display_order, cf.field_id",
         [$entityId, $entityType]
     );
 }

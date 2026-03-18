@@ -70,10 +70,10 @@ function createTire(array $data, int $createdBy): int {
     $fields = [
         'brand_id', 'tire_type_id', 'construction_id',
         'width_mm', 'aspect_ratio', 'wheel_diameter', 'size_format',
-        'speed_rating_id', 'load_index_id', 'load_construction_id',
+        'speed_rating_id', 'load_index_id', 'load_constr_id',
         'model_name', 'full_size_string', 'dot_tin_raw', 'dot_mfg_week', 'dot_mfg_year',
         'tread_depth_32nds', 'condition', 'status',
-        'acquisition_source_id', 'cost', 'retail_price',
+        'source_id', 'cost', 'retail_price',
         'bin_facility', 'bin_shelf', 'bin_level', 'notes'
     ];
 
@@ -82,8 +82,8 @@ function createTire(array $data, int $createdBy): int {
     // Fields that must be int or null (never empty string)
     $intFields = ['brand_id', 'tire_type_id', 'construction_id', 'width_mm',
         'aspect_ratio', 'wheel_diameter', 'speed_rating_id', 'load_index_id',
-        'load_construction_id', 'dot_mfg_week', 'dot_mfg_year', 'tread_depth_32nds',
-        'acquisition_source_id'];
+        'load_constr_id', 'dot_mfg_week', 'dot_mfg_year', 'tread_depth_32nds',
+        'source_id'];
     $decFields = ['cost', 'retail_price'];
     foreach ($fields as $f) {
         if (array_key_exists($f, $data)) {
@@ -233,8 +233,8 @@ function saveTirePhoto(int $tireId, string $filePath, ?string $caption, bool $is
         }
 
         Database::execute(
-            "INSERT INTO tire_photos (tire_id, file_path, caption, is_primary, uploaded_by) VALUES (?, ?, ?, ?, ?)",
-            [$tireId, $filePath, $caption, $isPrimary ? 1 : 0, $uploadedBy]
+            "INSERT INTO tire_photos (tire_id, photo_path, photo_type, caption, uploaded_by) VALUES (?, ?, ?, ?, ?)",
+            [$tireId, $filePath, $data['photo_type'] ?? 'other', $caption, $uploadedBy]
         );
 
         $photoId = (int) Database::lastInsertId();
@@ -251,7 +251,7 @@ function deleteTirePhoto(int $photoId, int $deletedBy): string {
 
     Database::execute("DELETE FROM tire_photos WHERE photo_id = ?", [$photoId]);
     auditLog('tire_photos', $photoId, 'DELETE', null, null, null, $deletedBy);
-    return $photo['file_path'];
+    return $photo['photo_path'];
 }
 
 
@@ -466,7 +466,7 @@ function getWorkOrder(int $woId): ?array {
     if ($wo !== null) {
         $wo['positions'] = Database::query(
             "SELECT wop.*,
-                    t_ex.size_display AS full_size_string, t_ex.brand_name AS existing_tire_brand,
+                    t_ex.size_display AS existing_tire_size, t_ex.brand_name AS existing_tire_brand,
                     t_new.size_display AS new_tire_size, t_new.brand_name AS new_tire_brand
              FROM work_order_positions wop
              LEFT JOIN v_tire_inventory t_ex ON wop.tire_id_existing = t_ex.tire_id
@@ -897,13 +897,11 @@ function addPoLineItem(int $poId, array $data, int $addedBy): int {
     InputValidator::check('po_line_items', $data);
 
     Database::execute(
-        "INSERT INTO po_line_items (po_id, description, size_string, brand, quantity_ordered, unit_cost)
-         VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO po_line_items (po_id, description, quantity_ordered, unit_cost)
+         VALUES (?, ?, ?, ?)",
         [
             $poId,
             $data['description'] ?? '',
-            $data['size_string'] ?? null,
-            $data['brand'] ?? null,
             (int) ($data['quantity_ordered'] ?? 1),
             $data['unit_cost'] ?? '0.00',
         ]
@@ -1030,8 +1028,8 @@ function createAppointment(array $data, int $createdBy): int {
             isset($data['vehicle_id']) ? (int) $data['vehicle_id'] : null,
             $date,
             $data['appointment_time'] ?? null,
-            (int) ($data['est_duration_min'] ?? $data['duration_minutes'] ?? 60),
-            $data['service_requested'] ?? $data['service_type'] ?? null,
+            (int) ($data['est_duration_min'] ?? $data['est_duration_min'] ?? 60),
+            $data['service_requested'] ?? $data['service_requested'] ?? null,
             $data['notes'] ?? null,
             $createdBy,
         ]
@@ -1052,7 +1050,7 @@ function updateAppointment(int $apptId, array $data, int $updatedBy): array {
     InputValidator::check('appointments', $data);
 
     $editable = ['customer_id', 'vehicle_id', 'appointment_date', 'appointment_time',
-                 'duration_minutes', 'service_type', 'notes', 'status'];
+                 'est_duration_min', 'service_requested', 'notes', 'status'];
     $sets = [];
     $binds = [];
     $changes = [];
@@ -1109,19 +1107,18 @@ function createWaiver(array $data, int $createdBy): int {
 
     Database::execute(
         "INSERT INTO waivers (waiver_type, customer_id, vehicle_id, work_order_id, tire_id,
-                               template_text, customer_acknowledged, customer_signature_data,
-                               acknowledged_at, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                               waiver_text, customer_signature,
+                               signed_at, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             $type,
             isset($data['customer_id']) ? (int) $data['customer_id'] : null,
             isset($data['vehicle_id']) ? (int) $data['vehicle_id'] : null,
             isset($data['work_order_id']) ? (int) $data['work_order_id'] : null,
             isset($data['tire_id']) ? (int) $data['tire_id'] : null,
-            $data['template_text'] ?? getWaiverTemplate($type),
-            (int) ($data['customer_acknowledged'] ?? 0),
-            $data['customer_signature_data'] ?? null,
-            ($data['customer_acknowledged'] ?? false) ? date('Y-m-d H:i:s') : null,
+            $data['waiver_text'] ?? getWaiverTemplate($type),
+            $data['customer_signature'] ?? null,
+            ($data['customer_signature'] ?? null) ? date('Y-m-d H:i:s') : null,
             $createdBy,
         ]
     );

@@ -580,7 +580,7 @@ function EmployeesTab() {
               {data.slice(0, 50).map((r, i) => (
                 <tr key={i}>
                   <td className="mono">{(r.created_at || '').slice(0, 16)}</td>
-                  <td>{r.action_type}</td>
+                  <td>{r.action}</td>
                   <td>{r.entity_type}</td>
                   <td style={{ maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.details}</td>
                 </tr>

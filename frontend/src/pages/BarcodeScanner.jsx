@@ -129,7 +129,7 @@ function TireResult({ tire, onPrint }) {
       </div>
       <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.75rem', fontSize: '0.875rem', flexWrap: 'wrap' }}>
         {tire.tread_depth_32nds && <div><strong>Tread:</strong> {tire.tread_depth_32nds}/32</div>}
-        {tire.dot_tin && <div><strong>DOT:</strong> <span className="mono">{tire.dot_tin}</span></div>}
+        {tire.dot_tin_raw && <div><strong>DOT:</strong> <span className="mono">{tire.dot_tin_raw}</span></div>}
         <div><strong>Status:</strong> {tire.status}</div>
       </div>
       <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>

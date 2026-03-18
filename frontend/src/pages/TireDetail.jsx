@@ -97,10 +97,10 @@ export default function TireDetail() {
         </div>
 
         {/* DOT / Age card */}
-        {tire.dot_tin && (
+        {tire.dot_tin_raw && (
           <div className="card">
             <SectionTitle>DOT / TIN</SectionTitle>
-            <DotInfo tireId={tire.tire_id} dotTin={tire.dot_tin} />
+            <DotInfo tireId={tire.tire_id} dotTin={tire.dot_tin_raw} />
           </div>
         )}
 
@@ -177,7 +177,7 @@ function TireEditForm({ tire, onSaved }) {
         <Field label="Retail Price" value={form.retail_price} onChange={handleChange('retail_price')} type="number" step="0.01" />
         <Field label="Cost" value={form.cost} onChange={handleChange('cost')} type="number" step="0.01" />
         <Field label="BIN Location" value={form.bin_location} onChange={handleChange('bin_location')} placeholder="e.g. R-A1-03" />
-        <Field label="DOT/TIN" value={form.dot_tin} onChange={handleChange('dot_tin')} />
+        <Field label="DOT/TIN" value={form.dot_tin_raw} onChange={handleChange('dot_tin_raw')} />
         <div className="form-field">
           <label className="label">Status</label>
           <select value={form.status || 'available'} onChange={handleChange('status')}>
@@ -217,7 +217,7 @@ function TireReadOnly({ tire }) {
       <ReadField label="Price" value={tire.retail_price ? `$${Number(tire.retail_price).toFixed(2)}` : null} />
       <ReadField label="Cost" value={tire.cost ? `$${Number(tire.cost).toFixed(2)}` : null} />
       <ReadField label="BIN" value={tire.bin_location} />
-      <ReadField label="DOT/TIN" value={tire.dot_tin} />
+      <ReadField label="DOT/TIN" value={tire.dot_tin_raw} />
       <ReadField label="Status" value={tire.status} />
       {tire.notes && <ReadField label="Notes" value={tire.notes} wide />}
     </div>
@@ -328,10 +328,10 @@ function DotInfo({ tireId, dotTin }) {
 
   return (
     <div className="form-grid readonly">
-      <ReadField label="Plant Code" value={info.plant_code} />
+      <ReadField label="Plant Code" value={info.dot_plant_code} />
       <ReadField label="Size Code" value={info.size_code} />
-      <ReadField label="Mfg Week" value={info.mfg_week} />
-      <ReadField label="Mfg Year" value={info.mfg_year} />
+      <ReadField label="Mfg Week" value={info.dot_mfg_week} />
+      <ReadField label="Mfg Year" value={info.dot_mfg_year} />
       <ReadField label="Age (years)" value={info.age_years != null ? info.age_years.toFixed(1) : null} />
       {info.is_aged && (
         <div className="form-field" style={{ gridColumn: '1 / -1' }}>

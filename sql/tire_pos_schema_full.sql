@@ -444,7 +444,7 @@ CREATE TABLE IF NOT EXISTS vendors (
 
 CREATE TABLE IF NOT EXISTS tires (
     tire_id             INT AUTO_INCREMENT PRIMARY KEY,
-    `condition`         ENUM('N','U') NOT NULL COMMENT 'New or Used',
+    `condition`         ENUM('new','used') NOT NULL COMMENT 'New or Used',
     cost                DECIMAL(8,2) DEFAULT NULL COMMENT 'Purchase cost, nullable',
     retail_price        DECIMAL(8,2) NOT NULL COMMENT 'Selling price',
 
@@ -1006,6 +1006,11 @@ CREATE TABLE IF NOT EXISTS warranty_policies (
     coverage_tread_depth_32nds TINYINT UNSIGNED DEFAULT NULL,
     pro_rata            TINYINT(1) NOT NULL DEFAULT 0,
     terms_text          TEXT NOT NULL,
+    exclusions_text     TEXT DEFAULT NULL COMMENT 'What is NOT covered',
+    price               DECIMAL(8,2) DEFAULT NULL COMMENT 'Warranty price',
+    is_per_tire         TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = price is per tire, 0 = flat',
+    deductible          DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+    max_claim_amount    DECIMAL(10,2) DEFAULT NULL COMMENT 'Max payout per claim',
     is_active           TINYINT(1) NOT NULL DEFAULT 1,
     created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1069,11 +1074,12 @@ CREATE TABLE IF NOT EXISTS wheels (
 CREATE TABLE IF NOT EXISTS wheel_fitments (
     fitment_id      INT AUTO_INCREMENT PRIMARY KEY,
     wheel_id        INT NOT NULL,
-    year_from       SMALLINT UNSIGNED DEFAULT NULL,
-    year_to         SMALLINT UNSIGNED DEFAULT NULL,
+    year_start      SMALLINT UNSIGNED DEFAULT NULL,
+    year_end        SMALLINT UNSIGNED DEFAULT NULL,
     make            VARCHAR(40) NOT NULL,
     model           VARCHAR(40) NOT NULL,
     trim_level      VARCHAR(40) DEFAULT NULL,
+    is_oem          TINYINT(1) NOT NULL DEFAULT 0,
     notes           VARCHAR(255) DEFAULT NULL,
 
     CONSTRAINT fk_wf_wheel FOREIGN KEY (wheel_id) REFERENCES wheels(wheel_id),
@@ -1149,9 +1155,11 @@ CREATE TABLE IF NOT EXISTS notification_log (
     status              ENUM('pending','sent','failed') NOT NULL DEFAULT 'pending',
     sent_at             DATETIME DEFAULT NULL,
     error_message       VARCHAR(255) DEFAULT NULL,
+    sent_by             INT DEFAULT NULL,
     created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_nl_customer FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+    CONSTRAINT fk_nl_sent_by FOREIGN KEY (sent_by) REFERENCES users(user_id),
     INDEX idx_nl_status (status),
     INDEX idx_nl_customer (customer_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1267,9 +1275,12 @@ CREATE TABLE IF NOT EXISTS integration_credentials (
     cred_key        VARCHAR(60) NOT NULL,
     cred_value      TEXT NOT NULL COMMENT 'Encrypted at rest in production',
     environment     ENUM('sandbox','production') NOT NULL DEFAULT 'sandbox',
+    expires_at      DATETIME DEFAULT NULL,
+    updated_by      INT DEFAULT NULL,
     is_active       TINYINT(1) NOT NULL DEFAULT 1,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
+    CONSTRAINT fk_ic_updated_by FOREIGN KEY (updated_by) REFERENCES users(user_id),
     UNIQUE INDEX idx_ic_unique (integration, cred_key, environment)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -1286,6 +1297,8 @@ CREATE TABLE IF NOT EXISTS integration_sync_log (
     response_body   TEXT DEFAULT NULL,
     remote_id       VARCHAR(120) DEFAULT NULL,
     duration_ms     INT DEFAULT NULL,
+    entity_type     VARCHAR(40) DEFAULT NULL,
+    entity_id       INT DEFAULT NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     INDEX idx_isl_integration (integration, created_at)
@@ -1348,8 +1361,11 @@ CREATE TABLE IF NOT EXISTS b2b_network_inventory (
     b2b_id          INT AUTO_INCREMENT PRIMARY KEY,
     tire_id         INT DEFAULT NULL,
     wheel_id        INT DEFAULT NULL,
+    listing_type    ENUM('sell','wholesale','trade') NOT NULL DEFAULT 'sell',
     price_wholesale DECIMAL(8,2) DEFAULT NULL,
     min_order_qty   SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    max_quantity    SMALLINT UNSIGNED DEFAULT NULL,
+    description     TEXT DEFAULT NULL,
     is_active       TINYINT(1) NOT NULL DEFAULT 1,
     added_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -1364,6 +1380,7 @@ CREATE TABLE IF NOT EXISTS directory_listings (
     status          ENUM('active','pending','inactive') NOT NULL DEFAULT 'pending',
     last_verified   DATE DEFAULT NULL,
     notes           TEXT DEFAULT NULL,
+    profile_data    JSON DEFAULT NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

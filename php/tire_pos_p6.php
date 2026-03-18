@@ -35,7 +35,7 @@ use App\Core\Database;
 
 function getIntegrationCredentials(string $integration, string $env = 'production'): array {
     return Database::query(
-        "SELECT credential_key, credential_value, expires_at
+        "SELECT cred_key, cred_value, expires_at
          FROM integration_credentials
          WHERE integration = ? AND environment = ? AND is_active = 1",
         [$integration, $env]
@@ -43,9 +43,9 @@ function getIntegrationCredentials(string $integration, string $env = 'productio
 }
 
 function setIntegrationCredential(string $integration, string $key, string $value, int $userId, string $env = 'production', ?string $expires = null): void {
-    $sql = "INSERT INTO integration_credentials (integration, credential_key, credential_value, environment, expires_at, updated_by)
+    $sql = "INSERT INTO integration_credentials (integration, cred_key, cred_value, environment, expires_at, updated_by)
             VALUES (?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE credential_value = VALUES(credential_value), expires_at = VALUES(expires_at),
+            ON DUPLICATE KEY UPDATE cred_value = VALUES(cred_value), expires_at = VALUES(expires_at),
             updated_by = VALUES(updated_by), is_active = 1";
     getDB()->prepare($sql)->execute([$integration, $key, $value, $env, $expires, $userId]);
     auditLog('integration_credentials', null, 'UPDATE', $integration . '.' . $key, '', '(set)', $userId);
@@ -63,7 +63,7 @@ function listIntegrations(): array {
 
 function removeIntegrationCredential(string $integration, string $key, string $env = 'production'): void {
     getDB()->prepare(
-        "UPDATE integration_credentials SET is_active = 0 WHERE integration = ? AND credential_key = ? AND environment = ?"
+        "UPDATE integration_credentials SET is_active = 0 WHERE integration = ? AND cred_key = ? AND environment = ?"
     )->execute([$integration, $key, $env]);
 }
 
@@ -77,8 +77,8 @@ function logSync(string $integration, string $action, string $direction, string 
     ?string $error = null, ?string $entityType = null, ?int $entityId = null, ?int $durationMs = null): int {
 
     $sql = "INSERT INTO integration_sync_log
-            (integration, action, direction, status, request_summary, response_code,
-             response_summary, error_message, entity_type, entity_id, duration_ms)
+            (integration, operation, direction, status, request_body, http_status,
+             response_body, error_message, entity_type, entity_id, duration_ms)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     getDB()->prepare($sql)->execute([
         $integration, $action, $direction, $status, $reqSummary, $respCode,
@@ -298,12 +298,12 @@ function listB2bInventory(string $listingType = '', bool $visibleOnly = true): a
 function addToB2bNetwork(array $data): int {
     InputValidator::check('b2b_network_inventory', $data);
     $sql = "INSERT INTO b2b_network_inventory
-            (tire_id, wheel_id, listing_type, wholesale_price, min_quantity, max_quantity, description)
+            (tire_id, wheel_id, listing_type, price_wholesale, min_order_qty, max_quantity, description)
             VALUES (?, ?, ?, ?, ?, ?, ?)";
     getDB()->prepare($sql)->execute([
         $data['tire_id'] ?? null, $data['wheel_id'] ?? null,
-        $data['listing_type'] ?? 'sell', $data['wholesale_price'],
-        (int) ($data['min_quantity'] ?? 1), $data['max_quantity'] ?? null,
+        $data['listing_type'] ?? 'sell', $data['price_wholesale'],
+        (int) ($data['min_order_qty'] ?? 1), $data['max_quantity'] ?? null,
         $data['description'] ?? null,
     ]);
     return (int) getDB()->lastInsertId();
@@ -324,11 +324,11 @@ function listDirectoryListings(): array {
 
 function createDirectoryListing(array $data): int {
     InputValidator::check('directory_listings', $data, ['directory_name']);
-    $sql = "INSERT INTO directory_listings (directory_name, listing_url, listing_status, profile_data, notes)
+    $sql = "INSERT INTO directory_listings (directory_name, listing_url, status, profile_data, notes)
             VALUES (?, ?, ?, ?, ?)";
     getDB()->prepare($sql)->execute([
         $data['directory_name'], $data['listing_url'] ?? null,
-        $data['listing_status'] ?? 'pending',
+        $data['status'] ?? 'pending',
         isset($data['profile_data']) ? json_encode($data['profile_data']) : null,
         $data['notes'] ?? null,
     ]);
@@ -337,7 +337,7 @@ function createDirectoryListing(array $data): int {
 
 function updateDirectoryListing(int $dirId, array $data): void {
     InputValidator::check('directory_listings', $data);
-    $editable = ['listing_url', 'listing_status', 'profile_data', 'notes', 'last_verified'];
+    $editable = ['listing_url', 'status', 'profile_data', 'notes', 'last_verified'];
     $sets = []; $params = [];
     foreach ($editable as $col) {
         if (array_key_exists($col, $data)) {

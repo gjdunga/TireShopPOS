@@ -404,7 +404,7 @@ function CustomFieldsTab({ onError }) {
 }
 
 function AddFieldForm({ entityType, onAdded, onCancel, onError }) {
-  const [form, setForm] = useState({ field_name: '', field_label: '', field_type: 'text', is_required: 0, sort_order: 0 });
+  const [form, setForm] = useState({ field_name: '', field_label: '', field_type: 'text', is_required: 0, display_order: 0 });
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -429,7 +429,7 @@ function AddFieldForm({ entityType, onAdded, onCancel, onError }) {
             {['text', 'number', 'boolean', 'date', 'select'].map((t) => <option key={t} value={t}>{t}</option>)}
           </select></div>
         <div className="form-field"><label className="label">Sort Order</label>
-          <input type="number" value={form.sort_order} onChange={(e) => setForm((p) => ({ ...p, sort_order: e.target.value }))} /></div>
+          <input type="number" value={form.display_order} onChange={(e) => setForm((p) => ({ ...p, display_order: e.target.value }))} /></div>
       </div>
       <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
         <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>{saving ? <span className="spinner" /> : 'Add'}</button>

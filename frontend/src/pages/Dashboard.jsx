@@ -136,7 +136,7 @@ function AppointmentsCard() {
               <tr key={a.appointment_id}>
                 <td className="mono">{a.appointment_time?.slice(0, 5) || 'TBD'}</td>
                 <td>{a.customer_first ? `${a.customer_first} ${a.customer_last}` : 'Walk-in'}</td>
-                <td>{a.service_type || 'General'}</td>
+                <td>{a.service_requested || 'General'}</td>
                 <td><StatusBadge status={a.status} /></td>
               </tr>
             ))}
@@ -162,7 +162,7 @@ function RetorqueCard() {
             <li key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <span className="mono">{item.wo_number || `WO #${item.work_order_id}`}</span>
-                {item.due_date && <span className="text-muted"> by {item.due_date}</span>}
+                {item.retorque_due_date && <span className="text-muted"> by {item.retorque_due_date}</span>}
               </div>
               <RetorqueCompleteBtn id={item.work_order_id} onDone={() => window.location.reload()} />
             </li>
